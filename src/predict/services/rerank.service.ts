@@ -153,6 +153,15 @@ export class RerankService {
 
     // 4. Umbral adaptativo + tope de salida.
     const scored: ScoredTool[] = names.map((name) => ({ name, score: propagated.get(name) ?? 0 }));
+    const sortedScored = [...scored].sort((a, b) => b.score - a.score);
+    if (sortedScored.length > 0) {
+      log(
+        `[rerank:graph] top=${sortedScored
+          .slice(0, Math.min(5, sortedScored.length))
+          .map((s) => `${s.name}(${s.score.toFixed(3)})`)
+          .join(", ")}`,
+      );
+    }
     const selectedNames = adaptiveThreshold(
       scored,
       this.config.adaptiveMinTools,
@@ -162,13 +171,37 @@ export class RerankService {
 
     // 5. Resolución de mutexes: de dos nodos excluidos, queda el de mayor score.
     const selectedSet = new Set(selectedNames);
+    const removed: string[] = [];
     for (const e of edges) {
       if (e.type !== "MUTUALLY_EXCLUSIVE") continue;
       if (selectedSet.has(e.from) && selectedSet.has(e.to)) {
         const fromScore = propagated.get(e.from) ?? 0;
         const toScore = propagated.get(e.to) ?? 0;
-        selectedSet.delete(fromScore >= toScore ? e.to : e.from);
+        const loser = fromScore >= toScore ? e.to : e.from;
+        selectedSet.delete(loser);
+        removed.push(loser);
       }
+    }
+
+    // No dejar que los mutexes reduzcan por debajo del mínimo adaptativo: se
+    // rellena con la siguiente mejor herramienta que no esté excluida.
+    const minTools = Math.min(this.config.adaptiveMinTools, names.length);
+    if (selectedSet.size < minTools) {
+      for (const s of sortedScored) {
+        if (selectedSet.size >= minTools) break;
+        if (selectedSet.has(s.name)) continue;
+        const conflictsWithSelected = edges.some(
+          (e) =>
+            e.type === "MUTUALLY_EXCLUSIVE" &&
+            ((e.from === s.name && selectedSet.has(e.to)) ||
+              (e.to === s.name && selectedSet.has(e.from))),
+        );
+        if (conflictsWithSelected) continue;
+        selectedSet.add(s.name);
+      }
+    }
+    if (removed.length > 0) {
+      log(`[rerank:graph] mutex removidos=${removed.join(",")} final=${selectedSet.size}`);
     }
 
     // 6. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo.
@@ -188,8 +221,11 @@ export class RerankService {
     }
 
     const complexity = estimateComplexity(scored, tools.length);
+    const orderWithScores = executionOrder
+      .map((name) => `${name}(${(propagated.get(name) ?? 0).toFixed(3)})`)
+      .join(">");
     log(
-      `[rerank:graph] selected=${tools.length} order=${executionOrder.join(">")} complexity=${complexity}`,
+      `[rerank:graph] selected=${tools.length} order=${orderWithScores} complexity=${complexity}`,
     );
     return {
       tools,
@@ -268,8 +304,21 @@ export function adaptiveThreshold(
     }
   }
 
-  // Sin gap natural → devolver el mínimo.
-  return sorted.slice(0, min).map((t) => t.name);
+  // Sin gap natural → el ranking es denso (muchas tools igualmente relevantes,
+  // típico de prompts complejos multi-paso). En lugar de colapsar al mínimo, se
+  // devuelve el cluster superior (tools dentro de 3 gaps del top), acotado al
+  // máximo. Así un prompt complejo ya no queda reducido a 1-2 tools.
+  const top = sorted[0].score;
+  const band = gapThreshold * 3;
+  let cluster = sorted.length;
+  for (let i = 0; i < sorted.length; i++) {
+    if (top - sorted[i].score > band) {
+      cluster = i;
+      break;
+    }
+  }
+  const count = Math.max(min, Math.min(cluster, max));
+  return sorted.slice(0, count).map((t) => t.name);
 }
 
 /** Replica EstimateComplexity del Go. */

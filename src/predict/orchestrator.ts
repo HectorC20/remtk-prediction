@@ -102,7 +102,7 @@ export class PredictionOrchestrator {
         trace.confirmHit = true;
         this.debugger_.bump({ confirmHits: 1 });
         log(`[pipeline] early-exit: confirmación vacía con plan cacheado`);
-        this.finalize(trace, start);
+        this.finalize(trace, start, cached.tools.map((t) => t.name));
         return cached;
       }
     }
@@ -148,7 +148,7 @@ export class PredictionOrchestrator {
         this.debugger_.bump({ confirmSets: 1 });
       }
 
-      this.finalize(trace, start);
+      this.finalize(trace, start, result.tools.map((t) => t.name));
       return result;
     }
 
@@ -193,7 +193,7 @@ export class PredictionOrchestrator {
       this.debugger_.bump({ confirmSets: 1 });
     }
 
-    this.finalize(trace, start);
+    this.finalize(trace, start, result.tools.map((t) => t.name));
     return result;
   }
 
@@ -300,13 +300,14 @@ export class PredictionOrchestrator {
     return { embedding: EmbeddingEngineService.normalizeL2(blended), lastScore: 0 };
   }
 
-  private finalize(trace: Trace, start: number): void {
+  private finalize(trace: Trace, start: number, outTools: string[] = []): void {
     trace.latencyMs = Date.now() - start;
     this.debugger_.addTrace(trace);
+    const outNames = outTools.length ? ` out_tools=${outTools.join(",")}` : "";
     log(
       `[pipeline] predict session=${trace.sessionId} tenant=${trace.tenant} turn=${trace.turnType} ` +
         `confirm_hit=${trace.confirmHit} recall=${trace.recall} degraded=${trace.degraded} ` +
-        `in=${trace.inputTokens} out=${trace.outputTools} model=${trace.modelSize} ` +
+        `in=${trace.inputTokens} out=${trace.outputTools}${outNames} model=${trace.modelSize} ` +
         `emb_compute=${trace.embeddingsRecomputed} emb_cached=${trace.embeddingsCached} ` +
         `complexity=${trace.complexity} ${trace.latencyMs}ms`,
     );

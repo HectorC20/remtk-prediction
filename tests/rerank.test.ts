@@ -39,14 +39,14 @@ test("adaptiveThreshold: corta en el primer gap > umbral", () => {
   assert.deepEqual(adaptiveThreshold(scored, 2, 5, 0.15), ["a", "b", "c"]);
 });
 
-test("adaptiveThreshold: scores planos sin gap → devuelve el mínimo", () => {
+test("adaptiveThreshold: scores planos sin gap → devuelve el cluster denso", () => {
   const scored = [
     { name: "a", score: 0.9 },
     { name: "b", score: 0.89 },
     { name: "c", score: 0.88 },
   ];
   const out = adaptiveThreshold(scored, 2, 5, 0.15);
-  assert.deepEqual(out, ["a", "b"]);
+  assert.deepEqual(out, ["a", "b", "c"]);
 });
 
 test("estimateComplexity: rangos por cantidad y promedio", () => {
