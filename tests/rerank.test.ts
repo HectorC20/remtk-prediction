@@ -1,7 +1,7 @@
 /** Tests unitarios del re-rank y utilidades (herméticos, sin modelo ni Qdrant). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 import { adaptiveThreshold, estimateComplexity } from "../src/predict/services/rerank.service";
 
 test("cosine: normaliza y acota a [0,1]", () => {

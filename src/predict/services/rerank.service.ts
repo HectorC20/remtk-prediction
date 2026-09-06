@@ -5,12 +5,12 @@
  * de salida (env opcional `MAX_OUTPUT_TOOLS`, 0-50).
  * Migrado de rerank_service.go + adaptive_threshold.go del server Go.
  */
-import { EmbeddingEngineService } from "../../embedding/embedding-engine";
-import type { AppConfig } from "../../config";
-import { log } from "../../logger";
-import type { ScoredTool, ToolComplexity, ToolDefinition } from "../../shared/interfaces/domain.interface";
-import type { GraphEdge, TenantToolGraph } from "../../shared/interfaces/graph.interface";
-import { graphPropagationAlphaDefault } from "../../shared/constants/predict/general.predict";
+import { EmbeddingEngineService } from "src/embedding/embedding.service";
+import type { AppConfig } from "src/config";
+import { log } from "src/logger";
+import type { ScoredTool, ToolComplexity, ToolDefinition } from "src/shared/interfaces/domain.interface";
+import type { GraphEdge, TenantToolGraph } from "src/shared/interfaces/graph.interface";
+import { graphPropagationAlphaDefault } from "src/shared/constants/predict/general.predict";
 
 export interface RerankResult {
   tools: ToolDefinition[];

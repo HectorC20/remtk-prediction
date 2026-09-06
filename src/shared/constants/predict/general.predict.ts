@@ -40,3 +40,5 @@ export const TOPIC_SHIFT_THRESHOLD = 0.86;
 export const MAX_HISTORY_MESSAGES = 4;
 /** Tope de caracteres por mensaje de historial (evita prompts gigantes). */
 export const MAX_MESSAGE_CHARS = 300;
+
+export const MAX_TRACES = 200;

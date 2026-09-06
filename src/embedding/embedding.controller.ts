@@ -16,7 +16,7 @@ import {
   InternalServerErrorException,
   Post,
 } from "@nestjs/common";
-import { EmbeddingEngineService } from "./embedding-engine";
+import { EmbeddingEngineService } from "./embedding.service";
 import type { ModelSize } from "../shared/constants/predict/version.constants";
 
 @Controller()

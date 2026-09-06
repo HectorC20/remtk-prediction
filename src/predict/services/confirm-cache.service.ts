@@ -1,5 +1,5 @@
 /** Caché de confirmación por sesión: reutiliza el plan previo en confirmaciones vacías. */
-import type { GraphPredictionResult } from "../../shared/interfaces/graph.interface";
+import type { GraphPredictionResult } from "src/shared/interfaces/graph.interface";
 
 export class ConfirmationCache {
   private readonly store = new Map<string, GraphPredictionResult>();

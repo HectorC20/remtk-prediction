@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 import type { EmbedResult } from "../src/shared/interfaces/embedding.interface";
 
 const CFG = {

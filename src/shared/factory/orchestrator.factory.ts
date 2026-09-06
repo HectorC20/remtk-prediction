@@ -1,4 +1,4 @@
-import { EmbeddingEngineService } from "src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { TurnClassifier } from "src/predict/turn-classifier";
 import { QdrantService } from "src/qdrant/qdrant-service";
 import { KeywordService } from "src/predict/services/keyword.service";

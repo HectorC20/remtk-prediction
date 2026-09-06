@@ -9,14 +9,14 @@
  *     (i es pre-requisito de j) para la propagación del Graph Router.
  */
 import { createHash } from "node:crypto";
-import { EmbeddingEngineService } from "../../embedding/embedding-engine";
-import { log } from "../../logger";
-import type { ToolDefinition } from "../../shared/interfaces/domain.interface";
+import { EmbeddingEngineService } from "src/embedding/embedding.service";
+import { log } from "src/logger";
+import type { ToolDefinition } from "src/shared/interfaces/domain.interface";
 import type {
   GraphEdge,
   TenantToolGraph,
   ToolGraphNode,
-} from "../../shared/interfaces/graph.interface";
+} from "src/shared/interfaces/graph.interface";
 import { normalizeToken } from "../keywords";
 
 const PREREQUISITE_WEIGHT = 0.85;

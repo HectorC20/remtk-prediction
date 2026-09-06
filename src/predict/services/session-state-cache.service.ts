@@ -6,8 +6,8 @@
  * TOPIC_SHIFT_THRESHOLD), aplica una combinación convexa 70/30 con el estado
  * previo; en caso contrario resetea el estado (topicShift = true).
  */
-import { EmbeddingEngineService } from "../../embedding/embedding-engine";
-import { TOPIC_SHIFT_THRESHOLD } from "../../shared/constants/predict/general.predict";
+import { EmbeddingEngineService } from "src/embedding/embedding.service";
+import { TOPIC_SHIFT_THRESHOLD } from "src/shared/constants/predict/general.predict";
 
 const BLEND_PREV = 0.7;
 const BLEND_NEW = 0.3;

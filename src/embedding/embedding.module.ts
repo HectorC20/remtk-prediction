@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { loadConfig } from "../config";
-import { EmbeddingEngineService } from "./embedding-engine";
+import { EmbeddingEngineService } from "./embedding.service";
 import { EmbeddingV1Controller } from "./embedding.controller";
 
 @Module({

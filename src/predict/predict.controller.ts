@@ -21,7 +21,7 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
-import type { EmbeddingEngineService } from "../embedding/embedding-engine";
+import type { EmbeddingEngineService } from "../embedding/embedding.service";
 import type { Debugger } from "./helper/debugger.helper";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 import type { IPredictionOrchestrator } from "../shared/interfaces/orchestrator.interface";

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { loadConfig } from "../src/config";
-import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 import { RerankService, topologicalSort } from "../src/predict/services/rerank.service";
 import { ToolGraphCacheService } from "../src/predict/services/graph-cache.service";
 import { SessionStateCacheService } from "../src/predict/services/session-state-cache.service";

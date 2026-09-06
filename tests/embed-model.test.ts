@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 import { createSystem } from "../src/main";
 import { EXAMPLE_TOOLS } from "./example-tools";
 

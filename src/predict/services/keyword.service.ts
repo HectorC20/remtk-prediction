@@ -9,7 +9,7 @@
  *          Resultado: reduce drásticamente el catálogo al top-K más relevante.
  */
 import { createHash } from "node:crypto";
-import { EmbeddingEngineService } from "src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log } from "src/logger";
 import type { ScoredTool, ToolDefinition } from "src/shared/interfaces/domain.interface";
 import { extractQueryKeywords, toolKeywords } from "../keywords";

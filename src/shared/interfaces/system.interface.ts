@@ -1,4 +1,4 @@
-import type { EmbeddingEngineService } from "../../embedding/embedding-engine";
+import type { EmbeddingEngineService } from "../../embedding/embedding.service";
 import type { ConfirmationCache } from "../../predict/services/confirm-cache.service";
 import type { Debugger } from "../../predict/helper/debugger.helper";
 import type { KeywordService } from "../../predict/services/keyword.service";

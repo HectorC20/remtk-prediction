@@ -25,10 +25,10 @@ export { createSystem, type System } from "./main";
 export { loadConfig, type AppConfig } from "./config";
 
 // Servicios núcleo reutilizables.
-export { EmbeddingEngineService } from "./embedding/embedding-engine";
+export { EmbeddingEngineService } from "./embedding/embedding.service";
 export { QdrantService } from "./qdrant/qdrant-service";
 export { PredictionOrchestrator } from "./predict/orchestrator";
-export { TurnClassifier, type TurnType } from "./predict/turn-classifier";
+export { TurnClassifier} from "./predict/turn-classifier";
 export { KeywordService, type KeywordReduceResult } from "./predict/services/keyword.service";
 export { ToolGraphCacheService } from "./predict/services/graph-cache.service";
 export { SessionStateCacheService } from "./predict/services/session-state-cache.service";

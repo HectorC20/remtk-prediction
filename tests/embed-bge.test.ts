@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import * as ort from "onnxruntime-node";
 import { Tokenizer } from "@huggingface/tokenizers";
-import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 
 const DIR = "models/multilingual-bge-m3-int8-onnx";
 const ONNX = "model_quantized.onnx";

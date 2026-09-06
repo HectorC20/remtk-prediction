@@ -6,7 +6,7 @@
  *                  recall Qdrant → re-rank por embeddings e5 → umbral adaptativo.
  * Flujo /memory/predict: embed → topic shift → recall Qdrant → re-rank cosine.
  */
-import { EmbeddingEngineService } from "../embedding/embedding-engine";
+import { EmbeddingEngineService } from "../embedding/embedding.service";
 import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
 import type { QdrantService } from "../qdrant/qdrant-service";
@@ -22,9 +22,10 @@ import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
 import { RerankService } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
-import { TurnClassifier, TurnType } from "./turn-classifier";
+import { TurnClassifier} from "./turn-classifier";
 import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult } from "src/shared/interfaces/index";
 import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS } from "src/shared/constants/predict/index";
+import { TurnType } from "src/shared/dictionary/turn.dictionary";
 
 export class PredictionOrchestrator {
   private readonly topics = new Map<string, TopicState>();

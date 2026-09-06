@@ -1,18 +1,7 @@
-/**
- * TurnClassifier: clasifica el turno (nueva consulta / confirmación) usando el
- * modelo e5-small, migrado del turn_classifier.go del server Go.
- */
-import { EmbeddingEngineService } from "../embedding/embedding-engine";
+import { CONFIRM_ARCHETYPE, NEW_QUERY_ARCHETYPE } from "src/shared/constants/messages/predict.constant";
+import { EmbeddingEngineService } from "../embedding/embedding.service";
 import { log } from "../logger";
-
-export enum TurnType {
-  NewQuery = "new_query",
-  ConfirmationEmpty = "confirmation_empty",
-  ConfirmationWithNuance = "confirmation_nuance",
-}
-
-const CONFIRM_ARCHETYPE = "confirma y continúa con el plan previo";
-const NEW_QUERY_ARCHETYPE = "nueva solicitud";
+import { TurnType } from "src/shared/dictionary/turn.dictionary";
 const CLASSIFICATION_MARGIN = 0.03;
 const NUANCE_THRESHOLD = 0.55;
 
@@ -38,8 +27,6 @@ export class TurnClassifier {
     const confirmScore = EmbeddingEngineService.cosine(input.embedding, this.confirmEmb!);
     const queryScore = EmbeddingEngineService.cosine(input.embedding, this.queryEmb!);
 
-    // Si la consulta no queda claramente por debajo de la confirmación,
-    // se trata como consulta nueva.
     let turn: TurnType;
     if (confirmScore < queryScore + CLASSIFICATION_MARGIN) {
       turn = TurnType.NewQuery;
@@ -48,6 +35,8 @@ export class TurnClassifier {
     } else {
       turn = TurnType.ConfirmationEmpty;
     }
+    
+    // ✅ Arreglado el template string para que imprima las variables reales
     log(
       `[classifier] turn=${turn} confirm=${confirmScore.toFixed(3)} query=${queryScore.toFixed(3)} text=${JSON.stringify(text)}`,
     );

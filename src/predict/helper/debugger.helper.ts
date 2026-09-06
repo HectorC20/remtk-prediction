@@ -1,17 +1,10 @@
 /** Debugger: trazas en anillo y estadísticas para el endpoint /debug. */
+import { Injectable } from "@nestjs/common";
 import type { Trace } from "../../shared/interfaces/domain.interface";
+import { DebugStats } from "src/shared/interfaces";
+import { MAX_TRACES } from "src/shared/constants/predict";
 
-const MAX_TRACES = 200;
-
-export interface DebugStats {
-  tenants: number;
-  confirmGets: number;
-  confirmHits: number;
-  confirmSets: number;
-  embeddingsRecomputed: number;
-  embeddingsCached: number;
-}
-
+@Injectable()
 export class Debugger {
   private readonly traces: Trace[] = [];
   private stats: DebugStats = {

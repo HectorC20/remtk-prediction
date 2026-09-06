@@ -24,8 +24,6 @@ import { EmbedResult, OnnxModuleLike, OnnxSessionLike, OnnxTensorLike, Tokenizer
 
 const nodeRequire = createRequire(__filename);
 
-
-
 @Injectable()
 export class EmbeddingEngineService {
   private sessions = new Map<ModelSize, OnnxSessionLike>();

@@ -32,3 +32,12 @@ export interface TokenizerModuleLike {
     config: Record<string, unknown>,
   ) => TokenizerLike;
 }
+
+export interface DebugStats {
+  tenants: number;
+  confirmGets: number;
+  confirmHits: number;
+  confirmSets: number;
+  embeddingsRecomputed: number;
+  embeddingsCached: number;
+}

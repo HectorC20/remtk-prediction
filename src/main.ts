@@ -15,7 +15,7 @@
  *  └────────────────────────────────────────────────────────────┘
  */
 import type { AppConfig } from "./config";
-import { EmbeddingEngineService } from "./embedding/embedding-engine";
+import { EmbeddingEngineService } from "./embedding/embedding.service";
 import { ConfirmationCache } from "./predict/services/confirm-cache.service";
 import { Debugger } from "./predict/helper/debugger.helper";
 import { KeywordService } from "./predict/services/keyword.service";
