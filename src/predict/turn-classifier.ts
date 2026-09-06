@@ -2,8 +2,7 @@
  * TurnClassifier: clasifica el turno (nueva consulta / confirmación) usando el
  * modelo e5-small, migrado del turn_classifier.go del server Go.
  */
-import type { EmbeddingEngine } from "../embedding/embedding-engine";
-import { cosine } from "../embedding/embedding-engine";
+import { EmbeddingEngineService } from "../embedding/embedding-engine";
 import { log } from "../logger";
 
 export enum TurnType {
@@ -21,7 +20,7 @@ export class TurnClassifier {
   private confirmEmb?: Float32Array;
   private queryEmb?: Float32Array;
 
-  constructor(private readonly engine: EmbeddingEngine) {}
+  constructor(private readonly engine: EmbeddingEngineService) {}
 
   async init(): Promise<void> {
     if (this.confirmEmb && this.queryEmb) return;
@@ -36,8 +35,8 @@ export class TurnClassifier {
   async classify(text: string): Promise<TurnType> {
     await this.init();
     const input = await this.engine.embedQuery(text, "small", { high: true });
-    const confirmScore = cosine(input.embedding, this.confirmEmb!);
-    const queryScore = cosine(input.embedding, this.queryEmb!);
+    const confirmScore = EmbeddingEngineService.cosine(input.embedding, this.confirmEmb!);
+    const queryScore = EmbeddingEngineService.cosine(input.embedding, this.queryEmb!);
 
     // Si la consulta no queda claramente por debajo de la confirmación,
     // se trata como consulta nueva.

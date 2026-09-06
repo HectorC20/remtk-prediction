@@ -1,5 +1,5 @@
 /** Debugger: trazas en anillo y estadísticas para el endpoint /debug. */
-import type { Trace } from "../types";
+import type { Trace } from "../../shared/interfaces/domain.interface";
 
 const MAX_TRACES = 200;
 

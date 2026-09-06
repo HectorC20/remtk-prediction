@@ -1,4 +1,39 @@
-/** Configuración del servicio unificado, leída de variables de entorno. */
+/**
+ * Configuración del servicio unificado, leída de variables de entorno.
+ *
+ * Los valores por defecto NO están hardcodeados aquí: viven en
+ * `shared/constants/` agrupados por dominio, y este archivo solo mapea cada
+ * env var sobre su default:
+ *   - ports/    → puertos de los 3 listeners (predicción, modelos, Qdrant API)
+ *   - models/   → tamaños de modelos ONNX
+ *   - predict/  → afinamiento del pipeline (umbral adaptativo, keywords, recall)
+ *   - qdrant/   → URL del motor Qdrant y nombres de colecciones
+ */
+
+import { ONNXMODELSIZESMALL } from "./shared/constants/predict/version.constants";
+import {
+  STRICTPORTEMBEDDING,
+  STRICTPORTPREDICT,
+  STRICTPORTQDRANT,
+} from "./shared/constants/ports/general.port";
+import {
+  gapThresholdDefault,
+  keywordBoostDefault,
+  keywordTopKDefault,
+  maxOutputToolsDefault,
+  maxToolsDefault,
+  minScoreDefault,
+  minToolsDefault,
+  outputToolsCeiling,
+  recallLimitDefault,
+} from "./shared/constants/predict/general.predict";
+import {
+  KEYWORDSCOLLECTIONDEFAULT,
+  MEMORIECOLLECTIONDEFAULTS,
+  QDRANTURLDEFAULT,
+  SYNONYMSCOLLECTIONDEFAULT,
+  TOOLSCOLLECTIONDEFAULT,
+} from "./shared/constants/qdrant/general.constant";
 
 export interface AppConfig {
   /** Puerto del API de predicción (endpoints /predict, /tools, /memory/predict...). */
@@ -11,7 +46,7 @@ export interface AppConfig {
   onnxEnabled: boolean;
   onnxModelsPath: string;
   /** Modelo del pipeline: solo e5-small (migrado de large por rendimiento). */
-  onnxModelSize: "small";
+  onnxModelSize: typeof ONNXMODELSIZESMALL;
 
   adaptiveMinTools: number;
   adaptiveMaxTools: number;
@@ -21,16 +56,19 @@ export interface AppConfig {
   keywordBoost: number;
   /** Tamaño del top-K tras la reducción cross-idioma (capa 2). */
   keywordTopK: number;
+  /** Tope de candidatas recuperadas del recall BM25 por consulta. */
+  recallLimit: number;
+  /** Tope final de tools devueltas tras el umbral adaptativo (env `MAX_OUTPUT_TOOLS`, rango 0-50). */
+  maxOutputTools: number;
 
   qdrantEnabled: boolean;
   qdrantUrl: string;
   qdrantApiKey: string;
+  // Colecciones del motor Qdrant: fijas por constantes (ya no se leen de env).
   toolsCollection: string;
   keywordsCollection: string;
   synonymsCollection: string;
   memoriesCollection: string;
-
-  recallLimit: number;
 }
 
 function int(v: string | undefined, d: number): number {
@@ -48,6 +86,13 @@ function float(v: string | undefined, d: number): number {
 function bool(v: string | undefined, d: boolean): boolean {
   if (v === undefined || v === "") return d;
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
+}
+
+/** Lee un string de entorno recortando espacios; vacío o solo espacios → default. */
+function str(v: string | undefined, d: string): string {
+  if (v === undefined) return d;
+  const s = v.trim();
+  return s === "" ? d : s;
 }
 
 /** Resuelve la carpeta de modelos: env explícito → rutas del paquete → CWD. */
@@ -70,30 +115,43 @@ function resolveModelsPath(env: NodeJS.ProcessEnv): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  return {
-    portPredict: int(env.PORT_PREDICT ?? env.PORT, 6776),
-    portEmbed: int(env.PORT_EMBED, 6777),
-    portQdrant: int(env.PORT_QDRANT, 6778),
+  // Tope final de tools de salida: env opcional recortado al rango permitido [0, 50].
+  const maxOutputTools = Math.max(
+    0,
+    Math.min(int(env.MAX_OUTPUT_TOOLS, maxOutputToolsDefault), outputToolsCeiling),
+  );
 
+  return {
+    // ── Puertos de los listeners HTTP ───────────────────────────────────
+    // PORT_PREDICT también hereda de PORT (nombre genérico del server Go).
+    portPredict: int(env.PORT_PREDICT ?? env.PORT, STRICTPORTPREDICT),
+    portEmbed: int(env.PORT_EMBED, STRICTPORTEMBEDDING),
+    portQdrant: int(env.PORT_QDRANT, STRICTPORTQDRANT),
+
+    // ── Modelos ONNX ────────────────────────────────────────────────────
     onnxEnabled: bool(env.ONNX_ENABLED, true),
     onnxModelsPath: resolveModelsPath(env),
-    onnxModelSize: "small",
+    // Pipeline sobre e5-small (único tamaño activo).
+    onnxModelSize: ONNXMODELSIZESMALL,
 
-    adaptiveMinTools: int(env.ONNX_ADAPTIVE_MIN_TOOLS, 2),
-    adaptiveMaxTools: int(env.ONNX_ADAPTIVE_MAX_TOOLS, 30),
-    adaptiveGapThreshold: float(env.ONNX_ADAPTIVE_GAP_THRESHOLD, 0.03),
-    adaptiveMinScore: float(env.ONNX_ADAPTIVE_MIN_SCORE, 0.8),
-    keywordBoost: float(env.KEYWORD_BOOST, 0.15),
-    keywordTopK: int(env.KEYWORD_TOP_K, 20),
+    // ── Umbral adaptativo y keywords (capas 2-3 del pipeline) ───────────
+    adaptiveMinTools: int(env.ONNX_ADAPTIVE_MIN_TOOLS, minToolsDefault),
+    adaptiveMaxTools: int(env.ONNX_ADAPTIVE_MAX_TOOLS, maxToolsDefault),
+    adaptiveGapThreshold: float(env.ONNX_ADAPTIVE_GAP_THRESHOLD, gapThresholdDefault),
+    adaptiveMinScore: float(env.ONNX_ADAPTIVE_MIN_SCORE, minScoreDefault),
+    keywordBoost: float(env.KEYWORD_BOOST, keywordBoostDefault),
+    keywordTopK: int(env.KEYWORD_TOP_K, keywordTopKDefault),
+    recallLimit: int(env.RECALL_LIMIT, recallLimitDefault),
+    maxOutputTools,
 
+    // ── Motor Qdrant externo ────────────────────────────────────────────
     qdrantEnabled: bool(env.QDRANT_ENABLED, true),
-    qdrantUrl: (env.QDRANT_URL ?? "http://localhost:6333").trim(),
-    qdrantApiKey: (env.QDRANT_API_KEY ?? "").trim(),
-    toolsCollection: (env.QDRANT_MCP_TOOLS_COLLECTION ?? "mcp_tools").trim(),
-    keywordsCollection: (env.QDRANT_TOOL_KEYWORDS_COLLECTION ?? "tool_keywords").trim(),
-    synonymsCollection: (env.QDRANT_QUERY_SYNONYMS_COLLECTION ?? "query_synonyms").trim(),
-    memoriesCollection: (env.QDRANT_MEMORIES_COLLECTION ?? "contextual_memories").trim(),
-
-    recallLimit: int(env.RECALL_LIMIT, 50),
+    qdrantUrl: str(env.QDRANT_URL, QDRANTURLDEFAULT),
+    qdrantApiKey: str(env.QDRANT_API_KEY, ""),
+    // Colecciones fijas (definidas en shared/constants), no configurables por env.
+    toolsCollection: TOOLSCOLLECTIONDEFAULT,
+    keywordsCollection: KEYWORDSCOLLECTIONDEFAULT,
+    synonymsCollection: SYNONYMSCOLLECTIONDEFAULT,
+    memoriesCollection: MEMORIECOLLECTIONDEFAULTS,
   };
 }

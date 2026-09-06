@@ -4,16 +4,12 @@
  * Orquesta: expansión por sinónimos → keywords (RAKE) → BM25 en paralelo
  * (mcp_tools + tool_keywords) → blend 60/40 → cruce con el catálogo del tenant.
  */
+import { MemoryCandidate } from "..";
 import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
-import type { MemoryCandidate, MemoryDefinition, ScoredTool, ToolDefinition } from "../types";
+import type {  ScoredTool, ToolDefinition } from "../shared/interfaces/index";
 import { QdrantClient, type SearchResult, uuidv5 } from "./qdrant-client";
-
-const MAX_KEYWORDS = 8;
-/** Tope de resultados por búsqueda BM25 (150 era excesivo para payloads grandes). */
-const MAX_SEARCH_LIMIT = 50;
-/** Tope de sinónimos añadidos a la query expandida. */
-const MAX_SYNONYM_EXPANSIONS = 8;
+import { MAX_KEYWORDS, MAX_SEARCH_LIMIT, MAX_SYNONYM_EXPANSIONS } from "../shared/constants/qdrant/general.constant";
 
 /** Catálogo de herramientas por tenant (nombre → definición completa). */
 export interface ToolCatalog {

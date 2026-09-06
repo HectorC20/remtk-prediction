@@ -19,8 +19,9 @@ docs/
 
 node_modules
 dist
-models
+/models/
 .git
 runtime
 *.log
 *.tsbuildinfo
+/docs/

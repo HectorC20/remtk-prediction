@@ -14,7 +14,7 @@ con tres puertos Express. Reemplaza al server Go legacy (mismos contratos).
 │  Puerto 6777  API de Modelos (e5-large + e5-small)           │
 │    POST /embed · GET /models · /health                       │
 │                                                              │
-│  Puerto 6778  API de Qdrant (BM25, keywording, indexado)     │
+│  Puerto 6775  API de Qdrant (BM25, keywording, indexado)     │
 │    /tools/upsert · /tools/search · /memories/search          │
 │    /tools/synonyms · /status · /health                       │
 └──────────────────────────────────────────────────────────────┘
@@ -37,10 +37,10 @@ Al iniciar se loguean las 3 URLs:
 ```
 [boot] → Predicción  http://localhost:6776
 [boot] → Modelos     http://localhost:6777
-[boot] → Qdrant      http://localhost:6778
+[boot] → Qdrant      http://localhost:6775
 ```
 
-> Qdrant externo (`localhost:6333`) se conecta igual que antes: el servicio 6778 es la
+> Qdrant externo (`localhost:6333`) se conecta igual que antes: el servicio 6775 es la
 > capa HTTP propia sobre el motor Qdrant. Si Qdrant no está disponible, la predicción
 > degrada automáticamente a catálogo completo (sin fallar).
 
@@ -64,7 +64,7 @@ const result = await system.orchestrator.predict({
   source: "human",
   history: [{ role: "user", content: "hola" }], // contexto previo
 });
-console.log(result.tools.map((t) => t.name)); // 0..10 herramientas
+console.log(result.tools.map((t) => t.name)); // hasta MAX_OUTPUT_TOOLS (default 50, rango 0-50)
 ```
 
 API exportada:
@@ -89,11 +89,10 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 |---|---|---|
 | `PORT_PREDICT` | `6776` | Puerto de predicción |
 | `PORT_EMBED` | `6777` | Puerto de modelos |
-| `PORT_QDRANT` | `6778` | Puerto Qdrant |
+| `PORT_QDRANT` | `6775` | Puerto Qdrant |
 | `ONNX_ENABLED` | `true` | Cargar modelos ONNX (si `false` usa fallback hash) |
 | `ONNX_MODELS_PATH` | `./models` → `../models` | Carpeta de los modelos |
-| `ONNX_MODEL_SIZE` | `small` | Modelo default del pipeline (`large`/`small`) |
-| `ONNX_ADAPTIVE_MIN_TOOLS` | `6` | Mínimo de tools del umbral adaptativo |
+| `ONNX_ADAPTIVE_MIN_TOOLS` | `2` | Mínimo de tools del umbral adaptativo |
 | `ONNX_ADAPTIVE_MAX_TOOLS` | `30` | Máximo de tools del umbral adaptativo |
 | `ONNX_ADAPTIVE_GAP_THRESHOLD` | `0.03` | Gap natural para cortar el ranking (escala de coseno e5-small) |
 | `ONNX_ADAPTIVE_MIN_SCORE` | `0.8` | Score mínimo aceptado (coseno semántico) |
@@ -102,11 +101,12 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 | `QDRANT_ENABLED` | `true` | Habilitar recall BM25 en Qdrant |
 | `QDRANT_URL` | `http://localhost:6333` | URL del Qdrant |
 | `QDRANT_API_KEY` | *(vacío)* | API key opcional |
-| `QDRANT_MCP_TOOLS_COLLECTION` | `mcp_tools` | Colección de tools |
-| `QDRANT_TOOL_KEYWORDS_COLLECTION` | `tool_keywords` | Colección de keywords |
-| `QDRANT_QUERY_SYNONYMS_COLLECTION` | `query_synonyms` | Colección de sinónimos |
-| `QDRANT_MEMORIES_COLLECTION` | `contextual_memories` | Colección de memorias |
 | `RECALL_LIMIT` | `50` | Límite de recall por consulta |
+| `MAX_OUTPUT_TOOLS` | `50` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo (rango `0-50`; `0` → nunca devolver herramientas) |
+
+> Las colecciones de Qdrant (`mcp_tools`, `tool_keywords`, `query_synonyms`,
+> `contextual_memories`) son **constantes fijas** del código
+> (`shared/constants/qdrant/general.qdrant.ts`), no variables de entorno.
 
 ---
 
@@ -309,7 +309,7 @@ según el caso (contrato del modelo e5).
 
 ---
 
-## Puerto 6778 — Qdrant
+## Puerto 6775 — Qdrant
 
 Capa HTTP propia sobre el motor Qdrant (BM25 sparse + hash djb2, igual que el monolith).
 
@@ -395,7 +395,7 @@ Expande un texto con sinónimos de la colección `query_synonyms`.
 # Health de los 3 servicios
 curl http://localhost:6776/health
 curl http://localhost:6777/health
-curl http://localhost:6778/health
+curl http://localhost:6775/health
 
 # Predecir herramientas
 curl -X POST http://localhost:6776/predict \
@@ -413,7 +413,7 @@ curl -X POST http://localhost:6777/embed \
   -d '{"text":"query: enviar correo","size":"large"}'
 
 # Recall BM25
-curl -X POST http://localhost:6778/tools/search \
+curl -X POST http://localhost:6775/tools/search \
   -H "Content-Type: application/json" \
   -d '{"tenant":"demo","text":"enviar correo"}'
 ```

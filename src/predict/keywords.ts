@@ -4,15 +4,10 @@
  * - `toolKeywords`: keywords canónicas internas de la tool (tags + intentSummary).
  * El match cross-idioma NO es léxico aquí: lo hace KeywordService por embeddings.
  */
-import type { ToolDefinition } from "../types";
+import { STOPWORDS } from "src/shared/dictionary/stopwords.dictionary";
+import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 
 /** Stopwords ES/EN comunes para descartar tokens no informativos. */
-const STOPWORDS = new Set([
-  "the", "and", "for", "that", "with", "from", "this", "will", "your", "are",
-  "was", "you", "our", "all", "its", "not", "can", "has", "have", "use", "using",
-  "para", "una", "uno", "del", "los", "las", "que", "con", "por", "como",
-  "pero", "mas", "des", "esta", "este", "eso", "sus",
-]);
 
 export function normalizeToken(raw: string): string {
   return raw

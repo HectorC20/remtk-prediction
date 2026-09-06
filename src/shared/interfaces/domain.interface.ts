@@ -1,8 +1,15 @@
-/** Tipos de dominio, contrato 1:1 con el Tool Prediction Server original (Go). */
+/**
+ * Contrato de dominio compartido (1:1 con el Tool Prediction Server Go).
+ *
+ * Uniones de valor e interfaces del pipeline de predicción, autocontenidas.
+ * `ModelSize` NO vive aquí: se deriva de la constante `onnxModelSizeSmall` en
+ * `constants/models/version.models.ts` (fuente única del literal "small").
+ */
 
+import { ChatMessage } from "./index";
+
+/** Complejidad estimada del prompt (gobierna el corte del pipeline). */
 export type ToolComplexity = "simple" | "moderate" | "complex";
-// export type ModelSize = "large" | "small";
-export type ModelSize = "small";
 
 export interface ToolDefinition {
   id: string;
@@ -13,6 +20,10 @@ export interface ToolDefinition {
   tags: string[];
   intentSummary: string;
   inputSchema: Record<string, unknown>;
+  /** Herramientas que deben ejecutarse antes (relaciones declaradas, opcional). */
+  prerequisites?: string[];
+  /** Herramientas mutuamente excluyentes (relaciones declaradas, opcional). */
+  conflicts?: string[];
 }
 
 export interface ScoredTool {
@@ -37,40 +48,6 @@ export interface PredictionInput {
   history?: ChatMessage[];
 }
 
-/** Mensaje de historial (rol + contenido plano). */
-export interface ChatMessage {
-  role: string;
-  content: string;
-}
-
-export interface MemoryDefinition {
-  id: string;
-  content: string;
-  chatId?: string;
-  metadata?: Record<string, unknown>;
-  createdAt?: string;
-  score: number;
-}
-
-export interface MemoryCandidate {
-  memory: MemoryDefinition;
-  retrievalScore: number;
-}
-
-export interface MemoryPredictionInput {
-  sessionId: string;
-  tenant: string;
-  text: string;
-  limit: number;
-}
-
-export interface MemoryPredictionResult {
-  memories: MemoryDefinition[];
-  topicShift: boolean;
-  topicScore: number;
-  modelSize: string;
-  rankedScores: number[];
-}
 
 /** Traza de una predicción (para el endpoint /debug). */
 export interface Trace {

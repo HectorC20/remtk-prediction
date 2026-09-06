@@ -1,5 +1,5 @@
 /** Test de herramientas de ejemplo: 12 herramientas MCP que simulan el envío desde NestJS. */
-import type { ToolDefinition } from "../src/types";
+import type { ToolDefinition } from "../src/shared/interfaces/domain.interface";
 
 export const EXAMPLE_TOOLS: ToolDefinition[] = [
   {

@@ -1,65 +1,35 @@
 /**
- * Test end-to-end del servicio unificado: levanta los 3 listeners en puertos
- * efímeros y valida predicción + memoria + modelos + Qdrant API, simulando el
- * envío de 12 herramientas desde NestJS. Hermético (sin ONNX real ni Qdrant).
+ * Test end-to-end del servicio unificado: levanta los 3 listeners Nest en
+ * puertos efímeros y valida predicción + memoria + modelos + Qdrant API,
+ * simulando el envío de 12 herramientas desde NestJS. Hermético (sin ONNX real
+ * ni Qdrant externo): los módulos leen env (loadConfig), por eso se desactiva
+ * ONNX_ENABLED y QDRANT_ENABLED durante el arranque.
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import type { Express } from "express";
-import { createSystem, type System } from "../src/main";
-import { createPredictServer } from "../src/predict/predict-server";
-import { createEmbedServer } from "../src/embedding/embed-server";
-import { createQdrantServer } from "../src/qdrant/qdrant-server";
+import { startEmbedServer, startPredictServer, startQdrantServer } from "../src/app.module";
 import { EXAMPLE_TOOLS } from "./example-tools";
 
-function listen(app: Express): Promise<{ port: number; close: () => Promise<void> }> {
-  return new Promise((resolve, reject) => {
-    const server = app.listen(0, () => {
-      const addr = server.address();
-      resolve({
-        port: typeof addr === "object" && addr ? addr.port : 0,
-        close: () => new Promise((r) => server.close(() => r())),
-      });
-    });
-    server.on("error", reject);
-  });
-}
-
-let system: System;
 let predictUrl = "";
 let embedUrl = "";
 let qdrantUrl = "";
 let closes: (() => Promise<void>)[] = [];
 
 before(async () => {
-  system = await createSystem({
-    portPredict: 0,
-    portEmbed: 0,
-    portQdrant: 0,
-    onnxEnabled: false, // hermético: fallback hash determinístico
-    onnxModelsPath: "../models",
-    onnxModelSize: "small",
-    adaptiveMinTools: 2,
-    adaptiveMaxTools: 5,
-    adaptiveGapThreshold: 0.15,
-    adaptiveMinScore: 0,
-    keywordBoost: 0.15,
-    keywordTopK: 20,
-    qdrantEnabled: false,
-    qdrantUrl: "http://localhost:6333",
-    qdrantApiKey: "",
-    toolsCollection: "mcp_tools",
-    keywordsCollection: "tool_keywords",
-    synonymsCollection: "query_synonyms",
-    memoriesCollection: "contextual_memories",
-    recallLimit: 50,
-  });
-
+  // Hermético: los módulos autocontenidos usan loadConfig() (env).
+  process.env.ONNX_ENABLED = "0";
+  process.env.QDRANT_ENABLED = "0";
+  // Fallback hash → cosenos bajos (~0.2-0.4): igual que la cfg custom previa
+  // del test, se baja el piso de relevancia a 0 para que el rerank seleccione.
+  process.env.ONNX_ADAPTIVE_MIN_SCORE = "0";
   const [p, e, q] = await Promise.all([
-    listen(createPredictServer(system.orchestrator, system.debugger, system.engine)),
-    listen(createEmbedServer(system.engine)),
-    listen(createQdrantServer(system.qdrant)),
+    startPredictServer(0),
+    startEmbedServer(0),
+    startQdrantServer(0),
   ]);
+  delete process.env.ONNX_ENABLED;
+  delete process.env.QDRANT_ENABLED;
+  delete process.env.ONNX_ADAPTIVE_MIN_SCORE;
   predictUrl = `http://localhost:${p.port}`;
   embedUrl = `http://localhost:${e.port}`;
   qdrantUrl = `http://localhost:${q.port}`;
@@ -188,7 +158,7 @@ test("GET /models (6777) expone el modelo small", async () => {
   assert.equal(data.small?.dim, 384);
 });
 
-test("API Qdrant (6778) responde status y recall de tools", async () => {
+test("API Qdrant (6775) responde status y recall de tools", async () => {
   const status = await fetch(`${qdrantUrl}/status`);
   assert.equal(status.status, 200);
 

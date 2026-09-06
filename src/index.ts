@@ -25,28 +25,32 @@ export { createSystem, type System } from "./main";
 export { loadConfig, type AppConfig } from "./config";
 
 // Servicios núcleo reutilizables.
-export { EmbeddingEngine, cosine, normalizeL2, type EmbedResult } from "./embedding/embedding-engine";
+export { EmbeddingEngineService } from "./embedding/embedding-engine";
 export { QdrantService } from "./qdrant/qdrant-service";
 export { PredictionOrchestrator } from "./predict/orchestrator";
 export { TurnClassifier, type TurnType } from "./predict/turn-classifier";
-export { KeywordService, type KeywordReduceResult } from "./predict/keyword-service";
-export { RerankService, adaptiveThreshold, estimateComplexity, type RerankResult } from "./predict/rerank";
-export { ConfirmationCache } from "./predict/confirm-cache";
-export { Debugger } from "./predict/debugger";
+export { KeywordService, type KeywordReduceResult } from "./predict/services/keyword.service";
+export { ToolGraphCacheService } from "./predict/services/graph-cache.service";
+export { SessionStateCacheService } from "./predict/services/session-state-cache.service";
+export { RerankService, adaptiveThreshold, estimateComplexity, topologicalSort, type RerankResult, type GraphRerankResult } from "./predict/services/rerank.service";
+export { ConfirmationCache } from "./predict/services/confirm-cache.service";
+export { Debugger } from "./predict/helper/debugger.helper";
 export { extractQueryKeywords, toolKeywords, normalizeToken } from "./predict/keywords";
-
+export { MemoryCandidate, MemoryDefinition } from "src/shared/interfaces/index";
 // Tipos del contrato.
 export type {
   ToolDefinition,
   ToolComplexity,
-  ModelSize,
   ScoredTool,
   PredictionInput,
   PredictionResult,
-  ChatMessage,
-  MemoryDefinition,
-  MemoryCandidate,
-  MemoryPredictionInput,
-  MemoryPredictionResult,
   Trace,
-} from "./types";
+} from "./shared/interfaces/index";
+export type {
+  EdgeType,
+  GraphEdge,
+  ToolGraphNode,
+  TenantToolGraph,
+  GraphPredictionResult,
+} from "./shared/interfaces/index";
+export type { ModelSize } from "./shared/constants/predict/version.constants";

@@ -38,6 +38,6 @@ COPY --from=builder /app/package.json ./package.json
 ENV ONNX_MODELS_PATH=/app/models
 ENV NODE_ENV=production
 
-EXPOSE 6776 6777 6778
+EXPOSE 6776 6777 6775
 
 CMD ["node", "dist/src/server.js"]

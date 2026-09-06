@@ -6,49 +6,39 @@
  *                  recall Qdrant → re-rank por embeddings e5 → umbral adaptativo.
  * Flujo /memory/predict: embed → topic shift → recall Qdrant → re-rank cosine.
  */
-import type { EmbeddingEngine } from "../embedding/embedding-engine";
-import { cosine, normalizeL2 } from "../embedding/embedding-engine";
+import { EmbeddingEngineService } from "../embedding/embedding-engine";
 import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
 import type { QdrantService } from "../qdrant/qdrant-service";
 import type {
-  ChatMessage,
-  MemoryDefinition,
-  MemoryPredictionInput,
-  MemoryPredictionResult,
   PredictionInput,
-  PredictionResult,
   Trace,
   ToolDefinition,
-} from "../types";
-import { ConfirmationCache } from "./confirm-cache";
-import { Debugger } from "./debugger";
-import { KeywordService } from "./keyword-service";
-import { RerankService } from "./rerank";
+} from "../shared/interfaces/domain.interface";
+import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
+import { ConfirmationCache } from "./services/confirm-cache.service";
+import { Debugger } from "./helper/debugger.helper";
+import { ToolGraphCacheService } from "./services/graph-cache.service";
+import { KeywordService } from "./services/keyword.service";
+import { RerankService } from "./services/rerank.service";
+import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier, TurnType } from "./turn-classifier";
-
-const TOPIC_SHIFT_THRESHOLD = 0.86;
-/** Máximo de mensajes previos incorporados al contexto de predicción. */
-const MAX_HISTORY_MESSAGES = 4;
-/** Tope de caracteres por mensaje de historial (evita prompts gigantes). */
-const MAX_MESSAGE_CHARS = 300;
-
-interface TopicState {
-  embedding: Float32Array;
-  lastScore: number;
-}
+import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult } from "src/shared/interfaces/index";
+import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS } from "src/shared/constants/predict/index";
 
 export class PredictionOrchestrator {
   private readonly topics = new Map<string, TopicState>();
   private readonly memoryCache = new Map<string, Float32Array>();
 
   constructor(
-    private readonly engine: EmbeddingEngine,
+    private readonly engine: EmbeddingEngineService,
     private readonly qdrant: QdrantService,
     private readonly classifier: TurnClassifier,
     private readonly rerank: RerankService,
     private readonly confirmCache: ConfirmationCache,
     private readonly keywords: KeywordService,
+    private readonly graphCache: ToolGraphCacheService,
+    private readonly sessionState: SessionStateCacheService,
     private readonly debugger_: Debugger,
     private readonly config: AppConfig,
   ) {}
@@ -57,6 +47,7 @@ export class PredictionOrchestrator {
   async registerTools(tenant: string, tools: ToolDefinition[]): Promise<{ indexed: number }> {
     await this.qdrant.indexTools(tenant, tools);
     const { recomputed, cached } = await this.keywords.upsertTools(tenant, tools);
+    await this.graphCache.buildTenantGraph(tenant, tools);
     this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
     this.debugger_.setTenants(this.qdrant.countTools(tenant) > 0 ? Math.max(1, this.debugger_.snapshot().stats.tenants) : 0);
     log(`[tools] tenant=${tenant} indexados=${tools.length} embeddings recomputed=${recomputed} cached=${cached}`);
@@ -68,7 +59,7 @@ export class PredictionOrchestrator {
   }
 
   /** POST /predict */
-  async predict(input: PredictionInput): Promise<PredictionResult> {
+  async predict(input: PredictionInput): Promise<GraphPredictionResult> {
     const start = Date.now();
     const trace: Trace = {
       sessionId: input.sessionId,
@@ -89,7 +80,13 @@ export class PredictionOrchestrator {
 
     const text = (input.text ?? "").trim();
     if (text === "") {
-      return { tools: [], complexity: "simple", modelSize: "hash", rankedScores: [] };
+      return {
+        tools: [],
+        complexity: "simple",
+        modelSize: "hash",
+        rankedScores: [],
+        graph: { nodes: [], edges: [], executionOrder: [] },
+      };
     }
 
     const turn = await this.classifier.classify(text);
@@ -114,8 +111,47 @@ export class PredictionOrchestrator {
     const promptText =
       turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text;
 
-    // Capas 1+2: extracción de keywords + match cross-idioma por embeddings.
-    // Reduce el catálogo al top-K más relevante (degrada al catálogo completo).
+    // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
+    let zt: Float32Array | undefined;
+    let sessionModel = "hash";
+    try {
+      const s = await this.sessionState.resolve(input.sessionId, promptText);
+      zt = s.zt;
+      sessionModel = s.model;
+    } catch (err) {
+      warn(`[pipeline] estado de sesión degradado: ${String((err as Error)?.message ?? err)}`);
+    }
+
+    const graph = this.graphCache.get(input.tenant);
+
+    // Ruta topológica: el grafo del tenant está precomputado en POST /tools.
+    if (graph && zt) {
+      const lexicalScores = await this.lexicalScores(input.tenant, promptText);
+      const result = this.rerank.graphFilter({
+        zt,
+        graph,
+        edges: this.graphCache.edges(input.tenant),
+        lexicalScores,
+        catalog: this.qdrant.catalog(input.tenant),
+        modelSize: sessionModel,
+      });
+      trace.recall = graph.nodes.size;
+      trace.modelSize = result.modelSize;
+      trace.complexity = result.complexity;
+      trace.outputTools = result.tools.length;
+      trace.embeddingsCached = graph.nodes.size;
+      this.debugger_.bump({ embeddingsCached: graph.nodes.size });
+
+      if (turn === TurnType.NewQuery) {
+        this.confirmCache.set(input.sessionId, result);
+        this.debugger_.bump({ confirmSets: 1 });
+      }
+
+      this.finalize(trace, start);
+      return result;
+    }
+
+    // Fallback plano (sin grafo): reduce por keywords + fusión BM25.
     let reduced: { name: string; score: number }[] = [];
     let modelSize = "hash";
     let recomputed = 0;
@@ -131,25 +167,18 @@ export class PredictionOrchestrator {
     }
     trace.degraded = reduced.length === 0;
     if (trace.degraded) {
-      const all = this.qdrant.catalog(input.tenant).all();
-      reduced = all.map((t) => ({ name: t.name, score: 0 }));
+      reduced = this.qdrant.catalog(input.tenant).all().map((t) => ({ name: t.name, score: 0 }));
     }
     trace.recall = reduced.length;
     log(`[pipeline] reduce candidates=${reduced.length} degraded=${trace.degraded}`);
 
-    // Capa 3: confirm léxica Qdrant (BM25, normalizada 0..1) + fusión final.
-    const lexicalScores = new Map<string, number>();
-    try {
-      const lexical = await this.qdrant.retrieveTools(input.tenant, promptText, this.config.recallLimit);
-      const maxLex = lexical.reduce((m, l) => Math.max(m, l.score), 0);
-      for (const l of lexical) {
-        lexicalScores.set(l.name, maxLex > 0 ? l.score / maxLex : 0);
-      }
-    } catch (err) {
-      warn(`[pipeline] confirm léxica degradada: ${String((err as Error)?.message ?? err)}`);
-    }
-
-    const result = this.rerank.filter(reduced, lexicalScores, this.qdrant.catalog(input.tenant), modelSize);
+    const lexicalScores = await this.lexicalScores(input.tenant, promptText);
+    const base = this.rerank.filter(reduced, lexicalScores, this.qdrant.catalog(input.tenant), modelSize);
+    const order = base.tools.map((t) => t.name);
+    const result: GraphPredictionResult = {
+      ...base,
+      graph: { nodes: order, edges: [], executionOrder: order },
+    };
     trace.embeddingsRecomputed = recomputed;
     trace.embeddingsCached = cached;
     this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
@@ -167,6 +196,21 @@ export class PredictionOrchestrator {
     return result;
   }
 
+  /** Confirmación léxica BM25 (normalizada 0..1) para reforzar el score semántico. */
+  private async lexicalScores(tenant: string, promptText: string): Promise<Map<string, number>> {
+    const scores = new Map<string, number>();
+    try {
+      const lexical = await this.qdrant.retrieveTools(tenant, promptText, this.config.recallLimit);
+      const maxLex = lexical.reduce((m, l) => Math.max(m, l.score), 0);
+      for (const l of lexical) {
+        scores.set(l.name, maxLex > 0 ? l.score / maxLex : 0);
+      }
+    } catch (err) {
+      warn(`[pipeline] confirm léxica degradada: ${String((err as Error)?.message ?? err)}`);
+    }
+    return scores;
+  }
+
   /** POST /memory/predict: memorias contextuales + detección de cambio de tema. */
   async predictMemory(input: MemoryPredictionInput): Promise<MemoryPredictionResult> {
     const text = (input.text ?? "").trim();
@@ -182,7 +226,7 @@ export class PredictionOrchestrator {
     let shift = false;
     const prev = this.topics.get(input.sessionId);
     if (prev) {
-      topicScore = cosine(promptEmb.embedding, prev.embedding);
+      topicScore = EmbeddingEngineService.cosine(promptEmb.embedding, prev.embedding);
       shift = topicScore < TOPIC_SHIFT_THRESHOLD;
     }
     this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
@@ -204,7 +248,7 @@ export class PredictionOrchestrator {
         scored.push({ memory: { ...c.memory, score: c.retrievalScore }, score: c.retrievalScore });
         continue;
       }
-      const s = cosine(promptEmb.embedding, emb);
+      const s = EmbeddingEngineService.cosine(promptEmb.embedding, emb);
       scored.push({ memory: { ...c.memory, score: s }, score: s });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -252,7 +296,7 @@ export class PredictionOrchestrator {
     for (let i = 0; i < emb.length; i++) {
       blended[i] = prev.embedding[i] * 0.7 + emb[i] * 0.3;
     }
-    return { embedding: normalizeL2(blended), lastScore: 0 };
+    return { embedding: EmbeddingEngineService.normalizeL2(blended), lastScore: 0 };
   }
 
   private finalize(trace: Trace, start: number): void {

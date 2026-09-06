@@ -1,11 +1,11 @@
 /**
  * Verificación del modelo real: carga multilingual-e5-small (384 dims) desde
- * ../models y comprueba que el pipeline usa ONNX (no hash). Requiere el modelo
+ * ./models y comprueba que el pipeline usa ONNX (no hash). Requiere el modelo
  * completo (model.onnx + model.onnx_data). Corre con: pnpm test:model
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EmbeddingEngine, cosine } from "../src/embedding/embedding-engine";
+import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
 import { createSystem } from "../src/main";
 import { EXAMPLE_TOOLS } from "./example-tools";
 
@@ -14,7 +14,7 @@ const CFG = {
   portEmbed: 0,
   portQdrant: 0,
   onnxEnabled: true,
-  onnxModelsPath: "../models",
+  onnxModelsPath: "./models",
   onnxModelSize: "small" as const,
   adaptiveMinTools: 2,
   adaptiveMaxTools: 5,
@@ -22,6 +22,8 @@ const CFG = {
   adaptiveMinScore: 0,
   keywordBoost: 0.15,
   keywordTopK: 20,
+  recallLimit: 50,
+  maxOutputTools: 50,
   qdrantEnabled: false,
   qdrantUrl: "http://localhost:6333",
   qdrantApiKey: "",
@@ -29,28 +31,27 @@ const CFG = {
   keywordsCollection: "tool_keywords",
   synonymsCollection: "query_synonyms",
   memoriesCollection: "contextual_memories",
-  recallLimit: 50,
 };
 
 test("e5-small real: modelo=small, dim=384, vector normalizado", { timeout: 300_000 }, async () => {
-  const engine = new EmbeddingEngine(CFG);
+  const engine = new EmbeddingEngineService(CFG);
   const res = await engine.embed("hola mundo");
   assert.equal(res.model, "small", "debe usar ONNX small, no hash");
   assert.equal(res.dim, 384);
   assert.equal(res.embedding.length, 384);
-  const norm = Math.sqrt(res.embedding.reduce((s, v) => s + v * v, 0));
+  const norm = Math.sqrt(res.embedding.reduce((s: number, v: number) => s + v * v, 0));
   assert.ok(Math.abs(norm - 1) < 1e-3, `esperaba L2=1, obtuve ${norm}`);
 });
 
 test("semántica real: textos similares > textos distintos (e5-small)", { timeout: 300_000 }, async () => {
-  const engine = new EmbeddingEngine(CFG);
+  const engine = new EmbeddingEngineService(CFG);
   const [a, b, c] = await Promise.all([
     engine.embed("envía un correo electrónico al equipo"),
     engine.embed("enviar email a los colaboradores"),
     engine.embed("genera una imagen de un paisaje"),
   ]);
-  const similar = cosine(a.embedding, b.embedding);
-  const different = cosine(a.embedding, c.embedding);
+  const similar = EmbeddingEngineService.cosine(a.embedding, b.embedding);
+  const different = EmbeddingEngineService.cosine(a.embedding, c.embedding);
   assert.ok(similar > different, `similar=${similar.toFixed(3)} debe superar different=${different.toFixed(3)}`);
   assert.ok(similar > 0.5, `similitud semántica demasiado baja: ${similar.toFixed(3)}`);
 });

@@ -9,11 +9,10 @@
  *          Resultado: reduce drásticamente el catálogo al top-K más relevante.
  */
 import { createHash } from "node:crypto";
-import type { EmbeddingEngine } from "../embedding/embedding-engine";
-import { cosine } from "../embedding/embedding-engine";
-import { log } from "../logger";
-import type { ScoredTool, ToolDefinition } from "../types";
-import { extractQueryKeywords, toolKeywords } from "./keywords";
+import { EmbeddingEngineService } from "src/embedding/embedding-engine";
+import { log } from "src/logger";
+import type { ScoredTool, ToolDefinition } from "src/shared/interfaces/domain.interface";
+import { extractQueryKeywords, toolKeywords } from "../keywords";
 
 export interface KeywordReduceResult {
   candidates: ScoredTool[];
@@ -31,7 +30,7 @@ export class KeywordService {
   private readonly perTenant = new Map<string, Map<string, Entry>>();
 
   constructor(
-    private readonly engine: EmbeddingEngine,
+    private readonly engine: EmbeddingEngineService,
     private readonly topK: number,
   ) {}
 
@@ -99,7 +98,7 @@ export class KeywordService {
       const r = await this.keywordEmbedding(tenant, t);
       if (r.recomputed) recomputed++;
       else cached++;
-      scored.push({ name: t.name, score: cosine(q.embedding, r.embedding) });
+      scored.push({ name: t.name, score: EmbeddingEngineService.cosine(q.embedding, r.embedding) });
     }
     scored.sort((a, b) => b.score - a.score);
     const reduced = scored.slice(0, Math.max(1, this.topK));

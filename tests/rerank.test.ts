@@ -1,19 +1,19 @@
 /** Tests unitarios del re-rank y utilidades (herméticos, sin modelo ni Qdrant). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cosine } from "../src/embedding/embedding-engine";
-import { adaptiveThreshold, estimateComplexity } from "../src/predict/rerank";
+import { EmbeddingEngineService } from "../src/embedding/embedding-engine";
+import { adaptiveThreshold, estimateComplexity } from "../src/predict/services/rerank.service";
 
 test("cosine: normaliza y acota a [0,1]", () => {
-  assert.equal(cosine([1, 0, 0], [1, 0, 0]), 1);
-  assert.equal(cosine([1, 0, 0], [-1, 0, 0]), 0);
-  assert.equal(cosine([1, 0], [0, 1]), 0);
-  const v = cosine([1, 1], [1, 1]);
+  assert.equal(EmbeddingEngineService.cosine([1, 0, 0], [1, 0, 0]), 1);
+  assert.equal(EmbeddingEngineService.cosine([1, 0, 0], [-1, 0, 0]), 0);
+  assert.equal(EmbeddingEngineService.cosine([1, 0], [0, 1]), 0);
+  const v = EmbeddingEngineService.cosine([1, 1], [1, 1]);
   assert.ok(Math.abs(v - 1) < 1e-6, `esperaba ~1, obtuve ${v}`);
 });
 
 test("cosine: tolera longitudes distintas (min)", () => {
-  assert.equal(cosine([1, 0, 0], [1]), 1);
+  assert.equal(EmbeddingEngineService.cosine([1, 0, 0], [1]), 1);
 });
 
 test("adaptiveThreshold: sin candidatas → vacío", () => {

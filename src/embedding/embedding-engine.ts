@@ -1,5 +1,5 @@
 /**
- * EmbeddingEngine: empaqueta los dos modelos de embeddings (multilingual-e5-large
+ * EmbeddingEngineService: empaqueta los dos modelos de embeddings (multilingual-e5-large
  * y multilingual-e5-small) en un solo proceso. Carga sesiones ONNX perezosamente
  * con onnxruntime-node + tokenizer @huggingface/tokenizers, mean-pooling y
  * normalización L2 (equivalente a OnnxNeuralFilterService del monolith NestJS).
@@ -7,60 +7,27 @@
  * Si ONNX no está disponible o el modelo está incompleto, degrada a un embedding
  * determinístico por hashing-trick (igual que el fallback del monolith).
  */
+import {Injectable} from '@nestjs/common';
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
-import type { ModelSize } from "../types";
+import type { ModelSize } from "../shared/constants/predict/version.constants";
+import {
+  onnxEmbedDim,
+  onnxMaxTokens,
+  onnxModelDirName,
+  onnxWeightsFile,
+} from "../shared/constants/predict/embedding.constants";
+import { EmbedResult, OnnxModuleLike, OnnxSessionLike, OnnxTensorLike, TokenizerLike, TokenizerModuleLike } from 'src/shared/interfaces/index';
 
 const nodeRequire = createRequire(__filename);
 
-export const EMBED_DIMS: Record<ModelSize, number> = { small: 384 };
-const MAX_TOKENS = 512;
 
-export interface EmbedResult {
-  embedding: Float32Array;
-  model: ModelSize | "hash";
-  dim: number;
-  modelPath: string;
-}
 
-interface OnnxTensorLike {
-  dims: number[];
-}
-
-interface OnnxSessionLike {
-  run(feeds: Record<string, unknown>): Promise<Record<string, unknown>>;
-}
-
-interface OnnxModuleLike {
-  InferenceSession: {
-    create(path: string, opts: Record<string, unknown>): Promise<OnnxSessionLike>;
-  };
-  Tensor: new (type: string, data: unknown, dims: number[]) => OnnxTensorLike;
-}
-
-interface TokenizerLike {
-  encode(text: string): { ids: number[]; attention_mask: number[] };
-}
-
-interface TokenizerModuleLike {
-  Tokenizer: new (
-    json: Record<string, unknown>,
-    config: Record<string, unknown>,
-  ) => TokenizerLike;
-}
-
-function hashDjb2(token: string): number {
-  let h = 0;
-  for (let i = 0; i < token.length; i++) {
-    h = ((h << 5) - h + token.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-export class EmbeddingEngine {
+@Injectable()
+export class EmbeddingEngineService {
   private sessions = new Map<ModelSize, OnnxSessionLike>();
   private tokenizers = new Map<ModelSize, TokenizerLike>();
   private attempts = new Set<ModelSize>();
@@ -85,43 +52,47 @@ export class EmbeddingEngine {
     return this.config.onnxEnabled;
   }
 
-  modelDirName(size: ModelSize): string {
-    return `multilingual-e5-${size}-onnx`;
-  }
-
-  modelOnnxPath(size: ModelSize): string {
-    return join(this.config.onnxModelsPath, this.modelDirName(size), "model.onnx");
-  }
-
   isReady(size: ModelSize): boolean {
     return this.sessions.has(size) && this.tokenizers.has(size);
   }
 
-  /** Intenta cargar ambos modelos en background (warm-up no bloqueante). */
+    
+  hashDjb2(token: string): number {
+    let h = 0;
+    for (let i = 0; i < token.length; i++) {
+      h = ((h << 5) - h + token.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  /**
+   * Calienta el modelo por defecto en background (warm-up no bloqueante). Otros
+   * tamaños (p.ej. large) se cargan bajo demanda vía embed/ensure para no
+   * penalizar el boot con modelos pesados.
+   */
   warmup(): void {
     if (!this.config.onnxEnabled) {
       log("[embed] ONNX deshabilitado — se usará fallback hash");
       return;
     }
-    for (const size of Object.keys(EMBED_DIMS) as ModelSize[]) {
-      this.ensure(size)
-        .then((ok) =>
-          log(
-            `[embed] warmup ${size} → ${ok ? "ONNX cargado" : "fallback hash"} (dim=${EMBED_DIMS[size]})`,
-          ),
-        )
-        .catch((err) =>
-          warn(`[embed] warmup ${size} falló: ${String(err?.message ?? err)}`),
-        );
-    }
+    const size = this.defaultSize;
+    this.ensure(size)
+      .then((ok) =>
+        log(
+          `[embed] warmup ${size} → ${ok ? "ONNX cargado" : "fallback hash"} (dim=${onnxEmbedDim[size]})`,
+        ),
+      )
+      .catch((err) =>
+        warn(`[embed] warmup ${size} falló: ${String((err as Error)?.message ?? err)}`),
+      );
   }
 
   async getInfo(size: ModelSize): Promise<{ model: string; dim: number; modelPath: string }> {
     const ready = this.isReady(size);
     return {
       model: ready ? size : "hash",
-      dim: EMBED_DIMS[size],
-      modelPath: ready ? join(this.config.onnxModelsPath, this.modelDirName(size)) : "",
+      dim: onnxEmbedDim[size],
+      modelPath: ready ? join(this.config.onnxModelsPath, onnxModelDirName(size)) : "",
     };
   }
 
@@ -144,16 +115,16 @@ export class EmbeddingEngine {
               (embedding) => ({
                 embedding,
                 model: s,
-                dim: EMBED_DIMS[s],
-                modelPath: join(this.config.onnxModelsPath, this.modelDirName(s)),
+                dim: onnxEmbedDim[s],
+                modelPath: join(this.config.onnxModelsPath, onnxModelDirName(s)),
               }),
             )
             .catch((err) => {
               warn(`[embed] inferencia ${s} falló (degradando a hash): ${String((err as Error)?.message ?? err)}`);
               return {
-                embedding: this.hashEmbedding(text, EMBED_DIMS[s]),
+                embedding: this.hashEmbedding(text, onnxEmbedDim[s]),
                 model: "hash" as const,
-                dim: EMBED_DIMS[s],
+                dim: onnxEmbedDim[s],
                 modelPath: "",
               };
             });
@@ -168,9 +139,9 @@ export class EmbeddingEngine {
       }
     }
     return {
-      embedding: this.hashEmbedding(text, EMBED_DIMS[s]),
+      embedding: this.hashEmbedding(text, onnxEmbedDim[s]),
       model: "hash",
-      dim: EMBED_DIMS[s],
+      dim: onnxEmbedDim[s],
       modelPath: "",
     };
   }
@@ -227,7 +198,7 @@ export class EmbeddingEngine {
   }
 
   private async doLoad(size: ModelSize): Promise<boolean> {
-    const modelPath = this.modelOnnxPath(size);
+    const modelPath = join(this.config.onnxModelsPath, onnxModelDirName(size), onnxWeightsFile);
     if (!existsSync(modelPath)) {
       warn(`[embed] modelo no encontrado: ${modelPath}`);
       return false;
@@ -236,7 +207,7 @@ export class EmbeddingEngine {
     this.onnx ??= nodeRequire("onnxruntime-node") as OnnxModuleLike;
     this.tokenizerModule ??= nodeRequire("@huggingface/tokenizers") as TokenizerModuleLike;
 
-    const dir = join(this.config.onnxModelsPath, this.modelDirName(size));
+    const dir = join(this.config.onnxModelsPath, onnxModelDirName(size));
     const tokenizerJson = JSON.parse(
       readFileSync(join(dir, "tokenizer.json"), "utf8"),
     ) as Record<string, unknown>;
@@ -260,8 +231,8 @@ export class EmbeddingEngine {
     const tokenizer = this.tokenizers.get(size)!;
 
     const encoded = tokenizer.encode(text);
-    const ids = encoded.ids.slice(0, MAX_TOKENS);
-    const mask = (encoded.attention_mask ?? ids.map(() => 1)).slice(0, MAX_TOKENS);
+    const ids = encoded.ids.slice(0, onnxMaxTokens);
+    const mask = (encoded.attention_mask ?? ids.map(() => 1)).slice(0, onnxMaxTokens);
     const len = ids.length;
 
     const inputIds = new BigInt64Array(len);
@@ -286,8 +257,9 @@ export class EmbeddingEngine {
     const data = (result as { data: Float32Array }).data;
     const dims = (result as OnnxTensorLike).dims;
     // [1, seq, dim] → mean-pooling por máscara; [1, dim] → directo.
-    const vec = dims.length === 3 ? meanPool(data, dims[1], dims[2], mask) : data;
-    return normalizeL2(vec);
+    const vec =
+      dims.length === 3 ? EmbeddingEngineService.meanPool(data, dims[1], dims[2], mask) : data;
+    return EmbeddingEngineService.normalizeL2(vec);
   }
 
   private hashEmbedding(text: string, dim: number): Float32Array {
@@ -297,43 +269,53 @@ export class EmbeddingEngine {
       .split(/[^a-záéíóúüñ0-9]+/i)
       .filter((t) => t.length > 1);
     for (const tok of tokens) {
-      vec[hashDjb2(tok) % dim] += 1;
+      vec[this.hashDjb2(tok) % dim] += 1;
     }
-    return normalizeL2(vec);
+    return EmbeddingEngineService.normalizeL2(vec);
   }
-}
 
-function meanPool(data: Float32Array, seq: number, dim: number, mask: number[]): Float32Array {
-  const out = new Float32Array(dim);
-  let valid = 0;
-  for (let s = 0; s < seq; s++) {
-    if (mask[s] === 0) continue;
-    valid++;
-    const off = s * dim;
-    for (let d = 0; d < dim; d++) {
-      out[d] += data[off + d];
+  /**
+   * Mean-pooling por máscara de atención: promedia los tokens válidos de la
+   * última capa ([1, seq, dim] → [dim]).
+   */
+  private static meanPool(
+    data: Float32Array,
+    seq: number,
+    dim: number,
+    mask: number[],
+  ): Float32Array {
+    const out = new Float32Array(dim);
+    let valid = 0;
+    for (let s = 0; s < seq; s++) {
+      if (mask[s] === 0) continue;
+      valid++;
+      const off = s * dim;
+      for (let d = 0; d < dim; d++) {
+        out[d] += data[off + d];
+      }
     }
+    if (valid > 1) {
+      for (let d = 0; d < dim; d++) out[d] /= valid;
+    }
+    return out;
   }
-  if (valid > 1) {
-    for (let d = 0; d < dim; d++) out[d] /= valid;
-  }
-  return out;
-}
 
-export function normalizeL2(vec: Float32Array): Float32Array {
-  let norm = 0;
-  for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
-  norm = Math.sqrt(norm);
-  if (norm > 1e-9) {
-    for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+  /** Normalización L2 in-place del vector (equivalente a normalizeL2 del monolith). */
+  static normalizeL2(vec: Float32Array): Float32Array {
+    let norm = 0;
+    for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
+    norm = Math.sqrt(norm);
+    if (norm > 1e-9) {
+      for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+    }
+    return vec;
   }
-  return vec;
-}
 
-/** Producto punto con clamp 0..1 (equivalente a shared.Cosine del Go). */
-export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
-  const n = Math.min(a.length, b.length);
-  let dot = 0;
-  for (let i = 0; i < n; i++) dot += a[i] * b[i];
-  return Math.min(1, Math.max(0, dot));
+  /** Producto punto con clamp 0..1 (equivalente a shared.Cosine del Go). */
+  static cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
+    const n = Math.min(a.length, b.length);
+    let dot = 0;
+    for (let i = 0; i < n; i++) dot += a[i] * b[i];
+    return Math.min(1, Math.max(0, dot));
+  }
 }
