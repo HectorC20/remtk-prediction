@@ -1,0 +1,26 @@
+#
+dist/
+# DEPENDENCIAS
+node_modules/
+
+.dbg/
+bin/
+# Build
+dist/
+build/
+docs/
+# Environment
+.env
+.env.local
+.env.*.local
+
+.idea/
+.vscode/
+
+node_modules
+dist
+models
+.git
+runtime
+*.log
+*.tsbuildinfo
