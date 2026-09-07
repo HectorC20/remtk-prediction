@@ -11,7 +11,7 @@ import type {  ScoredTool, ToolDefinition } from "../shared/interfaces/index";
 import { QdrantClient, type SearchResult, uuidv5 } from "./qdrant-client";
 import { MAX_KEYWORDS, MAX_SEARCH_LIMIT, MAX_SYNONYM_EXPANSIONS } from "../shared/constants/qdrant/general.constant";
 
-/** Catálogo de herramientas por tenant (nombre → definición completa). */
+/** Catálogo de herramientas por scopeKey (nombre → definición completa). */
 export interface ToolCatalog {
   get(name: string): ToolDefinition | undefined;
   all(): ToolDefinition[];
@@ -26,23 +26,23 @@ export class QdrantService {
     this.client = new QdrantClient(config);
   }
 
-  /** Registra/actualiza el catálogo del tenant (fuente de definiciones completas). */
-  setCatalog(tenant: string, tools: ToolDefinition[]): void {
+  /** Registra/actualiza el catálogo del scope (fuente de definiciones completas). */
+  setCatalog(scopeKey: string, tools: ToolDefinition[]): void {
     const map = new Map<string, ToolDefinition>();
     for (const t of tools) map.set(t.name.trim(), t);
-    this.catalogs.set(tenant, map);
+    this.catalogs.set(scopeKey, map);
   }
 
-  catalog(tenant: string): ToolCatalog {
-    const map = this.catalogs.get(tenant) ?? new Map<string, ToolDefinition>();
+  catalog(scopeKey: string): ToolCatalog {
+    const map = this.catalogs.get(scopeKey) ?? new Map<string, ToolDefinition>();
     return {
       get: (name: string) => map.get(name.trim()),
       all: () => [...map.values()],
     };
   }
 
-  countTools(tenant: string): number {
-    return this.catalogs.get(tenant)?.size ?? 0;
+  countTools(scopeKey: string): number {
+    return this.catalogs.get(scopeKey)?.size ?? 0;
   }
 
   /** Crea las colecciones si no existen (no destructivo). */
@@ -63,18 +63,19 @@ export class QdrantService {
   }
 
   /**
-   * Indexa las herramientas del tenant en Qdrant (colecciones mcp_tools y
+   * Indexa las herramientas del scope en Qdrant (colecciones mcp_tools y
    * tool_keywords) con el mismo payload que ToolRetrievalService.syncTools.
+   * El payload guarda el scopeKey como 'tenant' (informativo).
    */
-  async indexTools(tenant: string, tools: ToolDefinition[]): Promise<void> {
-    this.setCatalog(tenant, tools);
+  async indexTools(scopeKey: string, tools: ToolDefinition[]): Promise<void> {
+    this.setCatalog(scopeKey, tools);
     if (!this.client.enabled) return;
 
     // IDs determinísticos (mismo esquema que el monolith): uuidv5 DNS.
     const toolPoints = tools.map((t) => ({
       id: uuidv5(`mcp-tool:${t.group || "general"}:${t.name}`),
       payload: {
-        tenant,
+        tenant: scopeKey,
         toolName: t.name,
         group: t.group,
         category: t.category,
@@ -97,7 +98,7 @@ export class QdrantService {
       if (keywords.length === 0) continue;
       kwPoints.push({
         id: uuidv5(`tool-kw:${t.group || "general"}:${t.name}`),
-        payload: { tenant, toolName: t.name, keywords },
+        payload: { tenant: scopeKey, toolName: t.name, keywords },
         vector: {
           bm25_text: this.client.textToSparseVector(keywords.join(" ")),
         },
@@ -109,7 +110,7 @@ export class QdrantService {
       if (kwPoints.length > 0) {
         await this.client.upsertPoints(this.config.keywordsCollection, kwPoints);
       }
-      log(`[qdrant] indexados ${toolPoints.length} tools + ${kwPoints.length} keywords (tenant=${tenant})`);
+      log(`[qdrant] indexados ${toolPoints.length} tools + ${kwPoints.length} keywords (scope=${scopeKey})`);
     } catch (err) {
       warn(`[qdrant] indexado falló: ${String((err as Error)?.message ?? err)}`);
     }
@@ -181,11 +182,46 @@ export class QdrantService {
     return out;
   }
 
-  /** Recall de memorias contextuales (BM25 filtrado por userId). Replica MemoryRecallService. */
-  async searchMemories(userId: string, text: string, limit: number): Promise<MemoryCandidate[]> {
+  /**
+   * Recall de memorias contextuales (BM25 filtrado por userId y, opcionalmente,
+   * por agentId). Replica MemoryRecallService.
+   *
+   * Regla del filtro según agentId (normalizado, trim):
+   *  - ausente/''  ⇒ legacy: must [{key:"userId", match}] (solo userId).
+   *  - 'general'   ⇒ userId + should [{agentId=general}, {agentId is_empty}]:
+   *                  las memorias legacy sin campo agentId también matchean.
+   *  - concreto    ⇒ userId + agentId = valor exacto.
+   */
+  async searchMemories(
+    userId: string,
+    text: string,
+    limit: number,
+    agentId?: string,
+  ): Promise<MemoryCandidate[]> {
     const raw = text.trim();
     if (raw === "" || userId === "" || !this.client.enabled) return [];
-    const filter = { must: [{ key: "userId", match: { value: userId } }] };
+    const a = typeof agentId === "string" ? agentId.trim() : "";
+    const filter =
+      a === ""
+        ? { must: [{ key: "userId", match: { value: userId } }] }
+        : a === "general"
+          ? {
+              must: [
+                { key: "userId", match: { value: userId } },
+                {
+                  should: [
+                    { key: "agentId", match: { value: "general" } },
+                    { is_empty: { key: "agentId" } },
+                  ],
+                },
+              ],
+            }
+          : {
+              must: [
+                { key: "userId", match: { value: userId } },
+                { key: "agentId", match: { value: a } },
+              ],
+            };
     const results = await this.search(
       this.config.memoriesCollection,
       raw,

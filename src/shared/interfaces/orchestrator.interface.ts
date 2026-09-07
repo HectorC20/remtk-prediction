@@ -11,6 +11,6 @@ import type {
 export interface IPredictionOrchestrator {
   predict(input: PredictionInput): Promise<GraphPredictionResult>;
   predictMemory(input: MemoryPredictionInput): Promise<MemoryPredictionResult>;
-  registerTools(tenant: string, tools: ToolDefinition[]): Promise<{ indexed: number }>;
-  countTools(tenant: string): number;
+  registerTools(tenant: string, tools: ToolDefinition[], agentId?: string): Promise<{ indexed: number }>;
+  countTools(tenant: string, agentId?: string): number;
 }

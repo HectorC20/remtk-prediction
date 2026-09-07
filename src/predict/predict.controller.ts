@@ -25,6 +25,7 @@ import type { EmbeddingEngineService } from "../embedding/embedding.service";
 import type { Debugger } from "./helper/debugger.helper";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 import type { IPredictionOrchestrator } from "../shared/interfaces/orchestrator.interface";
+import { normalizeAgentId } from "../shared/scope";
 
 /** Contexto que necesita este controlador (provisto por PredictAppModule). */
 export interface PredictContext {
@@ -47,7 +48,7 @@ export class PredictV1Controller {
 
   /**
    * POST /predict
-   * Body: { sessionId, tenant, text, source: "human"|"agent", priorPlan? }
+   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan? }
    * Respuesta: { tools, complexity, modelSize, rankedScores }
    */
   @Post("predict")
@@ -64,6 +65,7 @@ export class PredictV1Controller {
         tenant,
         text,
         source: source === "agent" ? "agent" : "human",
+        agentId: normalizeAgentId(b.agentId),
         priorPlan: typeof priorPlan === "string" ? priorPlan : undefined,
         history: Array.isArray(history)
           ? (history as { role?: unknown; content?: unknown }[])
@@ -78,7 +80,7 @@ export class PredictV1Controller {
 
   /**
    * POST /tools
-   * Body: { tenant, tools: ToolDefinition[] }
+   * Body: { tenant, agentId?, tools: ToolDefinition[] }
    * Respuesta: { indexed: number }
    */
   @Post("tools")
@@ -89,22 +91,29 @@ export class PredictV1Controller {
       throw new BadRequestException({ error: "tenant y tools[] requeridos" });
     }
     try {
-      return await this.ctx.orchestrator.registerTools(b.tenant, b.tools as ToolDefinition[]);
+      return await this.ctx.orchestrator.registerTools(
+        b.tenant,
+        b.tools as ToolDefinition[],
+        normalizeAgentId(b.agentId),
+      );
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
     }
   }
 
-  /** GET /tools/count?tenant= → {count} */
+  /** GET /tools/count?tenant=&agentId= → {count} */
   @Get("tools/count")
-  toolsCount(@Query("tenant") tenant?: string): { count: number } {
+  toolsCount(
+    @Query("tenant") tenant?: string,
+    @Query("agentId") agentId?: string,
+  ): { count: number } {
     const t = typeof tenant === "string" ? tenant : "";
-    return { count: t ? this.ctx.orchestrator.countTools(t) : 0 };
+    return { count: t ? this.ctx.orchestrator.countTools(t, normalizeAgentId(agentId)) : 0 };
   }
 
   /**
    * POST /memory/predict
-   * Body: { sessionId, tenant, text, limit }
+   * Body: { sessionId, tenant, agentId?, text, limit }
    * Respuesta: { memories, topicShift, topicScore, modelSize, rankedScores }
    */
   @Post("memory/predict")
@@ -120,6 +129,7 @@ export class PredictV1Controller {
         sessionId,
         tenant,
         text,
+        agentId: normalizeAgentId(b.agentId),
         limit: Number.isFinite(Number(b.limit)) ? Number(b.limit) : 8,
       });
     } catch (err) {

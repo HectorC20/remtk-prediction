@@ -27,28 +27,29 @@ interface Entry {
 }
 
 export class KeywordService {
-  private readonly perTenant = new Map<string, Map<string, Entry>>();
+  /** Caché de embeddings de keywords por scopeKey (chat general: scopeKey = tenant). */
+  private readonly perScope = new Map<string, Map<string, Entry>>();
 
   constructor(
     private readonly engine: EmbeddingEngineService,
     private readonly topK: number,
   ) {}
 
-  private mapFor(tenant: string): Map<string, Entry> {
-    let m = this.perTenant.get(tenant);
+  private mapFor(scopeKey: string): Map<string, Entry> {
+    let m = this.perScope.get(scopeKey);
     if (!m) {
       m = new Map();
-      this.perTenant.set(tenant, m);
+      this.perScope.set(scopeKey, m);
     }
     return m;
   }
 
   /** Registro/precalentamiento de keywords de las tools (prioridad baja). */
   async upsertTools(
-    tenant: string,
+    scopeKey: string,
     tools: ToolDefinition[],
   ): Promise<{ recomputed: number; cached: number }> {
-    const map = this.mapFor(tenant);
+    const map = this.mapFor(scopeKey);
     let recomputed = 0;
     let cached = 0;
     for (const tool of tools) {
@@ -67,10 +68,10 @@ export class KeywordService {
   }
 
   private async keywordEmbedding(
-    tenant: string,
+    scopeKey: string,
     tool: ToolDefinition,
   ): Promise<{ embedding: Float32Array; recomputed: boolean }> {
-    const map = this.mapFor(tenant);
+    const map = this.mapFor(scopeKey);
     const doc = toolKeywords(tool).join(" ");
     const hash = createHash("sha1").update(doc).digest("hex");
     const prev = map.get(tool.name);
@@ -83,7 +84,7 @@ export class KeywordService {
 
   /** Capa 2: reduce el catálogo al top-K por cosine cross-idioma de keywords. */
   async reduce(
-    tenant: string,
+    scopeKey: string,
     prompt: string,
     catalog: { all(): ToolDefinition[] },
   ): Promise<KeywordReduceResult> {
@@ -95,7 +96,7 @@ export class KeywordService {
     let cached = 0;
     const scored: ScoredTool[] = [];
     for (const t of catalog.all()) {
-      const r = await this.keywordEmbedding(tenant, t);
+      const r = await this.keywordEmbedding(scopeKey, t);
       if (r.recomputed) recomputed++;
       else cached++;
       scored.push({ name: t.name, score: EmbeddingEngineService.cosine(q.embedding, r.embedding) });
@@ -110,7 +111,7 @@ export class KeywordService {
     return { candidates: reduced, modelSize: q.model, recomputed, cached };
   }
 
-  count(tenant: string): number {
-    return this.mapFor(tenant).size;
+  count(scopeKey: string): number {
+    return this.mapFor(scopeKey).size;
   }
 }

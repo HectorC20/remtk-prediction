@@ -1,7 +1,8 @@
 /**
- * ToolGraphCacheService: topología en memoria de las herramientas por tenant.
+ * ToolGraphCacheService: topología en memoria de las herramientas por scope
+ * (scopeKey; el chat general usa scopeKey = tenant).
  *
- * En el ciclo de POST /tools reconstruye el grafo G = (V, E) del tenant:
+ * En el ciclo de POST /tools reconstruye el grafo G = (V, E) del scope:
  *   - Cada nodo embebe la firma de su herramienta con prefijo `passage:` (e5-small).
  *   - Las aristas se infieren de las relaciones declaradas (`prerequisites`,
  *     `conflicts`) y del esquema `inputSchema`, más la co-ocurrencia por `group`.
@@ -24,21 +25,22 @@ const CO_OCCURRENCE_WEIGHT = 0.4;
 const MUTUALLY_EXCLUSIVE_WEIGHT = 1.0;
 
 export class ToolGraphCacheService {
+  /** Grafos por scopeKey (chat general: scopeKey = tenant). */
   private readonly graphs = new Map<string, TenantToolGraph>();
-  private readonly edgesByTenant = new Map<string, GraphEdge[]>();
+  private readonly edgesByScope = new Map<string, GraphEdge[]>();
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
-  get(tenant: string): TenantToolGraph | undefined {
-    return this.graphs.get(tenant);
+  get(scopeKey: string): TenantToolGraph | undefined {
+    return this.graphs.get(scopeKey);
   }
 
-  edges(tenant: string): GraphEdge[] {
-    return this.edgesByTenant.get(tenant) ?? [];
+  edges(scopeKey: string): GraphEdge[] {
+    return this.edgesByScope.get(scopeKey) ?? [];
   }
 
-  /** POST /tools: reconstruye el grafo del tenant (embeddings passage: + aristas). */
-  async buildTenantGraph(tenant: string, tools: ToolDefinition[]): Promise<TenantToolGraph> {
+  /** POST /tools: reconstruye el grafo del scope (embeddings passage: + aristas). */
+  async buildTenantGraph(scopeKey: string, tools: ToolDefinition[]): Promise<TenantToolGraph> {
     const versionHash = computeVersionHash(tools);
 
     // Nodos: embedding passage: de la firma de cada herramienta (prioridad baja,
@@ -62,11 +64,11 @@ export class ToolGraphCacheService {
     const adjacencyMatrix = new Float32Array(n * n);
     const edges = inferEdges(tools, toolIndexMap, adjacencyMatrix);
 
-    const graph: TenantToolGraph = { tenant, versionHash, nodes, adjacencyMatrix, toolIndexMap };
-    this.graphs.set(tenant, graph);
-    this.edgesByTenant.set(tenant, edges);
+    const graph: TenantToolGraph = { tenant: scopeKey, versionHash, nodes, adjacencyMatrix, toolIndexMap };
+    this.graphs.set(scopeKey, graph);
+    this.edgesByScope.set(scopeKey, edges);
     log(
-      `[graph] tenant=${tenant} nodes=${n} edges=${edges.length} hash=${versionHash.slice(0, 8)}`,
+      `[graph] scope=${scopeKey} nodes=${n} edges=${edges.length} hash=${versionHash.slice(0, 8)}`,
     );
     return graph;
   }

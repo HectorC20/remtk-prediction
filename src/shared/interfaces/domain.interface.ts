@@ -46,6 +46,8 @@ export interface PredictionInput {
   priorPlan?: string;
   /** Mensajes previos de la conversación (contexto para la predicción). */
   history?: ChatMessage[];
+  /** Agente opcional: ausente/vacío ⇒ chat general (scope = tenant). */
+  agentId?: string;
 }
 
 
@@ -53,6 +55,8 @@ export interface PredictionInput {
 export interface Trace {
   sessionId: string;
   tenant: string;
+  /** Scope efectivo de la partición (tenant o `tenant::agentId`); opcional en debug. */
+  scopeKey?: string;
   turnType: string;
   confirmHit: boolean;
   recall: number;

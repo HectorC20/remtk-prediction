@@ -26,6 +26,7 @@ import { TurnClassifier} from "./turn-classifier";
 import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult } from "src/shared/interfaces/index";
 import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS } from "src/shared/constants/predict/index";
 import { TurnType } from "src/shared/dictionary/turn.dictionary";
+import { resolveScopeKey } from "src/shared/scope";
 
 export class PredictionOrchestrator {
   private readonly topics = new Map<string, TopicState>();
@@ -44,19 +45,50 @@ export class PredictionOrchestrator {
     private readonly config: AppConfig,
   ) {}
 
-  /** POST /tools: registra el catálogo, indexa Qdrant y calcula embeddings. */
-  async registerTools(tenant: string, tools: ToolDefinition[]): Promise<{ indexed: number }> {
-    await this.qdrant.indexTools(tenant, tools);
-    const { recomputed, cached } = await this.keywords.upsertTools(tenant, tools);
-    await this.graphCache.buildTenantGraph(tenant, tools);
-    this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
-    this.debugger_.setTenants(this.qdrant.countTools(tenant) > 0 ? Math.max(1, this.debugger_.snapshot().stats.tenants) : 0);
-    log(`[tools] tenant=${tenant} indexados=${tools.length} embeddings recomputed=${recomputed} cached=${cached}`);
+  /** Warm-ups de embeddings pendientes por scopeKey (deduplicado/encadenado). */
+  private readonly warmups = new Map<string, Promise<void>>();
+
+  /**
+   * POST /tools: indexa el catálogo del scope en Qdrant (sparse, rápido) y responde;
+   * el cálculo de embeddings (keywords + grafo) corre en background para que un
+   * scope en frío no dispare el timeout del cliente (10 s) ni aborte el turno.
+   */
+  async registerTools(tenant: string, tools: ToolDefinition[], agentId?: string): Promise<{ indexed: number }> {
+    const scopeKey = resolveScopeKey(tenant, agentId);
+    await this.qdrant.indexTools(scopeKey, tools);
+    log(`[tools] tenant=${tenant} scope=${scopeKey} indexados=${tools.length} (embeddings en warm-up)`);
+    this.warmScope(scopeKey, tools);
     return { indexed: tools.length };
   }
 
-  countTools(tenant: string): number {
-    return this.qdrant.countTools(tenant);
+  /**
+   * Dispara el warm-up de embeddings del scope sin bloquear la respuesta.
+   * Si ya hay un warm-up corriendo para el mismo scope, encadena el nuevo tras él
+   * (así un re-registro con más tools no se pierde por una carrera).
+   */
+  private warmScope(scopeKey: string, tools: ToolDefinition[]): void {
+    const prev = this.warmups.get(scopeKey) ?? Promise.resolve();
+    const task = prev
+      .catch(() => undefined)
+      .then(async () => {
+        const { recomputed, cached } = await this.keywords.upsertTools(scopeKey, tools);
+        await this.graphCache.buildTenantGraph(scopeKey, tools);
+        this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
+        this.debugger_.setTenants(this.qdrant.countTools(scopeKey) > 0 ? Math.max(1, this.debugger_.snapshot().stats.tenants) : 0);
+        log(`[tools] scope=${scopeKey} warm-up completo indexados=${tools.length} embeddings recomputed=${recomputed} cached=${cached}`);
+      })
+      .catch((error: unknown) => {
+        warn(`[tools] warm-up falló scope=${scopeKey}: ${error instanceof Error ? error.message : String(error)}`);
+      })
+      .finally(() => {
+        // Solo limpia si sigue siendo el último warm-up encadenado.
+        if (this.warmups.get(scopeKey) === task) this.warmups.delete(scopeKey);
+      });
+    this.warmups.set(scopeKey, task);
+  }
+
+  countTools(tenant: string, agentId?: string): number {
+    return this.qdrant.countTools(resolveScopeKey(tenant, agentId));
   }
 
   /** POST /predict */
@@ -78,6 +110,9 @@ export class PredictionOrchestrator {
       latencyMs: 0,
       timestamp: new Date().toISOString(),
     };
+    // Partición por agente: scopeKey = tenant (chat general) o `tenant::agentId`.
+    const scopeKey = resolveScopeKey(input.tenant, input.agentId);
+    trace.scopeKey = scopeKey;
 
     const text = (input.text ?? "").trim();
     if (text === "") {
@@ -92,7 +127,24 @@ export class PredictionOrchestrator {
 
     const turn = await this.classifier.classify(text);
     trace.turnType = turn;
-    log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} turn=${turn}`);
+    log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} scope=${scopeKey} turn=${turn}`);
+
+    // Early exit: meta-pregunta sobre capacidades → 0 tools (respuesta directa).
+    // SOLO aplica al turno del usuario (source=human). Las sub-tareas del plan
+    // (source=agent) son instrucciones internas del planificador y nunca son
+    // meta-preguntas: abortarlas rompe la predicción de tools (regresión del
+    // guardado #knowledge, 2026-09-07).
+    if (input.source === "human" && (await this.classifier.isMetaQuestion(text))) {
+      log(`[pipeline] early-exit: meta-pregunta (capacidades) → 0 tools`);
+      this.finalize(trace, start, []);
+      return {
+        tools: [],
+        complexity: "simple",
+        modelSize: "hash",
+        rankedScores: [],
+        graph: { nodes: [], edges: [], executionOrder: [] },
+      };
+    }
 
     // Early exit: confirmación vacía con plan previo cacheado.
     if (turn === TurnType.ConfirmationEmpty) {
@@ -123,17 +175,17 @@ export class PredictionOrchestrator {
       warn(`[pipeline] estado de sesión degradado: ${String((err as Error)?.message ?? err)}`);
     }
 
-    const graph = this.graphCache.get(input.tenant);
+    const graph = this.graphCache.get(scopeKey);
 
-    // Ruta topológica: el grafo del tenant está precomputado en POST /tools.
+    // Ruta topológica: el grafo del scope está precomputado en POST /tools.
     if (graph && zt) {
-      const lexicalScores = await this.lexicalScores(input.tenant, promptText);
+      const lexicalScores = await this.lexicalScores(scopeKey, promptText);
       const result = this.rerank.graphFilter({
         zt,
         graph,
-        edges: this.graphCache.edges(input.tenant),
+        edges: this.graphCache.edges(scopeKey),
         lexicalScores,
-        catalog: this.qdrant.catalog(input.tenant),
+        catalog: this.qdrant.catalog(scopeKey),
         modelSize: sessionModel,
       });
       trace.recall = graph.nodes.size;
@@ -158,7 +210,7 @@ export class PredictionOrchestrator {
     let recomputed = 0;
     let cached = 0;
     try {
-      const r = await this.keywords.reduce(input.tenant, promptText, this.qdrant.catalog(input.tenant));
+      const r = await this.keywords.reduce(scopeKey, promptText, this.qdrant.catalog(scopeKey));
       reduced = r.candidates;
       modelSize = r.modelSize;
       recomputed = r.recomputed;
@@ -168,13 +220,13 @@ export class PredictionOrchestrator {
     }
     trace.degraded = reduced.length === 0;
     if (trace.degraded) {
-      reduced = this.qdrant.catalog(input.tenant).all().map((t) => ({ name: t.name, score: 0 }));
+      reduced = this.qdrant.catalog(scopeKey).all().map((t) => ({ name: t.name, score: 0 }));
     }
     trace.recall = reduced.length;
     log(`[pipeline] reduce candidates=${reduced.length} degraded=${trace.degraded}`);
 
-    const lexicalScores = await this.lexicalScores(input.tenant, promptText);
-    const base = this.rerank.filter(reduced, lexicalScores, this.qdrant.catalog(input.tenant), modelSize);
+    const lexicalScores = await this.lexicalScores(scopeKey, promptText);
+    const base = this.rerank.filter(reduced, lexicalScores, this.qdrant.catalog(scopeKey), modelSize);
     const order = base.tools.map((t) => t.name);
     const result: GraphPredictionResult = {
       ...base,
@@ -235,7 +287,7 @@ export class PredictionOrchestrator {
     // Recall BM25 directo en Qdrant (degradación suave si no responde).
     let candidates: { memory: MemoryDefinition; retrievalScore: number }[] = [];
     try {
-      candidates = await this.qdrant.searchMemories(input.tenant, text, input.limit || 8);
+      candidates = await this.qdrant.searchMemories(input.tenant, text, input.limit || 8, input.agentId);
     } catch (err) {
       log(`[memory] recall degradado (Qdrant no disponible): ${String((err as Error)?.message ?? err)}`);
       candidates = [];

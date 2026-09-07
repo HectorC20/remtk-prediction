@@ -20,6 +20,7 @@ import {
 } from "@nestjs/common";
 import { QdrantService } from "./qdrant-service";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
+import { normalizeAgentId } from "../shared/scope";
 
 @Controller()
 export class QdrantV1Controller {
@@ -71,7 +72,7 @@ export class QdrantV1Controller {
     }
   }
 
-  /** POST /memories/search {userId, text, limit?} → {memories: MemoryDefinition[]} */
+  /** POST /memories/search {userId, agentId?, text, limit?} → {memories: MemoryDefinition[]} */
   @Post("memories/search")
   @HttpCode(200)
   async searchMemories(@Body() body: Record<string, unknown>): Promise<{ memories: unknown }> {
@@ -81,7 +82,12 @@ export class QdrantV1Controller {
     }
     const limit = Number.isFinite(Number(b.limit)) ? Number(b.limit) : 8;
     try {
-      const candidates = await this.service.searchMemories(b.userId, b.text, limit);
+      const candidates = await this.service.searchMemories(
+        b.userId,
+        b.text,
+        limit,
+        normalizeAgentId(b.agentId),
+      );
       return { memories: candidates.map((c) => c.memory) };
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });

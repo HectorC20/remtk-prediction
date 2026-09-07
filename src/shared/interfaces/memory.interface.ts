@@ -19,6 +19,8 @@ export interface MemoryPredictionInput {
   tenant: string;
   text: string;
   limit: number;
+  /** Agente opcional: ausente/'' ⇒ filtro legacy por userId; 'general' ⇒ userId + agente general. */
+  agentId?: string;
 }
 
 export interface MemoryPredictionResult {
