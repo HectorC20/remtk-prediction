@@ -33,6 +33,7 @@ RUN apt-get update \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY scripts/ensure-onnx-models.mjs ./scripts/ensure-onnx-models.mjs
 
 # Modelos ONNX: bind mount ./models:/app/models (nunca en la imagen)
 ENV ONNX_MODELS_PATH=/app/models
@@ -40,4 +41,5 @@ ENV NODE_ENV=production
 
 EXPOSE 6776 6777 6775
 
-CMD ["node", "dist/src/server.js"]
+# Descarga los modelos ONNX (idempotente, no bloqueante) y arranca el servidor.
+CMD ["sh", "-c", "node scripts/ensure-onnx-models.mjs && node dist/src/server.js"]
