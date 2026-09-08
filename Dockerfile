@@ -38,6 +38,8 @@ COPY scripts/ensure-onnx-models.mjs ./scripts/ensure-onnx-models.mjs
 # Modelos ONNX: bind mount ./models:/app/models (nunca en la imagen)
 ENV ONNX_MODELS_PATH=/app/models
 ENV NODE_ENV=production
+# Resuelve los alias de import "src/*" del tsconfig en el JS compilado (CJS).
+ENV NODE_PATH=/app/dist
 
 EXPOSE 6776 6777 6775
 
