@@ -1,6 +1,12 @@
-# Infraestructura Qdrant propia de remtk-prediction (desarrollo local).
-# El hook `predev` (pnpm dev) levanta este servicio automáticamente si el
-# puerto 6333 está cerrado. Arranque manual: docker compose up -d qdrant
+# remtk-prediction — Tool Prediction Server (6776) y sus dependencias.
+#
+# Servicios:
+#   - qdrant     → motor Qdrant (recall BM25), puerto 6333
+#   - prediction → API de predicción (6776), modelos e5-small (6777) y API Qdrant (6775)
+#
+# Uso:
+#   docker compose up -d          # levanta Qdrant + servidor de predicción
+#   docker compose up -d qdrant   # solo Qdrant (p. ej. para `pnpm dev` en host)
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -11,6 +17,36 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  prediction:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: remtk_prediction
+    restart: unless-stopped
+    ports:
+      - "6776:6776" # API de predicción
+      - "6777:6777" # API de modelos (e5-small)
+      - "6775:6775" # API Qdrant del servicio
+    environment:
+      NODE_ENV: production
+      PORT_PREDICT: 6776
+      PORT_EMBED: 6777
+      PORT_QDRANT: 6775
+      # Dentro de compose, Qdrant se alcanza por el nombre del servicio.
+      QDRANT_ENABLED: "true"
+      QDRANT_URL: http://qdrant:6333
+    volumes:
+      # Modelos ONNX (e5-small): bind mount para no incluirlos en la imagen.
+      - ./models:/app/models
+    depends_on:
+      qdrant:
+        condition: service_healthy
 
 volumes:
   qdrant_data:
