@@ -137,6 +137,35 @@ export class PredictV1Controller {
     }
   }
 
+  /**
+   * POST /interest
+   * Body: { sessionId, tenant, agentId?, text, anchors?: string[], limit? }
+   * Respuesta: { interestScore, topic, topicScore, intentScore, matches, method }
+   */
+  @Post("interest")
+  @HttpCode(200)
+  async predictInterest(@Body() body: Record<string, unknown>): Promise<unknown> {
+    const b = body ?? {};
+    const { sessionId, tenant, text } = b;
+    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    }
+    try {
+      return await this.ctx.orchestrator.predictInterest({
+        sessionId,
+        tenant,
+        text,
+        agentId: normalizeAgentId(b.agentId),
+        anchors: Array.isArray(b.anchors)
+          ? (b.anchors as unknown[]).filter((a): a is string => typeof a === "string")
+          : undefined,
+        limit: Number.isFinite(Number(b.limit)) ? Number(b.limit) : undefined,
+      });
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
   /** GET /debug → engine, stats y trazas de las últimas predicciones. */
   @Get("debug")
   async debug(): Promise<{

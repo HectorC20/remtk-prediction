@@ -42,3 +42,12 @@ export const MAX_HISTORY_MESSAGES = 4;
 export const MAX_MESSAGE_CHARS = 300;
 
 export const MAX_TRACES = 200;
+
+/** Peso del match de tema (ancla de remtk-memory) en el score de interés compuesto. */
+export const INTEREST_TOPIC_WEIGHT = 0.6;
+/** Peso de la intención (arquetipos) en el score de interés compuesto. */
+export const INTEREST_INTENT_WEIGHT = 0.4;
+/** Tope de anclas de tema evaluadas por turno (acota el costo de embeddings). */
+export const INTEREST_MAX_ANCHORS = 32;
+/** Tope de matches de ancla devueltos (ordenados desc). */
+export const INTEREST_TOP_MATCHES = 5;

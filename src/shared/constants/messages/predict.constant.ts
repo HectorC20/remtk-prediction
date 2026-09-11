@@ -12,3 +12,19 @@ export const META_QUESTION_ARCHETYPES = [
   "¿qué puedes hacer?",
   "¿cuáles son tus capacidades y funciones?",
 ];
+
+/**
+ * Arquetipos de "intención de interés": el usuario expresa que quiere algo
+ * (comprar, contratar, pedir precio o más información). Igual que
+ * META_QUESTION_ARCHETYPES se comparan por coseno contra el embedding del turno
+ * (multi-idioma, sin regex): e5 proyecta cualquier idioma al mismo espacio
+ * semántico, así que estos arquetipos actúan como semillas, no como diccionario.
+ */
+export const INTEREST_ARCHETYPES = [
+  "quiero comprar este producto",
+  "me interesa esta promoción",
+  "quisiera más información para adquirirlo",
+  "cuánto cuesta y cómo puedo pagarlo",
+  "deseo contratar este servicio",
+  "estoy interesado en esta oferta",
+];

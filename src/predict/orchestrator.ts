@@ -23,14 +23,25 @@ import { KeywordService } from "./services/keyword.service";
 import { RerankService } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
-import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult } from "src/shared/interfaces/index";
-import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS } from "src/shared/constants/predict/index";
+import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult, InterestPredictionInput, InterestPredictionResult, InterestMatch } from "src/shared/interfaces/index";
+import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, INTEREST_TOPIC_WEIGHT, INTEREST_INTENT_WEIGHT, INTEREST_MAX_ANCHORS, INTEREST_TOP_MATCHES } from "src/shared/constants/predict/index";
+import { INTEREST_ARCHETYPES } from "src/shared/constants/messages/predict.constant";
 import { TurnType } from "src/shared/dictionary/turn.dictionary";
 import { resolveScopeKey } from "src/shared/scope";
+
+/** Acota un score al rango [0, 1]. */
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
 
 export class PredictionOrchestrator {
   private readonly topics = new Map<string, TopicState>();
   private readonly memoryCache = new Map<string, Float32Array>();
+  /** Embeddings de las anclas de tema (etiquetas de subgrafo de remtk-memory), cacheados por etiqueta. */
+  private readonly anchorCache = new Map<string, Float32Array>();
+  /** Embeddings de los arquetipos de intención (carga perezosa, una sola vez). */
+  private intentEmbs?: Float32Array[];
 
   constructor(
     private readonly engine: EmbeddingEngineService,
@@ -315,6 +326,113 @@ export class PredictionOrchestrator {
     };
     log(`[memory] memories=${result.memories.length} topicShift=${shift} topicScore=${topicScore.toFixed(3)}`);
     return result;
+  }
+
+  /**
+   * POST /interest: score semántico de interés del turno, sin regex ni diccionario
+   * de idioma. Combina (1) intención —coseno máximo contra arquetipos embebidos—
+   * y (2) tema —coseno contra las anclas de interés que remtk-memory descubrió por
+   * datos. El predictor solo mide similitud; el umbral de escalado lo aplica quien llama.
+   */
+  async predictInterest(input: InterestPredictionInput): Promise<InterestPredictionResult> {
+    const text = (input.text ?? "").trim();
+    const anchors = this.normalizeAnchors(input.anchors, input.limit);
+    if (text === "") {
+      return { interestScore: 0, topic: null, topicScore: 0, intentScore: 0, matches: [], method: "empty" };
+    }
+
+    const promptEmb = await this.engine.embedQuery(text, "small", { high: true });
+    const intentScore = await this.intentScore(promptEmb.embedding);
+    const matches = await this.topicMatches(promptEmb.embedding, anchors);
+    const topicScore = matches.length ? matches[0].score : 0;
+    const topic = matches.length ? matches[0].anchor : null;
+
+    // Con anclas: mezcla tema+intención. Sin anclas (grafo aún sin descubrir):
+    // cae a intención pura para no perder la señal.
+    const interestScore = matches.length
+      ? clamp01(topicScore * INTEREST_TOPIC_WEIGHT + intentScore * INTEREST_INTENT_WEIGHT)
+      : clamp01(intentScore);
+
+    log(
+      `[interest] session=${input.sessionId} scope=${resolveScopeKey(input.tenant, input.agentId)} ` +
+        `intent=${intentScore.toFixed(3)} topic=${topicScore.toFixed(3)} score=${interestScore.toFixed(3)} ` +
+        `anchors=${anchors.length} model=${promptEmb.model}`,
+    );
+
+    return {
+      interestScore,
+      topic,
+      topicScore,
+      intentScore,
+      matches: matches.slice(0, INTEREST_TOP_MATCHES),
+      method: promptEmb.model,
+    };
+  }
+
+  /** Coseno máximo del turno contra los arquetipos de intención (multi-idioma, sin regex). */
+  private async intentScore(embedding: Float32Array): Promise<number> {
+    const embs = await this.ensureIntentEmbs();
+    let max = 0;
+    for (const emb of embs) {
+      const s = EmbeddingEngineService.cosine(embedding, emb);
+      if (s > max) max = s;
+    }
+    return max;
+  }
+
+  private async ensureIntentEmbs(): Promise<Float32Array[]> {
+    if (this.intentEmbs) return this.intentEmbs;
+    const embs = await Promise.all(
+      INTEREST_ARCHETYPES.map((a: string) =>
+        this.engine.embedQuery(a, "small").then((r) => r.embedding),
+      ),
+    );
+    this.intentEmbs = embs;
+    return embs;
+  }
+
+  /** Coseno del turno contra cada ancla, ordenado desc. */
+  private async topicMatches(embedding: Float32Array, anchors: string[]): Promise<InterestMatch[]> {
+    const out: InterestMatch[] = [];
+    for (const anchor of anchors) {
+      const emb = await this.anchorEmbedding(anchor);
+      if (!emb) continue;
+      out.push({ anchor, score: EmbeddingEngineService.cosine(embedding, emb) });
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out;
+  }
+
+  private async anchorEmbedding(anchor: string): Promise<Float32Array | undefined> {
+    const key = anchor.trim().toLowerCase();
+    if (key === "") return undefined;
+    const cached = this.anchorCache.get(key);
+    if (cached) return cached;
+    const res = await this.engine.embedPassage(anchor, "small", { high: true });
+    this.anchorCache.set(key, res.embedding);
+    return res.embedding;
+  }
+
+  /** Normaliza/deduplica las anclas recibidas (tope INTEREST_MAX_ANCHORS). */
+  private normalizeAnchors(anchors: unknown, limit?: number): string[] {
+    if (!Array.isArray(anchors)) return [];
+    const cap =
+      Number.isFinite(Number(limit)) && Number(limit) > 0
+        ? Number(limit)
+        : INTEREST_MAX_ANCHORS;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const a of anchors) {
+      if (typeof a !== "string") continue;
+      const v = a.trim();
+      if (v === "") continue;
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(v);
+      if (out.length >= cap) break;
+    }
+    return out;
   }
 
   /**
