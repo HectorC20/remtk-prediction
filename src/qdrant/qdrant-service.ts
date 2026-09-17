@@ -394,7 +394,16 @@ function buildToolDocument(t: ToolDefinition): string {
 function extractToolKeywords(t: ToolDefinition): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const kw of [...(t.tags ?? []), ...(t.intentSummary ?? "").toLowerCase().split(/\s+/)]) {
+  // Mismas fuentes que `toolKeywords`: tags (identidad) + intentSummary +
+  // description. La descripción aporta el vocabulario de intención ("crear",
+  // "listar") que distingue tools del mismo complemento; el tope de 12 deja
+  // entrar solo lo que no llenaron las fuentes previas.
+  const sources = [
+    ...(t.tags ?? []),
+    ...(t.intentSummary ?? "").toLowerCase().split(/\s+/),
+    ...(t.description ?? "").toLowerCase().split(/\s+/),
+  ];
+  for (const kw of sources) {
     const clean = kw.toLowerCase().trim();
     if (clean.length > 1 && !seen.has(clean)) {
       seen.add(clean);

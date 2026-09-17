@@ -1,7 +1,7 @@
 /**
  * Extracción de keywords compartida por las 3 capas del pipeline.
  * - `extractQueryKeywords`: keywords salientes del prompt (frecuencia + stopwords).
- * - `toolKeywords`: keywords canónicas internas de la tool (tags + intentSummary).
+ * - `toolKeywords`: keywords canónicas internas de la tool (tags + intentSummary + description).
  * El match cross-idioma NO es léxico aquí: lo hace KeywordService por embeddings.
  */
 import { STOPWORDS } from "src/shared/dictionary/stopwords.dictionary";
@@ -35,12 +35,21 @@ export function extractQueryKeywords(prompt: string): string[] {
     .map(([w]) => w);
 }
 
-/** Keywords canónicas internas de la tool (tags + intentSummary), deduplicadas. */
+/**
+ * Keywords canónicas internas de la tool (tags + intentSummary + description),
+ * deduplicadas.
+ *
+ * La `description` es la fuente más rica de vocabulario de intención ("crear",
+ * "listar", "eliminar") y la única señal que distingue entre tools que
+ * comparten tags — caso típico de las tools de un mismo complemento, donde
+ * todas heredan el nombre del complemento como tag.
+ */
 export function toolKeywords(tool: ToolDefinition): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   const sources = [...(tool.tags ?? [])];
   for (const w of (tool.intentSummary ?? "").split(/\s+/)) sources.push(w);
+  for (const w of (tool.description ?? "").split(/\s+/)) sources.push(w);
   for (const raw of sources) {
     const w = normalizeToken(raw);
     if (w.length > 2 && !STOPWORDS.has(w) && !seen.has(w)) {

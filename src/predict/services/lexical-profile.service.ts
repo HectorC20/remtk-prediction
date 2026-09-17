@@ -321,13 +321,16 @@ export class LexicalProfileService {
 
   /**
    * Semilla de términos de una tool (§7.1), reusando lo que ya existe:
-   * `toolKeywords` (tags + intentSummary) ∪ nombre ∪ grupo ∪ categoría ∪ claves
-   * del `inputSchema`, todos normalizados como los términos de la consulta.
+   * nombre ∪ grupo ∪ categoría ∪ claves del `inputSchema` ∪ `toolKeywords`
+   * (tags + intentSummary + description), todos normalizados como los términos
+   * de la consulta. La identidad va primero: la descripción puede ser larga y
+   * consumir el tope `learnMaxTermsPerTool`, y el nombre/categoría son la señal
+   * más limpia de la semilla.
    */
   private seedTerms(tool: ToolDefinition): string[] {
-    const raw: string[] = [...toolKeywords(tool)];
-    raw.push(tool.name ?? "", tool.group ?? "", tool.category ?? "");
+    const raw: string[] = [tool.name ?? "", tool.group ?? "", tool.category ?? ""];
     for (const key of Object.keys(tool.inputSchema ?? {})) raw.push(key);
+    raw.push(...toolKeywords(tool));
 
     const seen = new Set<string>();
     const out: string[] = [];

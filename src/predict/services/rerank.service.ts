@@ -72,14 +72,14 @@ export class RerankService {
     }));
     fused.sort((a, b) => b.score - a.score);
 
-    // Piso de relevancia sobre la señal fusionada semántico + aprendido (§6.6):
-    // un término aprendido del canal puede rescatar una herramienta que el
-    // coseno dejaba justo por debajo del mínimo. Con `learnWeight = 0` la
-    // expresión es idéntica a la anterior (`topCos`).
-    const relevance = pool.reduce(
-      (m, r) => Math.max(m, r.score + learnWeight * (learned.scores.get(r.name) ?? 0)),
-      0,
-    );
+    // Piso de relevancia sobre la señal FUSIONADA (§6.6): `fused` ya incluye
+    // `coseno + keywordBoost·BM25 + learnWeight·aprendido`, y su máximo es el
+    // primer elemento (está ordenado). Así tanto una confirmación léxica como un
+    // término aprendido del canal pueden rescatar una herramienta que el coseno
+    // dejaba por debajo del mínimo. Evaluarlo solo sobre el coseno (como antes)
+    // apagaba el turno entero cuando la capa semántica no discriminaba nada
+    // aunque BM25 sí confirmara el intent.
+    const relevance = fused[0]?.score ?? 0;
     if (fused.length > 0) {
       log(
         `[rerank] fused=${fused.length} top1=${fused[0].name}(${fused[0].score.toFixed(3)}) ` +
@@ -393,21 +393,28 @@ export function adaptiveThreshold(
 
   const min = Math.min(minTools, sorted.length);
   const max = Math.max(min, maxTools);
+  const top = sorted[0].score;
+  // Banda de relevancia: cuánto puede caer un score respecto del top y seguir
+  // contando como "de la misma tanda". Se deriva del umbral de gap (×2) para
+  // que sea proporcional a la escala que el operador ya configuró.
+  const band = gapThreshold * 2;
 
-  // Busca un gap natural después del mínimo.
+  // Busca un gap natural después del mínimo. Un gap solo corta si además deja
+  // fuera herramientas claramente peores (`top - score > band`): si la cola
+  // sigue dentro de la banda del top, el ranking es denso y el corte es un
+  // artefacto del refuerzo léxico — típico cuando un grupo entero (p. ej. las
+  // tools de un complemento) comparte firma semántica y solo BM25 desempata.
   for (let i = min; i < Math.min(sorted.length, max); i++) {
     const gap = sorted[i - 1].score - sorted[i].score;
-    if (gap > gapThreshold) {
+    if (gap > gapThreshold && top - sorted[i].score > band) {
       return sorted.slice(0, i).map((t) => t.name);
     }
   }
 
   // Sin gap natural → el ranking es denso (muchas tools igualmente relevantes,
   // típico de prompts complejos multi-paso). En lugar de colapsar al mínimo, se
-  // devuelve el cluster superior (tools dentro de 3 gaps del top), acotado al
+  // devuelve el cluster superior (tools dentro de la banda del top), acotado al
   // máximo. Así un prompt complejo ya no queda reducido a 1-2 tools.
-  const top = sorted[0].score;
-  const band = gapThreshold * 3;
   let cluster = sorted.length;
   for (let i = 0; i < sorted.length; i++) {
     if (top - sorted[i].score > band) {
