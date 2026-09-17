@@ -54,6 +54,14 @@ export interface PredictionInput {
    * recall BM25 y el match cross-idioma.
    */
   keywords?: string[];
+  /**
+   * Nombres de herramientas a OMITIR del resultado. Es la palanca de la
+   * segunda pasada del mini-agente: ya se ofrecieron esas herramientas y no
+   * resolvieron la subtarea, así que se descartan antes del umbral adaptativo
+   * para que entren otras del mismo catálogo. La comparación es por nombre
+   * exacto, insensible a mayúsculas.
+   */
+  exclude?: string[];
 }
 
 

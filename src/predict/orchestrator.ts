@@ -236,6 +236,7 @@ export class PredictionOrchestrator {
         learned,
         catalog: this.qdrant.catalog(scopeKey),
         modelSize: sessionModel,
+        exclude: input.exclude,
       });
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
@@ -292,6 +293,7 @@ export class PredictionOrchestrator {
       learned,
       this.qdrant.catalog(scopeKey),
       modelSize,
+      input.exclude,
     );
     const order = base.tools.map((t) => t.name);
     const result: GraphPredictionResult = {

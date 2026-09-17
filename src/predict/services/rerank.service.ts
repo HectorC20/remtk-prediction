@@ -55,11 +55,16 @@ export class RerankService {
     learned: LearnedScores,
     catalog: { get(name: string): ToolDefinition | undefined },
     modelSize: string,
+    exclude?: string[],
   ): RerankResult {
     const learnWeight = learned.weight;
+    // Exclusión de la segunda pasada: las tools ya ofrecidas se descartan ANTES
+    // de la etapa A para que tampoco puntúen su categoría ni ocupen cupo.
+    const excluded = exclusionSet(exclude);
+    const candidates = excluded ? reduced.filter((r) => !excluded.has(r.name.toLowerCase())) : reduced;
     // Etapa A: conserva solo las mejores categorías (grupos) del pool.
     const pool = keepTopCategories(
-      reduced,
+      candidates,
       (name) => catalog.get(name)?.group,
       this.config.maxCategories,
     );
@@ -142,10 +147,17 @@ export class RerankService {
     learned: LearnedScores;
     catalog: Catalog;
     modelSize: string;
+    exclude?: string[];
   }): GraphRerankResult {
-    const { zt, graph, edges, lexicalScores, learned, catalog, modelSize } = opts;
-    const names = [...graph.nodes.keys()];
-    const total = names.length;
+    const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude } = opts;
+    // `total` es el tamaño COMPLETO del grafo: la matriz de adyacencia es
+    // global (total × total) y se indexa con `toolIndexMap`.
+    const allNames = [...graph.nodes.keys()];
+    const total = allNames.length;
+    // Exclusión de la segunda pasada: las tools ya ofrecidas no entran al
+    // enrutador, así liberan cupo y dejan paso a otras del catálogo.
+    const excluded = exclusionSet(exclude);
+    const names = excluded ? allNames.filter((n) => !excluded.has(n.toLowerCase())) : allNames;
     const learnWeight = learned.weight;
 
     // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo.
@@ -296,6 +308,17 @@ export class RerankService {
       graph: { nodes: executionOrder, edges: subEdges, executionOrder },
     };
   }
+}
+
+/**
+ * Normaliza la lista de nombres a omitir (segunda pasada del mini-agente) a un
+ * `Set` en minúsculas para comparar por nombre exacto insensible a
+ * mayúsculas. Devuelve `undefined` cuando no hay nada que omitir para que el
+ * llamador pueda saltarse el filtrado.
+ */
+export function exclusionSet(exclude?: string[]): Set<string> | undefined {
+  if (!exclude || exclude.length === 0) return undefined;
+  return new Set(exclude.map((n) => n.toLowerCase()));
 }
 
 /**
