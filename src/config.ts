@@ -17,6 +17,7 @@ import {
   STRICTPORTQDRANT,
 } from "./shared/constants/ports/general.port";
 import {
+  familyGatePenaltyDefault,
   gapThresholdDefault,
   keywordBoostDefault,
   keywordTopKDefault,
@@ -36,6 +37,7 @@ import {
   maxToolsDefault,
   minScoreDefault,
   minToolsDefault,
+  nameAffinityBoostDefault,
   outputToolsCeiling,
   recallLimitDefault,
 } from "./shared/constants/predict/general.predict";
@@ -66,6 +68,16 @@ export interface AppConfig {
   adaptiveMinScore: number;
   /** Refuerzo (suma) por match de keywords internas sobre el coseno semántico. */
   keywordBoost: number;
+  /**
+   * Refuerzo (suma) por afinidad entre las palabras clave de la consulta y el
+   * NOMBRE de la herramienta (env `NAME_AFFINITY_BOOST`).
+   */
+  nameAffinityBoost: number;
+  /**
+   * Penalización (resta) a las herramientas de una familia (namespace) distinta
+   * de la nombrada en las palabras clave (env `FAMILY_GATE_PENALTY`).
+   */
+  familyGatePenalty: number;
   /** Tamaño del top-K tras la reducción cross-idioma (capa 2). */
   keywordTopK: number;
   /** Tope de candidatas recuperadas del recall BM25 por consulta. */
@@ -183,6 +195,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     adaptiveGapThreshold: float(env.ONNX_ADAPTIVE_GAP_THRESHOLD, gapThresholdDefault),
     adaptiveMinScore: float(env.ONNX_ADAPTIVE_MIN_SCORE, minScoreDefault),
     keywordBoost: float(env.KEYWORD_BOOST, keywordBoostDefault),
+    nameAffinityBoost: float(env.NAME_AFFINITY_BOOST, nameAffinityBoostDefault),
+    familyGatePenalty: float(env.FAMILY_GATE_PENALTY, familyGatePenaltyDefault),
     keywordTopK: int(env.KEYWORD_TOP_K, keywordTopKDefault),
     recallLimit: int(env.RECALL_LIMIT, recallLimitDefault),
     maxOutputTools,

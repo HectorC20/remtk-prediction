@@ -6,7 +6,10 @@
  *
  * El pipeline corre en dos etapas sobre el mismo pool de candidatas:
  *   - Etapa A (categorías): agrupa las candidatas por `group` y conserva las
- *     mejores categorías (env `MAX_CATEGORIES`, default 60).
+ *     mejores categorías (env `MAX_CATEGORIES`, default 60). Las categorías con
+ *     herramientas cuyo NOMBRE casa con las palabras clave de la consulta nunca
+ *     se recortan: dentro de un complemento el grupo es compartido y por tanto
+ *     no discrimina familia ninguna.
  *   - Etapa B (decisor): dentro de esas categorías aplica la fusión, el umbral
  *     adaptativo y el tope final de herramientas (env `MAX_OUTPUT_TOOLS`).
  *
@@ -19,6 +22,7 @@ import type { ScoredTool, ToolComplexity, ToolDefinition } from "src/shared/inte
 import type { GraphEdge, TenantToolGraph } from "src/shared/interfaces/graph.interface";
 import type { LearnedScores } from "src/shared/interfaces/lexical.interface";
 import { graphPropagationAlphaDefault } from "src/shared/constants/predict/general.predict";
+import { isForeignFamily, nameAffinity, namedFamilies } from "../keywords";
 
 export interface RerankResult {
   tools: ToolDefinition[];
@@ -48,6 +52,15 @@ export class RerankService {
    *
    * final = cosineKeywords + keywordBoost * lexicalQdrant
    *                          + learnWeightEfectivo * aprendido
+   *                          + nameAffinityBoost * afinidad(consulta, nombre)
+   *                          - familyGatePenalty * familiaAjena(consulta, nombre)
+   *
+   * `queryTokens` son los tokens de match de la consulta (incluidas las
+   * palabras clave delegadas). Alimentan la afinidad por NOMBRE, que es la
+   * señal que separa familias dentro de un mismo complemento, y la puerta de
+   * FAMILIA: si la consulta nombra el namespace de alguna tool del pool, las de
+   * otras familias (p. ej. `schedule_*` cuando se habla de `mitumbes`) se
+   * penalizan hasta caer fuera de la banda del umbral adaptativo.
    */
   filter(
     reduced: ScoredTool[],
@@ -56,24 +69,33 @@ export class RerankService {
     catalog: { get(name: string): ToolDefinition | undefined },
     modelSize: string,
     exclude?: string[],
+    queryTokens?: Set<string>,
   ): RerankResult {
     const learnWeight = learned.weight;
     // Exclusión de la segunda pasada: las tools ya ofrecidas se descartan ANTES
     // de la etapa A para que tampoco puntúen su categoría ni ocupen cupo.
     const excluded = exclusionSet(exclude);
     const candidates = excluded ? reduced.filter((r) => !excluded.has(r.name.toLowerCase())) : reduced;
-    // Etapa A: conserva solo las mejores categorías (grupos) del pool.
+    // Etapa A: conserva solo las mejores categorías (grupos) del pool, sin
+    // descartar las que contienen herramientas afines al nombre de la consulta.
+    const isAffine = affinityPredicate(queryTokens);
     const pool = keepTopCategories(
       candidates,
       (name) => catalog.get(name)?.group,
       this.config.maxCategories,
+      isAffine,
     );
+    // Puerta de familia: namespaces nombrados explícitamente en las palabras
+    // clave. Vacío = la consulta no nombra familia ninguna → no se penaliza.
+    const families = namedFamilies(queryTokens, candidates.map((c) => c.name));
     const fused: ScoredTool[] = pool.map((r) => ({
       name: r.name,
       score:
         r.score +
         this.config.keywordBoost * (lexicalScores.get(r.name) ?? 0) +
-        learnWeight * (learned.scores.get(r.name) ?? 0),
+        learnWeight * (learned.scores.get(r.name) ?? 0) +
+        this.config.nameAffinityBoost * nameAffinity(queryTokens, r.name) -
+        (isForeignFamily(families, r.name) ? this.config.familyGatePenalty : 0),
     }));
     fused.sort((a, b) => b.score - a.score);
 
@@ -148,8 +170,9 @@ export class RerankService {
     catalog: Catalog;
     modelSize: string;
     exclude?: string[];
+    queryTokens?: Set<string>;
   }): GraphRerankResult {
-    const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude } = opts;
+    const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude, queryTokens } = opts;
     // `total` es el tamaño COMPLETO del grafo: la matriz de adyacencia es
     // global (total × total) y se indexa con `toolIndexMap`.
     const allNames = [...graph.nodes.keys()];
@@ -166,22 +189,30 @@ export class RerankService {
       score: EmbeddingEngineService.cosine(zt, graph.nodes.get(name)!.embedding),
     }));
 
-    // Etapa A: conserva solo las mejores categorías (grupos) del catálogo.
+    // Etapa A: conserva solo las mejores categorías (grupos) del catálogo, sin
+    // descartar las que contienen herramientas afines al nombre de la consulta.
     const keptNames = keepTopCategories(
       baseScores,
       (name) => graph.nodes.get(name)?.definition.group,
       this.config.maxCategories,
+      affinityPredicate(queryTokens),
     ).map((s) => s.name);
     const baseByName = new Map(baseScores.map((s) => [s.name, s.score]));
+    // Puerta de familia: namespaces nombrados explícitamente en las palabras
+    // clave. Vacío = la consulta no nombra familia ninguna → no se penaliza.
+    const families = namedFamilies(queryTokens, names);
 
-    // 2. Refuerzo léxico BM25 + perfil aprendido del canal sobre el pool.
+    // 2. Refuerzo léxico BM25 + perfil aprendido del canal + afinidad por
+    //    NOMBRE (única señal que separa familias dentro de un complemento).
     const fused = new Map<string, number>();
     for (const name of keptNames) {
       fused.set(
         name,
         (baseByName.get(name) ?? 0) +
           this.config.keywordBoost * (lexicalScores.get(name) ?? 0) +
-          learnWeight * (learned.scores.get(name) ?? 0),
+          learnWeight * (learned.scores.get(name) ?? 0) +
+          this.config.nameAffinityBoost * nameAffinity(queryTokens, name) -
+          (isForeignFamily(families, name) ? this.config.familyGatePenalty : 0),
       );
     }
 
@@ -322,6 +353,24 @@ export function exclusionSet(exclude?: string[]): Set<string> | undefined {
 }
 
 /**
+ * Predicado de "familia dorada": marca las herramientas cuyo NOMBRE casa por
+ * completo con las palabras clave de la consulta. Se usa como pin de la etapa A
+ * para que el recorte por `MAX_CATEGORIES` no descarte la categoría que
+ * contiene la familia correcta —la única señal que distingue familias cuando el
+ * grupo lo comparte todo el complemento.
+ *
+ * El umbral es exigente (afinidad 1: todos los tokens de identidad presentes) a
+ * propósito: fijar una categoría de más anula el recorte, así que solo se fija
+ * con certeza plena.
+ */
+export function affinityPredicate(
+  queryTokens?: Set<string>,
+): ((name: string) => boolean) | undefined {
+  if (!queryTokens || queryTokens.size === 0) return undefined;
+  return (name: string) => nameAffinity(queryTokens, name) >= 1;
+}
+
+/**
  * Etapa A del pipeline: agrupa las candidatas por categoría (`group`) y
  * conserva únicamente las de mayor score, hasta `limit`.
  *
@@ -334,13 +383,16 @@ export function keepTopCategories(
   candidates: ScoredTool[],
   groupOf: (name: string) => string | undefined,
   limit: number,
+  pinned?: (name: string) => boolean,
 ): ScoredTool[] {
   if (candidates.length === 0) return candidates;
   const categoryScore = new Map<string, number>();
+  const pinnedGroups = new Set<string>();
   for (const c of candidates) {
     const g = groupOf(c.name) || "";
     const cur = categoryScore.get(g);
     if (cur === undefined || c.score > cur) categoryScore.set(g, c.score);
+    if (pinned?.(c.name)) pinnedGroups.add(g);
   }
   if (limit <= 0 || categoryScore.size <= limit) return candidates;
 
@@ -350,10 +402,13 @@ export function keepTopCategories(
       .slice(0, limit)
       .map(([g]) => g),
   );
+  // La familia dorada nunca se recorta: el grupo compartido no discrimina y el
+  // coseno puede dejarla fuera del top de categorías.
+  for (const g of pinnedGroups) kept.add(g);
   const filtered = candidates.filter((c) => kept.has(groupOf(c.name) || ""));
   log(
     `[rerank:categorias] etapaA categorias=${categoryScore.size}->${kept.size} ` +
-      `candidatas=${candidates.length}->${filtered.length}`,
+      `candidatas=${candidates.length}->${filtered.length} fijadas=${pinnedGroups.size}`,
   );
   return filtered;
 }

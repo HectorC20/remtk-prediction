@@ -9,6 +9,7 @@ import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
 import type {  ScoredTool, ToolDefinition } from "../shared/interfaces/index";
 import { QdrantClient, type SearchResult, uuidv5 } from "./qdrant-client";
+import { toolIdentityTokens } from "../predict/keywords";
 import { MAX_KEYWORDS, MAX_SEARCH_LIMIT, MAX_SYNONYM_EXPANSIONS } from "../shared/constants/qdrant/general.constant";
 
 /** Catálogo de herramientas por scopeKey (nombre → definición completa). */
@@ -394,11 +395,14 @@ function buildToolDocument(t: ToolDefinition): string {
 function extractToolKeywords(t: ToolDefinition): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  // Mismas fuentes que `toolKeywords`: tags (identidad) + intentSummary +
-  // description. La descripción aporta el vocabulario de intención ("crear",
-  // "listar") que distingue tools del mismo complemento; el tope de 12 deja
-  // entrar solo lo que no llenaron las fuentes previas.
+  // Mismas fuentes que `toolKeywords`: nombre (identidad: familia + entidad) +
+  // tags + intentSummary + description. El nombre va primero para sobrevivir al
+  // tope de 12 y para que la coleccion de keywords responda a la familia y la
+  // entidad —no solo al vocabulario de la prosa—; la descripcion aporta el
+  // vocabulario de intencion ("crear", "listar") que distingue tools del mismo
+  // complemento.
   const sources = [
+    ...toolIdentityTokens(t.name ?? ""),
     ...(t.tags ?? []),
     ...(t.intentSummary ?? "").toLowerCase().split(/\s+/),
     ...(t.description ?? "").toLowerCase().split(/\s+/),

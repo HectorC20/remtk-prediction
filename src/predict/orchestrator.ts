@@ -19,7 +19,7 @@ import type {
 } from "../shared/interfaces/domain.interface";
 import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
 import { ConfirmationCache } from "./services/confirm-cache.service";
-import { extractQueryKeywords } from "./keywords";
+import { extractQueryKeywords, matchTokenSet } from "./keywords";
 import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
@@ -208,6 +208,10 @@ export class PredictionOrchestrator {
       turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text,
       input.keywords,
     );
+    // Tokens de match de la consulta (incluidas las keywords delegadas): son la
+    // señal con la que el rerank mide la afinidad contra el NOMBRE de cada
+    // herramienta, lo único que distingue familias dentro de un complemento.
+    const queryTokens = matchTokenSet(promptText);
 
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
     let zt: Float32Array | undefined;
@@ -237,6 +241,7 @@ export class PredictionOrchestrator {
         catalog: this.qdrant.catalog(scopeKey),
         modelSize: sessionModel,
         exclude: input.exclude,
+        queryTokens,
       });
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
@@ -294,6 +299,7 @@ export class PredictionOrchestrator {
       this.qdrant.catalog(scopeKey),
       modelSize,
       input.exclude,
+      queryTokens,
     );
     const order = base.tools.map((t) => t.name);
     const result: GraphPredictionResult = {

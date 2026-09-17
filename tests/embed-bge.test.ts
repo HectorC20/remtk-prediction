@@ -36,6 +36,8 @@ const CFG = {
   adaptiveGapThreshold: 0.15,
   adaptiveMinScore: 0,
   keywordBoost: 0.15,
+  nameAffinityBoost: 0.1,
+  familyGatePenalty: 0.2,
   keywordTopK: 20,
   recallLimit: 50,
   maxOutputTools: 50,

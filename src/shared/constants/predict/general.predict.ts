@@ -35,6 +35,34 @@ export const minScoreDefault = 0.8;
 /** Refuerzo (suma) por confirmación léxica BM25 sobre el coseno semántico. */
 export const keywordBoostDefault = 0.15;
 
+/**
+ * Refuerzo (suma) por afinidad entre las palabras clave de la consulta y el
+ * NOMBRE de la herramienta (familia + entidad).
+ *
+ * Es la señal que discrimina DENTRO de un complemento: cuando todas las tools
+ * comparten `group`, `category` y `tags` (caso de un plugin), ni el coseno ni
+ * BM25 separan `mitumbes_item_*` de `schedule_*`; el nombre sí.
+ *
+ * La magnitud (0.1) supera `gapThresholdDefault` (0.03) a propósito: así la
+ * familia correcta abre el gap natural sobre el que la etapa B recorta, en vez
+ * de quedar mezclada con el resto del complemento.
+ */
+export const nameAffinityBoostDefault = 0.1;
+
+/**
+ * Penalización (resta) a las herramientas de una familia DISTINTA de la
+ * nombrada en las palabras clave (env `FAMILY_GATE_PENALTY`).
+ *
+ * Solo actúa cuando la consulta nombra explícitamente el namespace de alguna
+ * herramienta del catálogo (p. ej. `mitumbes`, como hace el replanteo de la 2ª
+ * pasada): en ese momento las tools de otras familias (`schedule_*`) no tienen
+ * que ver con esas palabras clave y deben caer fuera de la banda del umbral
+ * adaptativo. La magnitud (0.2) es ~7× `gapThresholdDefault`: incluso cuando la
+ * herramienta ajena encabeza el coseno, la resta la deja fuera de la tanda del
+ * top. Sin familia nombrada la penalización es 0 y el ranking no cambia.
+ */
+export const familyGatePenaltyDefault = 0.2;
+
 /** Alpha de propagación de pre-requisitos en el grafo (S + alpha·Aᵀ·S). */
 export const graphPropagationAlphaDefault = 0.2;
 
