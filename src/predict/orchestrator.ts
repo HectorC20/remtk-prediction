@@ -19,7 +19,7 @@ import type {
 } from "../shared/interfaces/domain.interface";
 import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
 import { ConfirmationCache } from "./services/confirm-cache.service";
-import { extractQueryKeywords, matchTokenSet } from "./keywords";
+import { explicitToolNames, extractQueryKeywords, matchTokenSet } from "./keywords";
 import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
@@ -213,6 +213,20 @@ export class PredictionOrchestrator {
     // herramienta, lo único que distingue familias dentro de un complemento.
     const queryTokens = matchTokenSet(promptText);
 
+    // Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas: una
+    // keyword que coincide con el NOMBRE de una herramienta del catálogo es una
+    // orden directa de uso, así que el rerank la fija al frente de la salida. Sin
+    // este ancla el score por embeddings no distingue el verbo del nombre
+    // (`mitumbes_item_crear` y `mitumbes_item_actualizar` comparten identidad).
+    const catalog = this.qdrant.catalog(scopeKey);
+    const pinnedNames = explicitToolNames(
+      input.keywords,
+      catalog.all().map((t) => t.name),
+    );
+    if (pinnedNames.length > 0) {
+      log(`[pipeline] keywords explícitas=${pinnedNames.join(",")}`);
+    }
+
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
     let zt: Float32Array | undefined;
     let sessionModel = "hash";
@@ -238,10 +252,11 @@ export class PredictionOrchestrator {
         edges: this.graphCache.edges(scopeKey),
         lexicalScores,
         learned,
-        catalog: this.qdrant.catalog(scopeKey),
+        catalog,
         modelSize: sessionModel,
         exclude: input.exclude,
         queryTokens,
+        pinnedNames,
       });
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
@@ -296,10 +311,11 @@ export class PredictionOrchestrator {
       reduced,
       lexicalScores,
       learned,
-      this.qdrant.catalog(scopeKey),
+      catalog,
       modelSize,
       input.exclude,
       queryTokens,
+      pinnedNames,
     );
     const order = base.tools.map((t) => t.name);
     const result: GraphPredictionResult = {

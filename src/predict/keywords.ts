@@ -147,6 +147,36 @@ export function isForeignFamily(families: Set<string>, name: string): boolean {
 }
 
 /**
+ * Herramientas nombradas EXPLICITAMENTE en las palabras clave delegadas: una
+ * keyword que coincide con el NOMBRE de una herramienta del catálogo es una
+ * orden directa de uso, no una pista semántica mas del texto.
+ *
+ * El match es por nombre EXACTO (case-insensitive) porque el score por
+ * embeddings no distingue el verbo del nombre: `mitumbes_item_crear` y
+ * `mitumbes_item_actualizar` comparten tokens de identidad (`mitumbes`, `item`)
+ * y por tanto afinidad, así que sin este ancla la herramienta pedida puede no
+ * salir o salir por detrás de sus hermanas.
+ */
+export function explicitToolNames(keywords: string[] | undefined, names: string[]): string[] {
+  if (!keywords || keywords.length === 0) return [];
+  const byLower = new Map<string, string>();
+  for (const n of names) {
+    const name = String(n ?? "").trim();
+    if (name !== "") byLower.set(name.toLowerCase(), name);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const k of keywords) {
+    if (typeof k !== "string") continue;
+    const hit = byLower.get(k.trim().toLowerCase());
+    if (!hit || seen.has(hit)) continue;
+    seen.add(hit);
+    out.push(hit);
+  }
+  return out;
+}
+
+/**
  * Extrae keywords salientes del prompt: descarta stopwords y tokens cortos,
  * ordena por frecuencia (palabras repetidas primero) y luego por longitud.
  */

@@ -70,12 +70,20 @@ export class RerankService {
     modelSize: string,
     exclude?: string[],
     queryTokens?: Set<string>,
+    pinnedNames?: string[],
   ): RerankResult {
     const learnWeight = learned.weight;
     // Exclusión de la segunda pasada: las tools ya ofrecidas se descartan ANTES
     // de la etapa A para que tampoco puntúen su categoría ni ocupen cupo.
     const excluded = exclusionSet(exclude);
     const candidates = excluded ? reduced.filter((r) => !excluded.has(r.name.toLowerCase())) : reduced;
+    // Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas: se
+    // fijan al frente de la salida y se garantiza su presencia. El score por
+    // embeddings no distingue el verbo del nombre (dos tools del mismo
+    // complemento comparten tokens de identidad), así que sin este ancla la
+    // herramienta pedida puede quedarse fuera del umbral.
+    const pinned = pinnedList(pinnedNames, excluded);
+    const pinnedSet = new Set(pinned.map((n) => n.toLowerCase()));
     // Etapa A: conserva solo las mejores categorías (grupos) del pool, sin
     // descartar las que contienen herramientas afines al nombre de la consulta.
     const isAffine = affinityPredicate(queryTokens);
@@ -83,7 +91,7 @@ export class RerankService {
       candidates,
       (name) => catalog.get(name)?.group,
       this.config.maxCategories,
-      isAffine,
+      (name) => isAffine?.(name) === true || pinnedSet.has(name.toLowerCase()),
     );
     // Puerta de familia: namespaces nombrados explícitamente en las palabras
     // clave. Vacío = la consulta no nombra familia ninguna → no se penaliza.
@@ -115,12 +123,26 @@ export class RerankService {
     }
 
     // Piso absoluto de relevancia: si la mejor señal fusionada no supera el
-    // mínimo, no se selecciona ninguna herramienta.
+    // mínimo, no se selecciona ninguna herramienta. Las nombradas explícitamente
+    // se devuelven igual: son una orden del planificador, no una predicción.
     if (this.config.adaptiveMinScore > 0 && relevance < this.config.adaptiveMinScore) {
+      const forced = pinnedDefinitions(pinned, (n) => catalog.get(n));
+      if (forced.length === 0) {
+        log(
+          `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        );
+        return { tools: [], complexity: "simple", modelSize, rankedScores: [relevance] };
+      }
       log(
-        `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) ` +
+          `pero ${forced.length} tools explícitas → se devuelven`,
       );
-      return { tools: [], complexity: "simple", modelSize, rankedScores: [relevance] };
+      return {
+        tools: forced,
+        complexity: "simple",
+        modelSize,
+        rankedScores: forced.map(() => relevance),
+      };
     }
 
     const selectedNames = adaptiveThreshold(
@@ -141,10 +163,14 @@ export class RerankService {
     }
     const scoreByName = new Map(fused.map((s) => [s.name, s.score]));
 
+    // Las nombradas explícitamente encabezan la salida; si el umbral adaptativo
+    // las dejó fuera se añaden igualmente.
+    const finalNames = promotePinned(cappedNames, pinned).slice(0, this.config.maxOutputTools);
+
     const tools: ToolDefinition[] = [];
     const scores: number[] = [];
-    for (const name of cappedNames) {
-      const t = byName.get(name);
+    for (const name of finalNames) {
+      const t = byName.get(name) ?? catalog.get(name);
       if (t) {
         tools.push(t);
         scores.push(scoreByName.get(name) ?? 0);
@@ -171,6 +197,7 @@ export class RerankService {
     modelSize: string;
     exclude?: string[];
     queryTokens?: Set<string>;
+    pinnedNames?: string[];
   }): GraphRerankResult {
     const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude, queryTokens } = opts;
     // `total` es el tamaño COMPLETO del grafo: la matriz de adyacencia es
@@ -181,6 +208,11 @@ export class RerankService {
     // enrutador, así liberan cupo y dejan paso a otras del catálogo.
     const excluded = exclusionSet(exclude);
     const names = excluded ? allNames.filter((n) => !excluded.has(n.toLowerCase())) : allNames;
+    // Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas: son
+    // una orden del planificador, así que se fijan al frente y se garantiza su
+    // presencia aunque el umbral adaptativo las deje fuera.
+    const pinned = pinnedList(opts.pinnedNames, excluded);
+    const pinnedSet = new Set(pinned.map((n) => n.toLowerCase()));
     const learnWeight = learned.weight;
 
     // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo.
@@ -190,12 +222,14 @@ export class RerankService {
     }));
 
     // Etapa A: conserva solo las mejores categorías (grupos) del catálogo, sin
-    // descartar las que contienen herramientas afines al nombre de la consulta.
+    // descartar las que contienen herramientas afines al nombre de la consulta
+    // ni las nombradas explícitamente.
+    const isAffine = affinityPredicate(queryTokens);
     const keptNames = keepTopCategories(
       baseScores,
       (name) => graph.nodes.get(name)?.definition.group,
       this.config.maxCategories,
-      affinityPredicate(queryTokens),
+      (name) => isAffine?.(name) === true || pinnedSet.has(name.toLowerCase()),
     ).map((s) => s.name);
     const baseByName = new Map(baseScores.map((s) => [s.name, s.score]));
     // Puerta de familia: namespaces nombrados explícitamente en las palabras
@@ -243,15 +277,32 @@ export class RerankService {
       if (value > relevance) relevance = value;
     }
     if (this.config.adaptiveMinScore > 0 && relevance < this.config.adaptiveMinScore) {
+      // Las herramientas nombradas explícitamente son una orden del planificador,
+      // no una predicción: se devuelven aunque la relevancia no supere el piso.
+      const forced = pinnedDefinitions(pinned, (n) => catalog.get(n));
+      if (forced.length === 0) {
+        log(
+          `[rerank:graph] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        );
+        return {
+          tools: [],
+          complexity: "simple",
+          modelSize,
+          rankedScores: [relevance],
+          graph: { nodes: [], edges: [], executionOrder: [] },
+        };
+      }
+      const order = forced.map((t) => t.name);
       log(
-        `[rerank:graph] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        `[rerank:graph] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) ` +
+          `pero ${forced.length} tools explícitas → se devuelven`,
       );
       return {
-        tools: [],
+        tools: forced,
         complexity: "simple",
         modelSize,
-        rankedScores: [relevance],
-        graph: { nodes: [], edges: [], executionOrder: [] },
+        rankedScores: forced.map(() => relevance),
+        graph: { nodes: order, edges: [], executionOrder: order },
       };
     }
 
@@ -275,16 +326,34 @@ export class RerankService {
 
     // 6. Resolución de mutexes: de dos nodos excluidos, queda el de mayor score.
     const selectedSet = new Set(selectedNames);
+    // Las herramientas nombradas explícitamente entran siempre a la selección
+    // (si están en el pool), aunque el umbral adaptativo no las haya elegido.
+    const nodeNameByLower = new Map(names.map((n) => [n.toLowerCase(), n]));
+    const keptLower = new Set(keptNames.map((n) => n.toLowerCase()));
+    for (const name of pinned) {
+      const actual = nodeNameByLower.get(name.toLowerCase());
+      if (actual && keptLower.has(name.toLowerCase())) selectedSet.add(actual);
+    }
     const removed: string[] = [];
     for (const e of edges) {
       if (e.type !== "MUTUALLY_EXCLUSIVE") continue;
-      if (selectedSet.has(e.from) && selectedSet.has(e.to)) {
-        const fromScore = propagated.get(e.from) ?? 0;
-        const toScore = propagated.get(e.to) ?? 0;
-        const loser = fromScore >= toScore ? e.to : e.from;
+      if (!selectedSet.has(e.from) || !selectedSet.has(e.to)) continue;
+      // Una tool nombrada explícitamente nunca se descarta por un mutex: la
+      // ordena el planificador, no el ranking.
+      const fromPinned = pinnedSet.has(e.from.toLowerCase());
+      const toPinned = pinnedSet.has(e.to.toLowerCase());
+      if (fromPinned && toPinned) continue;
+      if (fromPinned || toPinned) {
+        const loser = fromPinned ? e.to : e.from;
         selectedSet.delete(loser);
         removed.push(loser);
+        continue;
       }
+      const fromScore = propagated.get(e.from) ?? 0;
+      const toScore = propagated.get(e.to) ?? 0;
+      const loser = fromScore >= toScore ? e.to : e.from;
+      selectedSet.delete(loser);
+      removed.push(loser);
     }
 
     // No dejar que los mutexes reduzcan por debajo del mínimo adaptativo: se
@@ -308,8 +377,15 @@ export class RerankService {
       log(`[rerank:graph] mutex removidos=${removed.join(",")} final=${selectedSet.size}`);
     }
 
-    // 7. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo.
-    const executionOrder = topologicalSort([...selectedSet], edges, propagated);
+    // 7. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo. Las
+    //    herramientas nombradas explícitamente desempatan al frente; sus
+    //    pre-requisitos seleccionados siguen ejecutándose antes que ellas.
+    const orderScores = new Map(propagated);
+    for (const name of pinned) {
+      const actual = nodeNameByLower.get(name.toLowerCase());
+      if (actual && selectedSet.has(actual)) orderScores.set(actual, Number.MAX_SAFE_INTEGER);
+    }
+    const executionOrder = topologicalSort([...selectedSet], edges, orderScores);
 
     // 8. Subgrafo activado: solo aristas cuyos extremos quedaron seleccionados.
     const subEdges = edges.filter((e) => selectedSet.has(e.from) && selectedSet.has(e.to));
@@ -350,6 +426,54 @@ export class RerankService {
 export function exclusionSet(exclude?: string[]): Set<string> | undefined {
   if (!exclude || exclude.length === 0) return undefined;
   return new Set(exclude.map((n) => n.toLowerCase()));
+}
+
+/**
+ * Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas,
+ * normalizadas y ya sin las omitidas por la segunda pasada. Se preserva el orden
+ * de mención de las palabras clave y se eliminan duplicados.
+ */
+export function pinnedList(pinnedNames?: string[], excluded?: Set<string>): string[] {
+  if (!pinnedNames || pinnedNames.length === 0) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of pinnedNames) {
+    const name = String(raw ?? "").trim();
+    if (name === "") continue;
+    const lower = name.toLowerCase();
+    if (excluded?.has(lower) || seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Promueve las herramientas nombradas explícitamente al frente de la salida,
+ * conservando el orden relativo del resto. Las que no estuvieran en `names` se
+ * añaden igualmente: son una orden del planificador, no una predicción.
+ */
+export function promotePinned(names: string[], pinned: string[]): string[] {
+  if (pinned.length === 0) return names;
+  const pinnedLower = new Set(pinned.map((n) => n.toLowerCase()));
+  const rest = names.filter((n) => !pinnedLower.has(n.toLowerCase()));
+  return [...pinned, ...rest];
+}
+
+/**
+ * Resuelve las definiciones de las herramientas fijadas por nombre exacto,
+ * saltando las que no existan en el catálogo.
+ */
+export function pinnedDefinitions(
+  pinned: string[],
+  resolve: (name: string) => ToolDefinition | undefined,
+): ToolDefinition[] {
+  const out: ToolDefinition[] = [];
+  for (const name of pinned) {
+    const t = resolve(name);
+    if (t) out.push(t);
+  }
+  return out;
 }
 
 /**
