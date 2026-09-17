@@ -31,6 +31,7 @@ import {
   learnSeedWeightDefault,
   learnTermMinWeightDefault,
   learnWeightDefault,
+  maxCategoriesDefault,
   maxOutputToolsDefault,
   maxToolsDefault,
   minScoreDefault,
@@ -69,8 +70,13 @@ export interface AppConfig {
   keywordTopK: number;
   /** Tope de candidatas recuperadas del recall BM25 por consulta. */
   recallLimit: number;
-  /** Tope final de tools devueltas tras el umbral adaptativo (env `MAX_OUTPUT_TOOLS`, rango 0-50). */
+  /** Tope final de tools devueltas tras el umbral adaptativo (env `MAX_OUTPUT_TOOLS`, rango 0-150). */
   maxOutputTools: number;
+  /**
+   * Etapa A: tope de categorías (grupos) que pasan al decisor de herramientas
+   * (env `MAX_CATEGORIES`).
+   */
+  maxCategories: number;
 
   // ── Capa de aprendizaje léxico por canal (docs/entrenamiento-prediccion.md) ──
   /** Interruptor maestro: sin él, `seedScope`/`observe`/scoring quedan inertes. */
@@ -150,11 +156,13 @@ function resolveModelsPath(env: NodeJS.ProcessEnv): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  // Tope final de tools de salida: env opcional recortado al rango permitido [0, 50].
+  // Tope final de tools de salida: env opcional recortado al rango permitido [0, 150].
   const maxOutputTools = Math.max(
     0,
     Math.min(int(env.MAX_OUTPUT_TOOLS, maxOutputToolsDefault), outputToolsCeiling),
   );
+  // Etapa A: al menos 1 categoría para que el decisor siempre tenga candidatas.
+  const maxCategories = Math.max(1, int(env.MAX_CATEGORIES, maxCategoriesDefault));
 
   return {
     // ── Puertos de los listeners HTTP ───────────────────────────────────
@@ -178,6 +186,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     keywordTopK: int(env.KEYWORD_TOP_K, keywordTopKDefault),
     recallLimit: int(env.RECALL_LIMIT, recallLimitDefault),
     maxOutputTools,
+    maxCategories,
 
     // ── Aprendizaje léxico por canal ────────────────────────────────────
     learnEnabled: bool(env.LEARN_ENABLED, learnEnabledDefault),

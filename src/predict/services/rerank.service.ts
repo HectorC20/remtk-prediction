@@ -2,7 +2,14 @@
  * RerankService: Capa 3 del pipeline. Fusiona el score cross-idioma de keywords
  * (capa 2) con la confirmación léxica de Qdrant (BM25) y aplica el umbral
  * adaptativo. El resultado final se recorta al tope configurado de herramientas
- * de salida (env opcional `MAX_OUTPUT_TOOLS`, 0-50).
+ * de salida (env opcional `MAX_OUTPUT_TOOLS`, 0-150).
+ *
+ * El pipeline corre en dos etapas sobre el mismo pool de candidatas:
+ *   - Etapa A (categorías): agrupa las candidatas por `group` y conserva las
+ *     mejores categorías (env `MAX_CATEGORIES`, default 60).
+ *   - Etapa B (decisor): dentro de esas categorías aplica la fusión, el umbral
+ *     adaptativo y el tope final de herramientas (env `MAX_OUTPUT_TOOLS`).
+ *
  * Migrado de rerank_service.go + adaptive_threshold.go del server Go.
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
@@ -50,7 +57,13 @@ export class RerankService {
     modelSize: string,
   ): RerankResult {
     const learnWeight = learned.weight;
-    const fused: ScoredTool[] = reduced.map((r) => ({
+    // Etapa A: conserva solo las mejores categorías (grupos) del pool.
+    const pool = keepTopCategories(
+      reduced,
+      (name) => catalog.get(name)?.group,
+      this.config.maxCategories,
+    );
+    const fused: ScoredTool[] = pool.map((r) => ({
       name: r.name,
       score:
         r.score +
@@ -63,7 +76,7 @@ export class RerankService {
     // un término aprendido del canal puede rescatar una herramienta que el
     // coseno dejaba justo por debajo del mínimo. Con `learnWeight = 0` la
     // expresión es idéntica a la anterior (`topCos`).
-    const relevance = reduced.reduce(
+    const relevance = pool.reduce(
       (m, r) => Math.max(m, r.score + learnWeight * (learned.scores.get(r.name) ?? 0)),
       0,
     );
@@ -90,12 +103,12 @@ export class RerankService {
       this.config.adaptiveGapThreshold,
     );
 
-    // Tope final opcional (MAX_OUTPUT_TOOLS, 0-50): recorta lo decidido por el
+    // Tope final opcional (MAX_OUTPUT_TOOLS, 0-150): recorta lo decidido por el
     // umbral adaptativo, p. ej. 0 para no devolver herramientas nunca.
     const cappedNames = selectedNames.slice(0, this.config.maxOutputTools);
 
     const byName = new Map<string, ToolDefinition>();
-    for (const r of reduced) {
+    for (const r of pool) {
       const t = catalog.get(r.name);
       if (t) byName.set(t.name, t);
     }
@@ -132,38 +145,56 @@ export class RerankService {
   }): GraphRerankResult {
     const { zt, graph, edges, lexicalScores, learned, catalog, modelSize } = opts;
     const names = [...graph.nodes.keys()];
+    const total = names.length;
     const learnWeight = learned.weight;
 
-    // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo,
-    //    más el refuerzo léxico BM25 y el perfil aprendido del canal.
+    // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo.
+    const baseScores: ScoredTool[] = names.map((name) => ({
+      name,
+      score: EmbeddingEngineService.cosine(zt, graph.nodes.get(name)!.embedding),
+    }));
+
+    // Etapa A: conserva solo las mejores categorías (grupos) del catálogo.
+    const keptNames = keepTopCategories(
+      baseScores,
+      (name) => graph.nodes.get(name)?.definition.group,
+      this.config.maxCategories,
+    ).map((s) => s.name);
+    const baseByName = new Map(baseScores.map((s) => [s.name, s.score]));
+
+    // 2. Refuerzo léxico BM25 + perfil aprendido del canal sobre el pool.
     const fused = new Map<string, number>();
-    for (const name of names) {
-      const node = graph.nodes.get(name)!;
-      const base = EmbeddingEngineService.cosine(zt, node.embedding);
+    for (const name of keptNames) {
       fused.set(
         name,
-        base +
+        (baseByName.get(name) ?? 0) +
           this.config.keywordBoost * (lexicalScores.get(name) ?? 0) +
           learnWeight * (learned.scores.get(name) ?? 0),
       );
     }
 
-    // 2. Propagación de pre-requisitos: S_propagado = S + alpha · (Aᵀ · S).
+    // 3. Propagación de pre-requisitos: S_propagado = S + alpha · (Aᵀ · S).
+    //    La matriz de adyacencia es global (total × total): se indexa con
+    //    `toolIndexMap`, no con la posición dentro del pool filtrado.
     const propagated = new Map<string, number>();
-    const n = names.length;
-    for (let j = 0; j < n; j++) {
+    for (const jName of keptNames) {
+      const j = graph.toolIndexMap.get(jName);
       let boost = 0;
-      for (let i = 0; i < n; i++) {
-        boost += graph.adjacencyMatrix[i * n + j] * (fused.get(names[i]) ?? 0);
+      if (j !== undefined) {
+        for (const iName of keptNames) {
+          const i = graph.toolIndexMap.get(iName);
+          if (i === undefined) continue;
+          boost += graph.adjacencyMatrix[i * total + j] * (fused.get(iName) ?? 0);
+        }
       }
-      propagated.set(names[j], (fused.get(names[j]) ?? 0) + graphPropagationAlphaDefault * boost);
+      propagated.set(jName, (fused.get(jName) ?? 0) + graphPropagationAlphaDefault * boost);
     }
 
-    // 3. Piso de relevancia sobre la señal fusionada (§6.6): el término
+    // 4. Piso de relevancia sobre la señal fusionada (§6.6): el término
     //    aprendido del canal puede rescatar una tool que el coseno dejaba bajo
     //    el mínimo. Con `learnWeight = 0` es el máximo propagado de siempre.
     let relevance = 0;
-    for (const name of names) {
+    for (const name of keptNames) {
       const value =
         (propagated.get(name) ?? 0) + learnWeight * (learned.scores.get(name) ?? 0);
       if (value > relevance) relevance = value;
@@ -181,8 +212,8 @@ export class RerankService {
       };
     }
 
-    // 4. Umbral adaptativo + tope de salida.
-    const scored: ScoredTool[] = names.map((name) => ({ name, score: propagated.get(name) ?? 0 }));
+    // 5. Umbral adaptativo + tope de salida (etapa B).
+    const scored: ScoredTool[] = keptNames.map((name) => ({ name, score: propagated.get(name) ?? 0 }));
     const sortedScored = [...scored].sort((a, b) => b.score - a.score);
     if (sortedScored.length > 0) {
       log(
@@ -199,7 +230,7 @@ export class RerankService {
       this.config.adaptiveGapThreshold,
     ).slice(0, this.config.maxOutputTools);
 
-    // 5. Resolución de mutexes: de dos nodos excluidos, queda el de mayor score.
+    // 6. Resolución de mutexes: de dos nodos excluidos, queda el de mayor score.
     const selectedSet = new Set(selectedNames);
     const removed: string[] = [];
     for (const e of edges) {
@@ -215,7 +246,7 @@ export class RerankService {
 
     // No dejar que los mutexes reduzcan por debajo del mínimo adaptativo: se
     // rellena con la siguiente mejor herramienta que no esté excluida.
-    const minTools = Math.min(this.config.adaptiveMinTools, names.length);
+    const minTools = Math.min(this.config.adaptiveMinTools, keptNames.length);
     if (selectedSet.size < minTools) {
       for (const s of sortedScored) {
         if (selectedSet.size >= minTools) break;
@@ -234,10 +265,10 @@ export class RerankService {
       log(`[rerank:graph] mutex removidos=${removed.join(",")} final=${selectedSet.size}`);
     }
 
-    // 6. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo.
+    // 7. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo.
     const executionOrder = topologicalSort([...selectedSet], edges, propagated);
 
-    // 7. Subgrafo activado: solo aristas cuyos extremos quedaron seleccionados.
+    // 8. Subgrafo activado: solo aristas cuyos extremos quedaron seleccionados.
     const subEdges = edges.filter((e) => selectedSet.has(e.from) && selectedSet.has(e.to));
 
     const tools: ToolDefinition[] = [];
@@ -265,6 +296,43 @@ export class RerankService {
       graph: { nodes: executionOrder, edges: subEdges, executionOrder },
     };
   }
+}
+
+/**
+ * Etapa A del pipeline: agrupa las candidatas por categoría (`group`) y
+ * conserva únicamente las de mayor score, hasta `limit`.
+ *
+ * La categoría se puntúa con el máximo de sus herramientas (una sola tool muy
+ * relevante basta para que su categoría entre al decisor). Si el pool no supera
+ * el tope de categorías, se devuelve intacto: la etapa A es una cota, no un
+ * filtro agresivo.
+ */
+export function keepTopCategories(
+  candidates: ScoredTool[],
+  groupOf: (name: string) => string | undefined,
+  limit: number,
+): ScoredTool[] {
+  if (candidates.length === 0) return candidates;
+  const categoryScore = new Map<string, number>();
+  for (const c of candidates) {
+    const g = groupOf(c.name) || "";
+    const cur = categoryScore.get(g);
+    if (cur === undefined || c.score > cur) categoryScore.set(g, c.score);
+  }
+  if (limit <= 0 || categoryScore.size <= limit) return candidates;
+
+  const kept = new Set(
+    [...categoryScore.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([g]) => g),
+  );
+  const filtered = candidates.filter((c) => kept.has(groupOf(c.name) || ""));
+  log(
+    `[rerank:categorias] etapaA categorias=${categoryScore.size}->${kept.size} ` +
+      `candidatas=${candidates.length}->${filtered.length}`,
+  );
+  return filtered;
 }
 
 /**

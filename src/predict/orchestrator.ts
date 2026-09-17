@@ -202,8 +202,12 @@ export class PredictionOrchestrator {
 
     // En turnos de confirmación (con matiz) o source=agent se predice sobre el plan previo.
     // En consulta nueva se incorporan los mensajes previos para dar contexto.
-    const promptText =
-      turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text;
+    // Las `keywords` delegadas (planificador/cliente) se anexan a la consulta:
+    // alimentan el match cross-idioma (capa 2), el recall BM25 y el z_t de sesión.
+    const promptText = this.withKeywords(
+      turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text,
+      input.keywords,
+    );
 
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
     let zt: Float32Array | undefined;
@@ -556,6 +560,28 @@ export class PredictionOrchestrator {
       .map((c) => (c.length > MAX_MESSAGE_CHARS ? c.slice(0, MAX_MESSAGE_CHARS) : c));
     if (recent.length === 0) return text;
     return [...recent, text].join("\n");
+  }
+
+  /**
+   * Anexa a la consulta las palabras clave delegadas (planificador o cliente).
+   * Se normalizan y deduplican; sin keywords la consulta queda intacta.
+   */
+  private withKeywords(text: string, keywords?: string[]): string {
+    if (!keywords || keywords.length === 0) return text;
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    for (const k of keywords) {
+      if (typeof k !== "string") continue;
+      const v = k.trim();
+      if (v === "") continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      parts.push(v);
+    }
+    if (parts.length === 0) return text;
+    log(`[pipeline] keywords delegadas=${parts.length}`);
+    return `${text}\n${parts.join(" ")}`;
   }
 
   private async memoryEmbedding(content: string): Promise<Float32Array | undefined> {

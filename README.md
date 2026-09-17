@@ -64,7 +64,7 @@ const result = await system.orchestrator.predict({
   source: "human",
   history: [{ role: "user", content: "hola" }], // contexto previo
 });
-console.log(result.tools.map((t) => t.name)); // hasta MAX_OUTPUT_TOOLS (default 50, rango 0-50)
+console.log(result.tools.map((t) => t.name)); // hasta MAX_OUTPUT_TOOLS (default 150, rango 0-150)
 ```
 
 API exportada:
@@ -102,7 +102,8 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 | `QDRANT_URL` | `http://localhost:6333` | URL del Qdrant |
 | `QDRANT_API_KEY` | *(vacío)* | API key opcional |
 | `RECALL_LIMIT` | `50` | Límite de recall por consulta |
-| `MAX_OUTPUT_TOOLS` | `50` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo (rango `0-50`; `0` → nunca devolver herramientas) |
+| `MAX_CATEGORIES` | `60` | Tope de **categorías** (`group`) que alimentan el decisor de herramientas (etapa A) |
+| `MAX_OUTPUT_TOOLS` | `150` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo (rango `0-150`; `0` → nunca devolver herramientas) |
 
 > Las colecciones de Qdrant (`mcp_tools`, `tool_keywords`, `query_synonyms`,
 > `contextual_memories`) son **constantes fijas** del código
@@ -121,7 +122,9 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 ### `POST /predict`
 
 Predice las herramientas MCP más relevantes para el texto del usuario (pipeline:
-clasificador de turno → recall BM25 → re-rank con e5-small → umbral adaptativo).
+clasificador de turno → recall BM25 → re-rank con e5-small → **etapa A**: recorte
+a las mejores categorías/`group` según `MAX_CATEGORIES` → **etapa B (decisor)**:
+umbral adaptativo + recorte final según `MAX_OUTPUT_TOOLS`).
 
 **Body:**
 
@@ -131,7 +134,8 @@ clasificador de turno → recall BM25 → re-rank con e5-small → umbral adapta
   "tenant": "tenant-demo",
   "text": "envía un correo electrónico al equipo con el resumen",
   "source": "human",
-  "priorPlan": "{\"objetivo\":\"...\"}"
+  "priorPlan": "{\"objetivo\":\"...\"}",
+  "keywords": ["enviar correo", "email", "equipo"]
 }
 ```
 
@@ -142,6 +146,8 @@ clasificador de turno → recall BM25 → re-rank con e5-small → umbral adapta
 | `text` | string | sí | Texto del usuario |
 | `source` | `"human"` \| `"agent"` | no | Origen del turno |
 | `priorPlan` | string (JSON) | no | Plan previo para turnos de confirmación |
+| `keywords` | string[] | no | Palabras clave que acompañan al texto (p. ej. las que el planificador delega a cada mini-agente). Se normalizan/deduplican y se anexan a la consulta para afinar el recall léxico y el match cross-idioma |
+| `history` | `{role,content}[]` | no | Mensajes previos de la conversación (contexto) |
 
 **Respuesta 200:**
 

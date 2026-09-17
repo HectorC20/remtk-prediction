@@ -11,8 +11,17 @@ export const minToolsDefault = 2;
 /** Máximo de tools que entrega el umbral adaptativo (capa 3). */
 export const maxToolsDefault = 30;
 
-/** Tope máximo permitido de herramientas de salida (env `MAX_OUTPUT_TOOLS`). */
-export const outputToolsCeiling = 50;
+/**
+ * Etapa A del pipeline: tope de categorías (grupos) que alimentan al decisor
+ * de herramientas (env `MAX_CATEGORIES`).
+ */
+export const maxCategoriesDefault = 60;
+
+/**
+ * Tope máximo permitido de herramientas de la etapa B / salida final
+ * (env `MAX_OUTPUT_TOOLS`).
+ */
+export const outputToolsCeiling = 150;
 
 /** Default del tope final de herramientas de salida (recorte tras el umbral). */
 export const maxOutputToolsDefault = outputToolsCeiling;
@@ -29,8 +38,12 @@ export const keywordBoostDefault = 0.15;
 /** Alpha de propagación de pre-requisitos en el grafo (S + alpha·Aᵀ·S). */
 export const graphPropagationAlphaDefault = 0.2;
 
-/** Tamaño del top-K tras la reducción cross-idioma (capa 2). */
-export const keywordTopKDefault = 20;
+/**
+ * Tamaño del top-K tras la reducción cross-idioma (capa 2). Es el pool de
+ * candidatas que alimenta la etapa A (categorías) y la etapa B (decisor de
+ * herramientas), por lo que debe cubrir el tope de salida.
+ */
+export const keywordTopKDefault = maxOutputToolsDefault;
 
 /** Tope de candidatas que se recuperan del recall BM25 por consulta. */
 export const recallLimitDefault = 50;

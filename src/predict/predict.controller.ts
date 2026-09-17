@@ -50,14 +50,14 @@ export class PredictV1Controller {
 
   /**
    * POST /predict
-   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan? }
+   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan?, keywords? }
    * Respuesta: { tools, complexity, modelSize, rankedScores }
    */
   @Post("predict")
   @HttpCode(200)
   async predict(@Body() body: Record<string, unknown>): Promise<unknown> {
     const b = body ?? {};
-    const { sessionId, tenant, text, source, priorPlan, history } = b;
+    const { sessionId, tenant, text, source, priorPlan, history, keywords } = b;
     if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
       throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
     }
@@ -69,6 +69,7 @@ export class PredictV1Controller {
         source: source === "agent" ? "agent" : "human",
         agentId: normalizeAgentId(b.agentId),
         priorPlan: typeof priorPlan === "string" ? priorPlan : undefined,
+        keywords: Array.isArray(keywords) ? asNames(keywords) : undefined,
         history: Array.isArray(history)
           ? (history as { role?: unknown; content?: unknown }[])
               .filter((h) => h && typeof h.content === "string")

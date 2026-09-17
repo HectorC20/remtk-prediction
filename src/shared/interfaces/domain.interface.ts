@@ -48,6 +48,12 @@ export interface PredictionInput {
   history?: ChatMessage[];
   /** Agente opcional: ausente/vacío ⇒ chat general (scope = tenant). */
   agentId?: string;
+  /**
+   * Palabras clave que acompañan a la tarea (p. ej. las que delega el
+   * planificador a cada mini-agente). Se añaden a la consulta para afinar el
+   * recall BM25 y el match cross-idioma.
+   */
+  keywords?: string[];
 }
 
 

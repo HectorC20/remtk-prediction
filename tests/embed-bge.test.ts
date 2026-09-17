@@ -39,6 +39,7 @@ const CFG = {
   keywordTopK: 20,
   recallLimit: 50,
   maxOutputTools: 50,
+  maxCategories: 60,
   qdrantEnabled: false,
   qdrantUrl: "http://localhost:6333",
   qdrantApiKey: "",
