@@ -10,6 +10,7 @@ import type { AppConfig } from "src/config";
 import { log } from "src/logger";
 import type { ScoredTool, ToolComplexity, ToolDefinition } from "src/shared/interfaces/domain.interface";
 import type { GraphEdge, TenantToolGraph } from "src/shared/interfaces/graph.interface";
+import type { LearnedScores } from "src/shared/interfaces/lexical.interface";
 import { graphPropagationAlphaDefault } from "src/shared/constants/predict/general.predict";
 
 export interface RerankResult {
@@ -35,37 +36,51 @@ export class RerankService {
 
   /**
    * Fusiona el ranking cross-idioma (reduced) con el score léxico normalizado
-   * de Qdrant y aplica el piso de relevancia + umbral adaptativo.
+   * de Qdrant y el perfil léxico aprendido del canal, y aplica el piso de
+   * relevancia + umbral adaptativo.
    *
    * final = cosineKeywords + keywordBoost * lexicalQdrant
+   *                          + learnWeightEfectivo * aprendido
    */
   filter(
     reduced: ScoredTool[],
     lexicalScores: Map<string, number>,
+    learned: LearnedScores,
     catalog: { get(name: string): ToolDefinition | undefined },
     modelSize: string,
   ): RerankResult {
+    const learnWeight = learned.weight;
     const fused: ScoredTool[] = reduced.map((r) => ({
       name: r.name,
-      score: r.score + this.config.keywordBoost * (lexicalScores.get(r.name) ?? 0),
+      score:
+        r.score +
+        this.config.keywordBoost * (lexicalScores.get(r.name) ?? 0) +
+        learnWeight * (learned.scores.get(r.name) ?? 0),
     }));
     fused.sort((a, b) => b.score - a.score);
 
-    const topCos = reduced.reduce((m, r) => Math.max(m, r.score), 0);
+    // Piso de relevancia sobre la señal fusionada semántico + aprendido (§6.6):
+    // un término aprendido del canal puede rescatar una herramienta que el
+    // coseno dejaba justo por debajo del mínimo. Con `learnWeight = 0` la
+    // expresión es idéntica a la anterior (`topCos`).
+    const relevance = reduced.reduce(
+      (m, r) => Math.max(m, r.score + learnWeight * (learned.scores.get(r.name) ?? 0)),
+      0,
+    );
     if (fused.length > 0) {
       log(
         `[rerank] fused=${fused.length} top1=${fused[0].name}(${fused[0].score.toFixed(3)}) ` +
-          `topCos=${topCos.toFixed(3)}`,
+          `relevancia=${relevance.toFixed(3)} learnW=${learnWeight.toFixed(2)}`,
       );
     }
 
-    // Piso absoluto de relevancia (semántico): si ni la mejor keyword coseno
-    // supera el mínimo, no se selecciona ninguna herramienta.
-    if (this.config.adaptiveMinScore > 0 && topCos < this.config.adaptiveMinScore) {
+    // Piso absoluto de relevancia: si la mejor señal fusionada no supera el
+    // mínimo, no se selecciona ninguna herramienta.
+    if (this.config.adaptiveMinScore > 0 && relevance < this.config.adaptiveMinScore) {
       log(
-        `[rerank] piso de relevancia no superado (topCos=${topCos.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
       );
-      return { tools: [], complexity: "simple", modelSize, rankedScores: [topCos] };
+      return { tools: [], complexity: "simple", modelSize, rankedScores: [relevance] };
     }
 
     const selectedNames = adaptiveThreshold(
@@ -111,18 +126,26 @@ export class RerankService {
     graph: TenantToolGraph;
     edges: GraphEdge[];
     lexicalScores: Map<string, number>;
+    learned: LearnedScores;
     catalog: Catalog;
     modelSize: string;
   }): GraphRerankResult {
-    const { zt, graph, edges, lexicalScores, catalog, modelSize } = opts;
+    const { zt, graph, edges, lexicalScores, learned, catalog, modelSize } = opts;
     const names = [...graph.nodes.keys()];
+    const learnWeight = learned.weight;
 
-    // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo.
+    // 1. Similitud base s_i = cosine(z_t, E(T_i)) sobre embeddings de nodo,
+    //    más el refuerzo léxico BM25 y el perfil aprendido del canal.
     const fused = new Map<string, number>();
     for (const name of names) {
       const node = graph.nodes.get(name)!;
       const base = EmbeddingEngineService.cosine(zt, node.embedding);
-      fused.set(name, base + this.config.keywordBoost * (lexicalScores.get(name) ?? 0));
+      fused.set(
+        name,
+        base +
+          this.config.keywordBoost * (lexicalScores.get(name) ?? 0) +
+          learnWeight * (learned.scores.get(name) ?? 0),
+      );
     }
 
     // 2. Propagación de pre-requisitos: S_propagado = S + alpha · (Aᵀ · S).
@@ -136,17 +159,24 @@ export class RerankService {
       propagated.set(names[j], (fused.get(names[j]) ?? 0) + graphPropagationAlphaDefault * boost);
     }
 
-    // 3. Piso de relevancia.
-    const topScore = names.length > 0 ? Math.max(...propagated.values()) : 0;
-    if (this.config.adaptiveMinScore > 0 && topScore < this.config.adaptiveMinScore) {
+    // 3. Piso de relevancia sobre la señal fusionada (§6.6): el término
+    //    aprendido del canal puede rescatar una tool que el coseno dejaba bajo
+    //    el mínimo. Con `learnWeight = 0` es el máximo propagado de siempre.
+    let relevance = 0;
+    for (const name of names) {
+      const value =
+        (propagated.get(name) ?? 0) + learnWeight * (learned.scores.get(name) ?? 0);
+      if (value > relevance) relevance = value;
+    }
+    if (this.config.adaptiveMinScore > 0 && relevance < this.config.adaptiveMinScore) {
       log(
-        `[rerank:graph] piso de relevancia no superado (top=${topScore.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
+        `[rerank:graph] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
       );
       return {
         tools: [],
         complexity: "simple",
         modelSize,
-        rankedScores: [topScore],
+        rankedScores: [relevance],
         graph: { nodes: [], edges: [], executionOrder: [] },
       };
     }

@@ -51,6 +51,29 @@ export interface PredictionInput {
 }
 
 
+/**
+ * Señal de refuerzo del aprendizaje léxico (§8 del plan de entrenamiento).
+ * `used` debe contener SOLO herramientas cuya ejecución confirmó éxito real;
+ * `rejected` las predichas que fallaron o no se usaron.
+ */
+export interface FeedbackInput {
+  sessionId: string;
+  tenant: string;
+  text: string;
+  /** Agente opcional: ausente/vacío ⇒ chat general (scope = tenant). */
+  agentId?: string;
+  /** Herramientas cuyo uso terminó en éxito real. */
+  used: string[];
+  /** Herramientas predichas que no funcionaron. */
+  rejected?: string[];
+}
+
+export interface FeedbackResult {
+  ok: true;
+  /** Señales acumuladas del canal tras aplicar este evento. */
+  events: number;
+}
+
 /** Traza de una predicción (para el endpoint /debug). */
 export interface Trace {
   sessionId: string;
@@ -69,4 +92,8 @@ export interface Trace {
   complexity: ToolComplexity;
   latencyMs: number;
   timestamp: string;
+  /** Peso efectivo de la señal aprendida del canal (0 = capa inactiva, §6.5). */
+  learnWeight?: number;
+  /** Herramientas del canal con score aprendido en esta predicción. */
+  learnTerms?: number;
 }

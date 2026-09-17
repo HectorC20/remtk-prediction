@@ -9,6 +9,7 @@ import { PredictionOrchestrator } from "src/predict/orchestrator";
 import { IPredictionOrchestrator } from "../interfaces/orchestrator.interface";
 import { RerankService } from "src/predict/services/rerank.service";
 import { ConfirmationCache } from "src/predict/services/confirm-cache.service";
+import { LexicalProfileService } from "src/predict/services/lexical-profile.service";
 import { AppConfig } from "src/config";
 
 export interface OrchestratorDependencies {
@@ -22,6 +23,8 @@ export interface OrchestratorDependencies {
   sessionState: SessionStateCacheService;
   debugger_: Debugger;
   cfg: AppConfig;
+  /** Perfil léxico aprendido por canal (cuarta señal del ranking). */
+  lexical: LexicalProfileService;
 }
 
 /** Construye y devuelve la instancia del orquestador bajo su interfaz */
@@ -37,5 +40,6 @@ export function createOrchestrator(deps: OrchestratorDependencies): IPredictionO
     deps.sessionState,
     deps.debugger_,
     deps.cfg,
+    deps.lexical,
   );
 }

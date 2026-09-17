@@ -31,6 +31,18 @@ const CFG = {
   keywordsCollection: "tool_keywords",
   synonymsCollection: "query_synonyms",
   memoriesCollection: "contextual_memories",
+  // Capa de aprendizaje léxico por canal (no interviene en estos tests).
+  learnEnabled: false,
+  learnWeight: 0.25,
+  learnEta: 0.5,
+  learnNegativeGamma: 0.15,
+  learnDecayLambda: 0.02,
+  learnMinEvents: 3,
+  learnSeedWeight: 0.3,
+  learnMaxTermsPerTool: 64,
+  learnTermMinWeight: 0.05,
+  learnMaxPostings: 200,
+  learnPersist: false,
 };
 
 test("e5-small real: modelo=small, dim=384, vector normalizado", { timeout: 300_000 }, async () => {

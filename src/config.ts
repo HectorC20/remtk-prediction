@@ -20,6 +20,17 @@ import {
   gapThresholdDefault,
   keywordBoostDefault,
   keywordTopKDefault,
+  learnDecayLambdaDefault,
+  learnEnabledDefault,
+  learnEtaDefault,
+  learnMaxPostingsDefault,
+  learnMaxTermsPerToolDefault,
+  learnMinEventsDefault,
+  learnNegativeGammaDefault,
+  learnPersistDefault,
+  learnSeedWeightDefault,
+  learnTermMinWeightDefault,
+  learnWeightDefault,
   maxOutputToolsDefault,
   maxToolsDefault,
   minScoreDefault,
@@ -60,6 +71,30 @@ export interface AppConfig {
   recallLimit: number;
   /** Tope final de tools devueltas tras el umbral adaptativo (env `MAX_OUTPUT_TOOLS`, rango 0-50). */
   maxOutputTools: number;
+
+  // ── Capa de aprendizaje léxico por canal (docs/entrenamiento-prediccion.md) ──
+  /** Interruptor maestro: sin él, `seedScope`/`observe`/scoring quedan inertes. */
+  learnEnabled: boolean;
+  /** Peso del score aprendido en la fusión (comparable a `keywordBoost`). */
+  learnWeight: number;
+  /** Tasa de refuerzo positivo término → tool. */
+  learnEta: number;
+  /** Tasa de penalización negativa término → tool. */
+  learnNegativeGamma: number;
+  /** Decaimiento exponencial por día. */
+  learnDecayLambda: number;
+  /** Señales mínimas del canal antes de que la capa puntúe (cold start). */
+  learnMinEvents: number;
+  /** Peso inicial de los términos de la semilla. */
+  learnSeedWeight: number;
+  /** Tope de términos por herramienta. */
+  learnMaxTermsPerTool: number;
+  /** Umbral de poda de términos. */
+  learnTermMinWeight: number;
+  /** Tope de acumulaciones por consulta (cota de latencia). */
+  learnMaxPostings: number;
+  /** Persistencia del perfil en `tool_lexicon` (Fase 4). */
+  learnPersist: boolean;
 
   qdrantEnabled: boolean;
   qdrantUrl: string;
@@ -143,6 +178,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     keywordTopK: int(env.KEYWORD_TOP_K, keywordTopKDefault),
     recallLimit: int(env.RECALL_LIMIT, recallLimitDefault),
     maxOutputTools,
+
+    // ── Aprendizaje léxico por canal ────────────────────────────────────
+    learnEnabled: bool(env.LEARN_ENABLED, learnEnabledDefault),
+    learnWeight: float(env.LEARN_WEIGHT, learnWeightDefault),
+    learnEta: float(env.LEARN_ETA, learnEtaDefault),
+    learnNegativeGamma: float(env.LEARN_NEGATIVE_GAMMA, learnNegativeGammaDefault),
+    learnDecayLambda: float(env.LEARN_DECAY_LAMBDA, learnDecayLambdaDefault),
+    learnMinEvents: int(env.LEARN_MIN_EVENTS, learnMinEventsDefault),
+    learnSeedWeight: float(env.LEARN_SEED_WEIGHT, learnSeedWeightDefault),
+    learnMaxTermsPerTool: int(env.LEARN_MAX_TERMS_PER_TOOL, learnMaxTermsPerToolDefault),
+    learnTermMinWeight: float(env.LEARN_TERM_MIN_WEIGHT, learnTermMinWeightDefault),
+    learnMaxPostings: int(env.LEARN_MAX_POSTINGS, learnMaxPostingsDefault),
+    learnPersist: bool(env.LEARN_PERSIST, learnPersistDefault),
 
     // ── Motor Qdrant externo ────────────────────────────────────────────
     qdrantEnabled: bool(env.QDRANT_ENABLED, true),

@@ -46,6 +46,18 @@ const CFG = {
   keywordsCollection: "tool_keywords",
   synonymsCollection: "query_synonyms",
   memoriesCollection: "contextual_memories",
+  // Capa de aprendizaje léxico por canal (no interviene en estos tests).
+  learnEnabled: false,
+  learnWeight: 0.25,
+  learnEta: 0.5,
+  learnNegativeGamma: 0.15,
+  learnDecayLambda: 0.02,
+  learnMinEvents: 3,
+  learnSeedWeight: 0.3,
+  learnMaxTermsPerTool: 64,
+  learnTermMinWeight: 0.05,
+  learnMaxPostings: 200,
+  learnPersist: false,
 };
 
 function toFloat32(embedding: Float32Array): number[] {

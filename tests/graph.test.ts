@@ -9,6 +9,10 @@ import { ToolGraphCacheService } from "../src/predict/services/graph-cache.servi
 import { SessionStateCacheService } from "../src/predict/services/session-state-cache.service";
 import type { ToolDefinition } from "../src/shared/interfaces/domain.interface";
 import type { GraphEdge, TenantToolGraph } from "../src/shared/interfaces/graph.interface";
+import type { LearnedScores } from "../src/shared/interfaces/lexical.interface";
+
+/** Capa de aprendizaje inactiva (cold start): la predicción no debe cambiar. */
+const NO_LEARNED: LearnedScores = { scores: new Map(), weight: 0, terms: [] };
 
 function makeConfig() {
   return loadConfig({
@@ -108,6 +112,7 @@ test("graphFilter: propaga pre-requisitos y ordena topológicamente", () => {
     graph,
     edges,
     lexicalScores: new Map(),
+    learned: NO_LEARNED,
     catalog,
     modelSize: "hash",
   });
@@ -143,6 +148,7 @@ test("graphFilter: resuelve mutexes dejando el de mayor score", () => {
     graph,
     edges,
     lexicalScores: new Map(),
+    learned: NO_LEARNED,
     catalog,
     modelSize: "hash",
   });
@@ -200,6 +206,7 @@ test("graphFilter: latencia < 15 ms con 50 tools", async () => {
     graph,
     edges: cache.edges("lat"),
     lexicalScores: new Map(),
+    learned: NO_LEARNED,
     catalog,
     modelSize: "hash",
   });

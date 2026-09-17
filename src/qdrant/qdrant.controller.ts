@@ -20,7 +20,7 @@ import {
 } from "@nestjs/common";
 import { QdrantService } from "./qdrant-service";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
-import { normalizeAgentId } from "../shared/scope";
+import { normalizeAgentId, resolveScopeKey } from "../shared/scope";
 
 @Controller()
 export class QdrantV1Controller {
@@ -94,7 +94,13 @@ export class QdrantV1Controller {
     }
   }
 
-  /** POST /tools/synonyms {text} → {expanded} */
+  /**
+   * POST /tools/synonyms {tenant?, agentId?, text} → {expanded}
+   *
+   * `tenant`/`agentId` definen el canal (scopeKey) sobre el que se expande: la
+   * caché y la búsqueda quedan particionadas por canal (F0). Sin `tenant` se
+   * usa la partición pública, que solo ve puntos sin `tenant` asignado.
+   */
   @Post("tools/synonyms")
   @HttpCode(200)
   async expandSynonyms(@Body() body: Record<string, unknown>): Promise<{ expanded: string }> {
@@ -102,6 +108,8 @@ export class QdrantV1Controller {
     if (typeof b.text !== "string") {
       throw new BadRequestException({ error: "text requerido" });
     }
-    return { expanded: await this.service.expandSynonyms(b.text) };
+    const tenant = typeof b.tenant === "string" ? b.tenant.trim() : "";
+    const scopeKey = tenant === "" ? "" : resolveScopeKey(tenant, normalizeAgentId(b.agentId));
+    return { expanded: await this.service.expandSynonyms(b.text, new Set(), scopeKey) };
   }
 }

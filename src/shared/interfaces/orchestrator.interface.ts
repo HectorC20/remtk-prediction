@@ -1,4 +1,6 @@
 import type {
+  FeedbackInput,
+  FeedbackResult,
   PredictionInput,
   ToolDefinition,
 } from "./domain.interface";
@@ -16,4 +18,6 @@ export interface IPredictionOrchestrator {
   predictInterest(input: InterestPredictionInput): Promise<InterestPredictionResult>;
   registerTools(tenant: string, tools: ToolDefinition[], agentId?: string): Promise<{ indexed: number }>;
   countTools(tenant: string, agentId?: string): number;
+  /** Señal de refuerzo del perfil léxico del canal (§8.1). */
+  feedback(input: FeedbackInput): FeedbackResult;
 }

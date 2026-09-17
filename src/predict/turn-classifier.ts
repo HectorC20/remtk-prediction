@@ -4,8 +4,21 @@ import { log } from "../logger";
 import { TurnType } from "src/shared/dictionary/turn.dictionary";
 const CLASSIFICATION_MARGIN = 0.03;
 const NUANCE_THRESHOLD = 0.55;
-/** Coseno mínimo contra un arquetipo de capacidades para marcar meta-pregunta. */
-const META_QUESTION_THRESHOLD = 0.75;
+/**
+ * Coseno mínimo contra un arquetipo de capacidades para marcar meta-pregunta.
+ *
+ * Calibrado con el modelo real (multilingual-e5-small, cosenos medidos):
+ *   · meta-preguntas ("dime qué herramientas tienes", "¿qué puedes hacer?")
+ *     → 0.928 – 1.000
+ *   · turnos operativos ("cambia de categoría X a servicios", "crea un
+ *     evento para el 20 de setiembre", "elimina el ítem X")
+ *     → 0.822 – 0.865
+ * El suelo semántico de e5 entre frases cortas no relacionadas es alto
+ * (~0.82), así que 0.75 marcaba CUALQUIER turno del usuario como
+ * meta-pregunta y el pipeline resolvía todo con 0 tools. 0.90 cae en el
+ * hueco entre ambas bandas.
+ */
+const META_QUESTION_THRESHOLD = 0.9;
 
 export class TurnClassifier {
   private confirmEmb?: Float32Array;

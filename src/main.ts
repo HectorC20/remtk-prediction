@@ -19,6 +19,7 @@ import { EmbeddingEngineService } from "./embedding/embedding.service";
 import { ConfirmationCache } from "./predict/services/confirm-cache.service";
 import { Debugger } from "./predict/helper/debugger.helper";
 import { KeywordService } from "./predict/services/keyword.service";
+import { LexicalProfileService } from "./predict/services/lexical-profile.service";
 import { ToolGraphCacheService } from "./predict/services/graph-cache.service";
 import { SessionStateCacheService } from "./predict/services/session-state-cache.service";
 import { RerankService } from "./predict/services/rerank.service";
@@ -48,6 +49,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
   const sessionState = new SessionStateCacheService(engine);
   const debugger_ = new Debugger();
   const rerank = new RerankService(cfg);
+  const lexical = new LexicalProfileService(cfg);
 
   const orchestrator = createOrchestrator({
     engine,
@@ -60,6 +62,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     sessionState,
     debugger_,
     cfg,
+    lexical,
   });
 
   return {
@@ -71,6 +74,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     sessionState,
     confirmCache,
     debugger: debugger_,
+    lexical,
     orchestrator,
   };
 }

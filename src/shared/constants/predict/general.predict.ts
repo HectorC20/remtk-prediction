@@ -43,6 +43,44 @@ export const MAX_MESSAGE_CHARS = 300;
 
 export const MAX_TRACES = 200;
 
+// ── Capa de aprendizaje léxico por canal (ver docs/entrenamiento-prediccion.md) ──
+
+/** Interruptor maestro de la capa de aprendizaje léxico. */
+export const learnEnabledDefault = true;
+
+/** Peso del score aprendido en la fusión (comparable a `KEYWORD_BOOST`). */
+export const learnWeightDefault = 0.25;
+
+/** Tasa de refuerzo positivo (término → tool que funcionó). */
+export const learnEtaDefault = 0.5;
+
+/** Tasa de penalización negativa (término → tool predicha que no funcionó). */
+export const learnNegativeGammaDefault = 0.15;
+
+/** Decaimiento exponencial por día (evita que el perfil se fosilice). */
+export const learnDecayLambdaDefault = 0.02;
+
+/** Señales mínimas del canal antes de que la capa puntúe (cold start, R7). */
+export const learnMinEventsDefault = 3;
+
+/** Peso inicial de los términos de la semilla (el uso real lo domina pronto). */
+export const learnSeedWeightDefault = 0.3;
+
+/** Tope de términos por herramienta (poda por peso). */
+export const learnMaxTermsPerToolDefault = 64;
+
+/** Umbral de poda de términos del perfil. */
+export const learnTermMinWeightDefault = 0.05;
+
+/** Tope de acumulaciones por consulta (cota dura de latencia). */
+export const learnMaxPostingsDefault = 200;
+
+/** Persistencia del perfil en la colección Qdrant `tool_lexicon` (Fase 4). */
+export const learnPersistDefault = false;
+
+/** Milisegundos de un día (unidad de Δt para el decaimiento exponencial). */
+export const LEARN_DAY_MS = 86_400_000;
+
 /** Peso del match de tema (ancla de remtk-memory) en el score de interés compuesto. */
 export const INTEREST_TOPIC_WEIGHT = 0.6;
 /** Peso de la intención (arquetipos) en el score de interés compuesto. */

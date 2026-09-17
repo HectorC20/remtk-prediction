@@ -20,7 +20,12 @@ export interface ToolCatalog {
 export class QdrantService {
   readonly client: QdrantClient;
   private readonly catalogs = new Map<string, Map<string, ToolDefinition>>();
-  private readonly synonymCache = new Map<string, string[]>();
+  /**
+   * Caché de sinónimos particionada por scopeKey (tenant::agentId). Nunca se
+   * comparte entre canales: un sinónimo cacheado para el canal A no puede
+   * servirse al canal B (§9.2 del plan de entrenamiento).
+   */
+  private readonly synonymCache = new Map<string, Map<string, string[]>>();
 
   constructor(private readonly config: AppConfig) {
     this.client = new QdrantClient(config);
@@ -121,13 +126,13 @@ export class QdrantService {
    * Devuelve candidatas con score crudo de Qdrant (0-∞); vacío/error → el
    * orquestador degrada al catálogo completo.
    */
-  async retrieveTools(tenant: string, prompt: string, limit: number): Promise<ScoredTool[]> {
+  async retrieveTools(scopeKey: string, prompt: string, limit: number): Promise<ScoredTool[]> {
     const raw = prompt.trim();
-    const catalog = this.catalog(tenant);
+    const catalog = this.catalog(scopeKey);
     if (raw === "" || catalog.all().length === 0 || !this.client.enabled) return [];
 
-    // 1. Expansión por sinónimos (cold start → query intacta).
-    const expanded = await this.expandSynonyms(raw);
+    // 1. Expansión por sinónimos (cold start → query intacta), aislada por canal.
+    const expanded = await this.expandSynonyms(raw, new Set(), scopeKey);
 
     // 2. Keywords RAKE.
     const keywords = extractKeywordsRake(raw, MAX_KEYWORDS);
@@ -249,8 +254,18 @@ export class QdrantService {
     return out;
   }
 
-  /** Expansión de sinónimos (colección query_synonyms). Replica SynonymExpander. */
-  async expandSynonyms(query: string, toolNames: Set<string> = new Set()): Promise<string> {
+  /**
+   * Expansión de sinónimos (colección query_synonyms). Replica SynonymExpander.
+   *
+   * `scopeKey` (tenant::agentId) es obligatorio para el aislamiento: la caché y
+   * la búsqueda en Qdrant quedan particionadas por canal. Si se omite, se usa
+   * la partición pública (`""`), que solo ve puntos sin `tenant` asignado.
+   */
+  async expandSynonyms(
+    query: string,
+    toolNames: Set<string> = new Set(),
+    scopeKey = "",
+  ): Promise<string> {
     const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (tokens.length === 0) return query;
     const seen = new Set(tokens);
@@ -260,7 +275,7 @@ export class QdrantService {
       tokens.map(async (token) => {
         const clean = cleanToken(token);
         if (clean.length < 2) return [];
-        return this.lookupSynonyms(clean);
+        return this.lookupSynonyms(clean, scopeKey);
       }),
     );
     for (const syns of perToken) {
@@ -280,16 +295,21 @@ export class QdrantService {
     return `${query} ${expansions.join(" ")}`;
   }
 
-  private async lookupSynonyms(token: string): Promise<string[]> {
+  private async lookupSynonyms(token: string, scopeKey: string): Promise<string[]> {
     if (!this.client.enabled) return [];
-    const cached = this.synonymCache.get(token);
+    let perScope = this.synonymCache.get(scopeKey);
+    if (!perScope) {
+      perScope = new Map<string, string[]>();
+      this.synonymCache.set(scopeKey, perScope);
+    }
+    const cached = perScope.get(token);
     if (cached) return cached;
     try {
       const results = await this.search(
         this.config.synonymsCollection,
         token,
         3,
-        undefined,
+        synonymsFilter(scopeKey),
         ["synonyms"],
       );
       const seen = new Set<string>();
@@ -305,7 +325,7 @@ export class QdrantService {
           }
         }
       }
-      this.synonymCache.set(token, out);
+      perScope.set(token, out);
       return out;
     } catch {
       return [];
@@ -336,6 +356,20 @@ export class QdrantService {
 function payloadString(r: SearchResult, key: string): string {
   const v = r.payload?.[key];
   return typeof v === "string" ? v : "";
+}
+
+/**
+ * Filtro de aislamiento para query_synonyms (F0).
+ *
+ * Acepta los sinónimos etiquetados con el `tenant` (scopeKey) del canal y,
+ * además, los puntos legacy sin `tenant` (poblados por fuera de este servicio),
+ * para no romper el comportamiento actual. Un punto etiquetado con OTRO canal
+ * queda excluido: ahí está la garantía de no contaminación cruzada (§9.2).
+ */
+function synonymsFilter(scopeKey: string): unknown {
+  const should: Record<string, unknown>[] = [{ is_empty: { key: "tenant" } }];
+  if (scopeKey !== "") should.push({ key: "tenant", match: { value: scopeKey } });
+  return { should };
 }
 
 function payloadObject(r: SearchResult, key: string): Record<string, unknown> | undefined {

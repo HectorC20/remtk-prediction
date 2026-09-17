@@ -23,15 +23,17 @@ import {
 } from "@nestjs/common";
 import type { EmbeddingEngineService } from "../embedding/embedding.service";
 import type { Debugger } from "./helper/debugger.helper";
+import type { LexicalProfileService } from "./services/lexical-profile.service";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 import type { IPredictionOrchestrator } from "../shared/interfaces/orchestrator.interface";
-import { normalizeAgentId } from "../shared/scope";
+import { normalizeAgentId, resolveScopeKey } from "../shared/scope";
 
 /** Contexto que necesita este controlador (provisto por PredictAppModule). */
 export interface PredictContext {
   orchestrator: IPredictionOrchestrator;
   engine: EmbeddingEngineService;
   debugger: Debugger;
+  lexical: LexicalProfileService;
 }
 
 /** Token de inyección del contexto (no es una clase inyectable por tipo). */
@@ -96,6 +98,36 @@ export class PredictV1Controller {
         b.tools as ToolDefinition[],
         normalizeAgentId(b.agentId),
       );
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
+  /**
+   * POST /predict/feedback
+   * Body: { tenant, agentId?, sessionId, text, used: string[], rejected?: string[] }
+   * Respuesta: { ok: true, events }
+   *
+   * `used` debe contener SOLO herramientas cuya ejecución confirmó éxito real
+   * (§8.1): reforzar las meramente predichas realimentaría los errores.
+   */
+  @Post("predict/feedback")
+  @HttpCode(200)
+  feedback(@Body() body: Record<string, unknown>): unknown {
+    const b = body ?? {};
+    const { sessionId, tenant, text } = b;
+    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    }
+    try {
+      return this.ctx.orchestrator.feedback({
+        sessionId,
+        tenant,
+        text,
+        agentId: normalizeAgentId(b.agentId),
+        used: asNames(b.used),
+        rejected: asNames(b.rejected),
+      });
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
     }
@@ -166,19 +198,34 @@ export class PredictV1Controller {
     }
   }
 
-  /** GET /debug → engine, stats y trazas de las últimas predicciones. */
+  /**
+   * GET /debug?tenant=&agentId= → engine, stats, trazas de las últimas
+   * predicciones y el resumen del perfil léxico aprendido del canal (F3).
+   */
   @Get("debug")
-  async debug(): Promise<{
+  async debug(
+    @Query("tenant") tenant?: string,
+    @Query("agentId") agentId?: string,
+  ): Promise<{
     engine: { size: string; modelPath: string };
     stats: unknown;
     traces: unknown;
+    lexical?: unknown;
   }> {
     const engineInfo = await this.ctx.engine.getInfo(this.ctx.engine.defaultSize);
     const snapshot = this.ctx.debugger.snapshot();
+    const t = typeof tenant === "string" ? tenant.trim() : "";
     return {
       engine: { size: engineInfo.model, modelPath: engineInfo.modelPath },
       stats: snapshot.stats,
       traces: snapshot.traces,
+      lexical: t === "" ? undefined : this.ctx.lexical.snapshot(resolveScopeKey(t, normalizeAgentId(agentId))),
     };
   }
+}
+
+/** Normaliza una lista de nombres de herramienta recibida por HTTP. */
+function asNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
 }

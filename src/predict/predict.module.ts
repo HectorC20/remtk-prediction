@@ -23,6 +23,7 @@ import { PREDICT_CONTEXT, PredictV1Controller } from "./predict.controller";
           orchestrator: system.orchestrator,
           engine: system.engine,
           debugger: system.debugger,
+          lexical: system.lexical,
         };
       },
     },

@@ -4,3 +4,4 @@ export type { TopicState } from "./topic.interface";
 export type * from "./domain.interface";
 export type * from "./embedding.interface";
 export type * from "./graph.interface";
+export type * from "./lexical.interface";

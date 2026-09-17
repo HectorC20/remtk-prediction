@@ -11,15 +11,19 @@ import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
 import type { QdrantService } from "../qdrant/qdrant-service";
 import type {
+  FeedbackInput,
+  FeedbackResult,
   PredictionInput,
   Trace,
   ToolDefinition,
 } from "../shared/interfaces/domain.interface";
 import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
 import { ConfirmationCache } from "./services/confirm-cache.service";
+import { extractQueryKeywords } from "./keywords";
 import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
+import { LexicalProfileService } from "./services/lexical-profile.service";
 import { RerankService } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
@@ -42,6 +46,8 @@ export class PredictionOrchestrator {
   private readonly anchorCache = new Map<string, Float32Array>();
   /** Embeddings de los arquetipos de intención (carga perezosa, una sola vez). */
   private intentEmbs?: Float32Array[];
+  /** Última predicción por sesión (para la señal implícita de reformulación, §8.2). */
+  private readonly lastTurns = new Map<string, { prompt: string; tools: string[] }>();
 
   constructor(
     private readonly engine: EmbeddingEngineService,
@@ -54,6 +60,7 @@ export class PredictionOrchestrator {
     private readonly sessionState: SessionStateCacheService,
     private readonly debugger_: Debugger,
     private readonly config: AppConfig,
+    private readonly lexical: LexicalProfileService,
   ) {}
 
   /** Warm-ups de embeddings pendientes por scopeKey (deduplicado/encadenado). */
@@ -84,6 +91,9 @@ export class PredictionOrchestrator {
       .then(async () => {
         const { recomputed, cached } = await this.keywords.upsertTools(scopeKey, tools);
         await this.graphCache.buildTenantGraph(scopeKey, tools);
+        // Tercer paso del warm-up: semilla del perfil léxico del canal (§7).
+        // Síncrono y sin ONNX: no compite con la cola de inferencia.
+        this.lexical.seedScope(scopeKey, tools);
         this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
         this.debugger_.setTenants(this.qdrant.countTools(scopeKey) > 0 ? Math.max(1, this.debugger_.snapshot().stats.tenants) : 0);
         log(`[tools] scope=${scopeKey} warm-up completo indexados=${tools.length} embeddings recomputed=${recomputed} cached=${cached}`);
@@ -100,6 +110,26 @@ export class PredictionOrchestrator {
 
   countTools(tenant: string, agentId?: string): number {
     return this.qdrant.countTools(resolveScopeKey(tenant, agentId));
+  }
+
+  /**
+   * POST /predict/feedback: aplica una señal de refuerzo al perfil léxico del
+   * canal. `used` debe traer solo herramientas con éxito real (§8.1): usar "fue
+   * predicha" como señal positiva realimentaría los errores del modelo.
+   */
+  feedback(input: FeedbackInput): FeedbackResult {
+    const scopeKey = resolveScopeKey(input.tenant, input.agentId);
+    const events = this.lexical.observe(
+      scopeKey,
+      input.text ?? "",
+      input.used ?? [],
+      input.rejected ?? [],
+    );
+    log(
+      `[feedback] scope=${scopeKey} session=${input.sessionId} used=${input.used?.length ?? 0} ` +
+        `rejected=${input.rejected?.length ?? 0} events=${events}`,
+    );
+    return { ok: true, events };
   }
 
   /** POST /predict */
@@ -178,10 +208,12 @@ export class PredictionOrchestrator {
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
     let zt: Float32Array | undefined;
     let sessionModel = "hash";
+    let topicShift = false;
     try {
       const s = await this.sessionState.resolve(input.sessionId, promptText);
       zt = s.zt;
       sessionModel = s.model;
+      topicShift = s.topicShift;
     } catch (err) {
       warn(`[pipeline] estado de sesión degradado: ${String((err as Error)?.message ?? err)}`);
     }
@@ -191,11 +223,13 @@ export class PredictionOrchestrator {
     // Ruta topológica: el grafo del scope está precomputado en POST /tools.
     if (graph && zt) {
       const lexicalScores = await this.lexicalScores(scopeKey, promptText);
+      const learned = this.lexical.score(scopeKey, promptText);
       const result = this.rerank.graphFilter({
         zt,
         graph,
         edges: this.graphCache.edges(scopeKey),
         lexicalScores,
+        learned,
         catalog: this.qdrant.catalog(scopeKey),
         modelSize: sessionModel,
       });
@@ -204,6 +238,8 @@ export class PredictionOrchestrator {
       trace.complexity = result.complexity;
       trace.outputTools = result.tools.length;
       trace.embeddingsCached = graph.nodes.size;
+      trace.learnWeight = learned.weight;
+      trace.learnTerms = learned.scores.size;
       this.debugger_.bump({ embeddingsCached: graph.nodes.size });
 
       if (turn === TurnType.NewQuery) {
@@ -211,6 +247,14 @@ export class PredictionOrchestrator {
         this.debugger_.bump({ confirmSets: 1 });
       }
 
+      this.trackTurn({
+        input,
+        turn,
+        topicShift,
+        scopeKey,
+        promptText,
+        tools: result.tools.map((t) => t.name),
+      });
       this.finalize(trace, start, result.tools.map((t) => t.name));
       return result;
     }
@@ -237,7 +281,14 @@ export class PredictionOrchestrator {
     log(`[pipeline] reduce candidates=${reduced.length} degraded=${trace.degraded}`);
 
     const lexicalScores = await this.lexicalScores(scopeKey, promptText);
-    const base = this.rerank.filter(reduced, lexicalScores, this.qdrant.catalog(scopeKey), modelSize);
+    const learned = this.lexical.score(scopeKey, promptText);
+    const base = this.rerank.filter(
+      reduced,
+      lexicalScores,
+      learned,
+      this.qdrant.catalog(scopeKey),
+      modelSize,
+    );
     const order = base.tools.map((t) => t.name);
     const result: GraphPredictionResult = {
       ...base,
@@ -245,6 +296,8 @@ export class PredictionOrchestrator {
     };
     trace.embeddingsRecomputed = recomputed;
     trace.embeddingsCached = cached;
+    trace.learnWeight = learned.weight;
+    trace.learnTerms = learned.scores.size;
     this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
     trace.modelSize = result.modelSize;
     trace.complexity = result.complexity;
@@ -256,8 +309,63 @@ export class PredictionOrchestrator {
       this.debugger_.bump({ confirmSets: 1 });
     }
 
+    this.trackTurn({
+      input,
+      turn,
+      topicShift,
+      scopeKey,
+      promptText,
+      tools: result.tools.map((t) => t.name),
+    });
     this.finalize(trace, start, result.tools.map((t) => t.name));
     return result;
+  }
+
+  /**
+   * Señal implícita (§8.2): cuando un turno humano abre tema nuevo (topicShift)
+   * y las herramientas predichas en el turno anterior ya no reaparecen en la
+   * consulta, se penaliza débilmente la asociación término→herramienta que
+   * llevó a ellas ("el usuario reformuló porque no era eso"). Se apoya en el
+   * estado de sesión que ya existe: no requiere cambios en el consumidor.
+   */
+  private trackTurn(params: {
+    input: PredictionInput;
+    turn: TurnType;
+    topicShift: boolean;
+    scopeKey: string;
+    promptText: string;
+    tools: string[];
+  }): void {
+    const sessionId = params.input.sessionId;
+    if (!sessionId) return;
+    const prev = this.lastTurns.get(sessionId);
+    if (
+      prev &&
+      params.input.source === "human" &&
+      params.turn === TurnType.NewQuery &&
+      params.topicShift &&
+      prev.tools.length > 0 &&
+      !this.toolMentioned(prev.tools, params.promptText)
+    ) {
+      // `observe` sin `used` solo resta: es la penalización débil de la señal
+      // implícita, nunca un refuerzo (no hubo éxito confirmado).
+      this.lexical.observe(params.scopeKey, prev.prompt, [], prev.tools);
+      log(
+        `[pipeline] señal implícita: reformulación session=${sessionId} → penalizadas ` +
+          `${prev.tools.length} tools del turno anterior`,
+      );
+    }
+    this.lastTurns.set(sessionId, { prompt: params.promptText, tools: params.tools });
+  }
+
+  /** True si alguna herramienta reaparece (nombre literal o keyword) en el texto. */
+  private toolMentioned(tools: string[], promptText: string): boolean {
+    const lowered = promptText.toLowerCase();
+    const terms = new Set(extractQueryKeywords(promptText));
+    return tools.some((name) => {
+      if (lowered.includes(name.toLowerCase())) return true;
+      return extractQueryKeywords(name).some((term) => terms.has(term));
+    });
   }
 
   /** Confirmación léxica BM25 (normalizada 0..1) para reforzar el score semántico. */
