@@ -25,3 +25,12 @@ export const MAX_KEYWORDS = 8;
 export const MAX_SEARCH_LIMIT = 50;
 /** Tope de sinónimos añadidos a la query expandida. */
 export const MAX_SYNONYM_EXPANSIONS = 8;
+
+/** Timeout por solicitud HTTP hacia Qdrant en milisegundos. */
+export const QDRANT_REQ_TIMEOUT_MS = 15000;
+/** Reintentos ante fallos transitorios (timeout de red / Qdrant optimizando). */
+export const QDRANT_REQ_RETRIES = 2;
+/** Namespace DNS de RFC 4122 para UUIDv5 determinístico. */
+export const QDRANT_DNS_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+/** Límite por defecto para recall de memorias contextuales. */
+export const DEFAULT_MEMORY_PREDICTION_LIMIT = 8;

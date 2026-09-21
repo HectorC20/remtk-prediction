@@ -7,16 +7,12 @@
 import { MemoryCandidate } from "..";
 import type { AppConfig } from "../config";
 import { log, warn } from "../logger";
-import type {  ScoredTool, ToolDefinition } from "../shared/interfaces/index";
+import type { ScoredTool, ToolDefinition, ToolCatalog } from "../shared/interfaces/index";
 import { QdrantClient, type SearchResult, uuidv5 } from "./qdrant-client";
 import { toolIdentityTokens } from "../predict/keywords";
 import { MAX_KEYWORDS, MAX_SEARCH_LIMIT, MAX_SYNONYM_EXPANSIONS } from "../shared/constants/qdrant/general.constant";
 
-/** Catálogo de herramientas por scopeKey (nombre → definición completa). */
-export interface ToolCatalog {
-  get(name: string): ToolDefinition | undefined;
-  all(): ToolDefinition[];
-}
+export type { ToolCatalog };
 
 export class QdrantService {
   readonly client: QdrantClient;

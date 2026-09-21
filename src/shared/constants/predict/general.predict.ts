@@ -130,3 +130,35 @@ export const INTEREST_INTENT_WEIGHT = 0.4;
 export const INTEREST_MAX_ANCHORS = 32;
 /** Tope de matches de ancla devueltos (ordenados desc). */
 export const INTEREST_TOP_MATCHES = 5;
+
+// ── Estado continuo de sesión ───────────────────────────────────────
+/** Ponderación del estado z_t previo en la combinación convexa 70/30. */
+export const BLEND_PREV = 0.7;
+/** Ponderación del vector nuevo en la combinación convexa 70/30. */
+export const BLEND_NEW = 0.3;
+
+// ── Ponderación topológica de aristas en el grafo de herramientas ────
+/** Peso de arista de pre-requisito dirigida. */
+export const PREREQUISITE_WEIGHT = 0.85;
+/** Peso de arista de co-ocurrencia por grupo compartido. */
+export const CO_OCCURRENCE_WEIGHT = 0.4;
+/** Peso de arista de exclusión mutua / conflicto. */
+export const MUTUALLY_EXCLUSIVE_WEIGHT = 1.0;
+
+// ── Clasificador de turnos ──────────────────────────────────────────
+/** Margen de ambigüedad para desempate entre confirmación y nueva consulta. */
+export const CLASSIFICATION_MARGIN = 0.03;
+/** Umbral de similitud para confirmación con matiz contextual. */
+export const NUANCE_THRESHOLD = 0.55;
+/** Umbral para clasificar como meta-pregunta de capacidades del sistema. */
+export const META_QUESTION_THRESHOLD = 0.9;
+
+// ── Complejidad de planes ───────────────────────────────────────────
+export const COMPLEXITY_COUNT_HIGH = 20;
+export const COMPLEXITY_AVG_HIGH = 0.65;
+export const COMPLEXITY_COUNT_MID = 10;
+export const COMPLEXITY_AVG_MID = 0.55;
+
+// ── Debugger ────────────────────────────────────────────────────────
+/** Número máximo de trazas históricas retornadas en el snapshot de /debug. */
+export const DEBUG_MAX_SNAPSHOT_TRACES = 20;

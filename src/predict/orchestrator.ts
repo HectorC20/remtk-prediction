@@ -28,9 +28,20 @@ import { RerankService } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
 import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult, InterestPredictionInput, InterestPredictionResult, InterestMatch } from "src/shared/interfaces/index";
-import { TOPIC_SHIFT_THRESHOLD, MAX_HISTORY_MESSAGES, MAX_MESSAGE_CHARS, INTEREST_TOPIC_WEIGHT, INTEREST_INTENT_WEIGHT, INTEREST_MAX_ANCHORS, INTEREST_TOP_MATCHES } from "src/shared/constants/predict/index";
-import { INTEREST_ARCHETYPES } from "src/shared/constants/messages/predict.constant";
-import { TurnType } from "src/shared/dictionary/turn.dictionary";
+import {
+  BLEND_NEW,
+  BLEND_PREV,
+  INTEREST_INTENT_WEIGHT,
+  INTEREST_MAX_ANCHORS,
+  INTEREST_TOPIC_WEIGHT,
+  INTEREST_TOP_MATCHES,
+  MAX_HISTORY_MESSAGES,
+  MAX_MESSAGE_CHARS,
+  TOPIC_SHIFT_THRESHOLD,
+} from "src/shared/constants/predict";
+import { DEFAULT_MEMORY_PREDICTION_LIMIT } from "src/shared/constants/qdrant";
+import { INTEREST_ARCHETYPES } from "src/shared/constants/messages";
+import { TurnType } from "src/shared/dictionary";
 import { resolveScopeKey } from "src/shared/scope";
 
 /** Acota un score al rango [0, 1]. */
@@ -163,6 +174,12 @@ export class PredictionOrchestrator {
         modelSize: "hash",
         rankedScores: [],
         graph: { nodes: [], edges: [], executionOrder: [] },
+        context: {
+          intent: { primaryAction: "unknown", confidence: 0, summary: "Consulta vacía" },
+          constraints: { negations: [], isConfirmation: false, isExploratory: false },
+          dialogState: { phase: "discovery", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Texto vacío" },
+        },
       };
     }
 
@@ -184,6 +201,16 @@ export class PredictionOrchestrator {
         modelSize: "hash",
         rankedScores: [],
         graph: { nodes: [], edges: [], executionOrder: [] },
+        context: {
+          intent: {
+            primaryAction: "meta",
+            confidence: 0.95,
+            summary: "Pregunta sobre capacidades del sistema",
+          },
+          constraints: { negations: [], isConfirmation: false, isExploratory: true },
+          dialogState: { phase: "discovery", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
+        },
       };
     }
 
@@ -208,6 +235,7 @@ export class PredictionOrchestrator {
       turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text,
       input.keywords,
     );
+
     // Tokens de match de la consulta (incluidas las keywords delegadas): son la
     // señal con la que el rerank mide la afinidad contra el NOMBRE de cada
     // herramienta, lo único que distingue familias dentro de un complemento.
@@ -257,6 +285,8 @@ export class PredictionOrchestrator {
         exclude: input.exclude,
         queryTokens,
         pinnedNames,
+        topicShift,
+        turnType: turn,
       });
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
@@ -434,7 +464,12 @@ export class PredictionOrchestrator {
     // Recall BM25 directo en Qdrant (degradación suave si no responde).
     let candidates: { memory: MemoryDefinition; retrievalScore: number }[] = [];
     try {
-      candidates = await this.qdrant.searchMemories(input.tenant, text, input.limit || 8, input.agentId);
+      candidates = await this.qdrant.searchMemories(
+        input.tenant,
+        text,
+        input.limit || DEFAULT_MEMORY_PREDICTION_LIMIT,
+        input.agentId,
+      );
     } catch (err) {
       log(`[memory] recall degradado (Qdrant no disponible): ${String((err as Error)?.message ?? err)}`);
       candidates = [];
@@ -623,7 +658,7 @@ export class PredictionOrchestrator {
     // Sin cambio de tema: suaviza el estado con el nuevo embedding (blend 70/30).
     const blended = new Float32Array(emb.length);
     for (let i = 0; i < emb.length; i++) {
-      blended[i] = prev.embedding[i] * 0.7 + emb[i] * 0.3;
+      blended[i] = prev.embedding[i] * BLEND_PREV + emb[i] * BLEND_NEW;
     }
     return { embedding: EmbeddingEngineService.normalizeL2(blended), lastScore: 0 };
   }

@@ -1,69 +1,104 @@
-import { CONFIRM_ARCHETYPE, META_QUESTION_ARCHETYPES, NEW_QUERY_ARCHETYPE } from "src/shared/constants/messages/predict.constant";
+import {
+  CONFIRM_ARCHETYPE,
+  CONFIRM_ARCHETYPES,
+  META_QUESTION_ARCHETYPES,
+  NEW_QUERY_ARCHETYPE,
+  NEW_QUERY_ARCHETYPES,
+} from "src/shared/constants/messages/predict.constant";
 import { EmbeddingEngineService } from "../embedding/embedding.service";
+import { CalibrationService } from "./services/calibration.service";
 import { log } from "../logger";
-import { TurnType } from "src/shared/dictionary/turn.dictionary";
-const CLASSIFICATION_MARGIN = 0.03;
-const NUANCE_THRESHOLD = 0.55;
-/**
- * Coseno mínimo contra un arquetipo de capacidades para marcar meta-pregunta.
- *
- * Calibrado con el modelo real (multilingual-e5-small, cosenos medidos):
- *   · meta-preguntas ("dime qué herramientas tienes", "¿qué puedes hacer?")
- *     → 0.928 – 1.000
- *   · turnos operativos ("cambia de categoría X a servicios", "crea un
- *     evento para el 20 de setiembre", "elimina el ítem X")
- *     → 0.822 – 0.865
- * El suelo semántico de e5 entre frases cortas no relacionadas es alto
- * (~0.82), así que 0.75 marcaba CUALQUIER turno del usuario como
- * meta-pregunta y el pipeline resolvía todo con 0 tools. 0.90 cae en el
- * hueco entre ambas bandas.
- */
-const META_QUESTION_THRESHOLD = 0.9;
+import {
+  CLASSIFICATION_MARGIN,
+  META_QUESTION_THRESHOLD,
+  NUANCE_THRESHOLD,
+} from "src/shared/constants/predict";
+import { TurnType } from "src/shared/dictionary";
+
+import type { TurnClassificationResult } from "src/shared/interfaces";
+
+export type { TurnClassificationResult };
 
 export class TurnClassifier {
-  private confirmEmb?: Float32Array;
-  private queryEmb?: Float32Array;
+  private confirmEmbs?: Float32Array[];
+  private queryEmbs?: Float32Array[];
   private metaEmbs?: Float32Array[];
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
   async init(): Promise<void> {
-    if (this.confirmEmb && this.queryEmb) return;
-    const [confirm, query] = await Promise.all([
-      this.engine.embedQuery(CONFIRM_ARCHETYPE, "small"),
-      this.engine.embedQuery(NEW_QUERY_ARCHETYPE, "small"),
+    if (this.confirmEmbs && this.queryEmbs) return;
+
+    const [confirms, queries] = await Promise.all([
+      Promise.all(
+        (CONFIRM_ARCHETYPES ?? [CONFIRM_ARCHETYPE]).map((text) =>
+          this.engine.embedQuery(text, "small").then((r) => r.embedding),
+        ),
+      ),
+      Promise.all(
+        (NEW_QUERY_ARCHETYPES ?? [NEW_QUERY_ARCHETYPE]).map((text) =>
+          this.engine.embedQuery(text, "small").then((r) => r.embedding),
+        ),
+      ),
     ]);
-    this.confirmEmb = confirm.embedding;
-    this.queryEmb = query.embedding;
+
+    this.confirmEmbs = confirms;
+    this.queryEmbs = queries;
   }
 
-  async classify(text: string): Promise<TurnType> {
+  /**
+   * Clasifica el tipo de turno y devuelve también la confianza probabilística calibrada.
+   */
+  async classifyWithConfidence(text: string): Promise<TurnClassificationResult> {
     await this.init();
     const input = await this.engine.embedQuery(text, "small", { high: true });
-    const confirmScore = EmbeddingEngineService.cosine(input.embedding, this.confirmEmb!);
-    const queryScore = EmbeddingEngineService.cosine(input.embedding, this.queryEmb!);
+
+    // Máxima similitud contra el pool de confirmaciones
+    let maxConfirm = 0;
+    for (const emb of this.confirmEmbs!) {
+      const s = EmbeddingEngineService.cosine(input.embedding, emb);
+      if (s > maxConfirm) maxConfirm = s;
+    }
+
+    // Máxima similitud contra el pool de nuevas consultas
+    let maxQuery = 0;
+    for (const emb of this.queryEmbs!) {
+      const s = EmbeddingEngineService.cosine(input.embedding, emb);
+      if (s > maxQuery) maxQuery = s;
+    }
 
     let turn: TurnType;
-    if (confirmScore < queryScore + CLASSIFICATION_MARGIN) {
+    if (maxConfirm < maxQuery + CLASSIFICATION_MARGIN) {
       turn = TurnType.NewQuery;
-    } else if (confirmScore < NUANCE_THRESHOLD) {
+    } else if (maxConfirm < NUANCE_THRESHOLD) {
       turn = TurnType.ConfirmationWithNuance;
     } else {
       turn = TurnType.ConfirmationEmpty;
     }
-    
-    // ✅ Arreglado el template string para que imprima las variables reales
+
+    // Calibración de la probabilidad de decisión
+    const rawDiff = Math.abs(maxConfirm - maxQuery);
+    const confidence = CalibrationService.calibrateProbability(rawDiff + 0.5, {
+      temperature: 0.25,
+      bias: 0.5,
+    });
+
     log(
-      `[classifier] turn=${turn} confirm=${confirmScore.toFixed(3)} query=${queryScore.toFixed(3)} text=${JSON.stringify(text)}`,
+      `[classifier] turn=${turn} confirm=${maxConfirm.toFixed(3)} query=${maxQuery.toFixed(3)} conf=${confidence.toFixed(2)} text=${JSON.stringify(text)}`,
     );
-    return turn;
+
+    return { turn, confidence };
+  }
+
+  async classify(text: string): Promise<TurnType> {
+    const res = await this.classifyWithConfidence(text);
+    return res.turn;
   }
 
   /**
-   * Detecta si el texto es una "meta-pregunta" sobre capacidades (p. ej.
-   * "dime qué herramientas tienes?"). Compara por coseno contra los arquetipos
-   * embebidos (semántico, no diccionario); si el máximo supera el umbral, el
-   * llamador debe resolver el turno sin herramientas.
+   * Detecta si el texto es una "meta-pregunta" sobre capacidades.
+   * Compara por coseno contra los arquetipos embebidos; si el máximo
+   * supera el umbral, se resuelve sin herramientas.
    */
   async isMetaQuestion(text: string): Promise<boolean> {
     await this.ensureMetaEmbs();

@@ -1,5 +1,26 @@
-export const CONFIRM_ARCHETYPE = "confirma y continúa con el plan previo";
-export const NEW_QUERY_ARCHETYPE = "nueva solicitud";
+export const CONFIRM_ARCHETYPES = [
+  "confirma y continúa con el plan previo",
+  "sí, procede con eso",
+  "de acuerdo, adelante",
+  "correcto, hazlo",
+  "ejecuta el plan",
+  "proceder",
+  "continúa",
+  "dale para adelante",
+];
+
+export const NEW_QUERY_ARCHETYPES = [
+  "nueva solicitud",
+  "quiero hacer una consulta diferente",
+  "cambia de tema",
+  "otra tarea",
+  "iniciar algo nuevo",
+];
+
+/** Arquetipo canónico de confirmación (primer elemento del pool). */
+export const CONFIRM_ARCHETYPE = CONFIRM_ARCHETYPES[0];
+/** Arquetipo canónico de nueva consulta (primer elemento del pool). */
+export const NEW_QUERY_ARCHETYPE = NEW_QUERY_ARCHETYPES[0];
 
 /**
  * Arquetipos de "meta-pregunta": el usuario pregunta por las capacidades del

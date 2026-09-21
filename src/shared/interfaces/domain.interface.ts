@@ -31,11 +31,54 @@ export interface ScoredTool {
   score: number;
 }
 
+/** Tipo de acción semántica inferida de la intención. */
+export type ActionType =
+  | "create"
+  | "read"
+  | "update"
+  | "delete"
+  | "execute"
+  | "confirm"
+  | "query"
+  | "meta"
+  | "unknown";
+
+/** Fase del diálogo deducida por el pipeline. */
+export type DialogPhase = "discovery" | "execution" | "confirmation" | "clarification";
+
+/**
+ * Contexto enriquecido predicho junto a las herramientas.
+ * Proporciona a los agentes el por qué y el cómo de la predicción.
+ */
+export interface PredictedContext {
+  intent: {
+    primaryAction: ActionType | string;
+    confidence: number;
+    category?: string;
+    summary: string;
+  };
+  constraints: {
+    negations: string[];
+    isConfirmation: boolean;
+    isExploratory: boolean;
+  };
+  dialogState: {
+    phase: DialogPhase;
+    topicShift: boolean;
+    activeDomain?: string;
+  };
+  anticipation: {
+    suggestedNextTools: string[];
+    reasoning: string;
+  };
+}
+
 export interface PredictionResult {
   tools: ToolDefinition[];
   complexity: ToolComplexity;
   modelSize: string;
   rankedScores: number[];
+  context?: PredictedContext;
 }
 
 export interface PredictionInput {

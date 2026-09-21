@@ -18,11 +18,12 @@ import type {
   TenantToolGraph,
   ToolGraphNode,
 } from "src/shared/interfaces/graph.interface";
+import {
+  CO_OCCURRENCE_WEIGHT,
+  MUTUALLY_EXCLUSIVE_WEIGHT,
+  PREREQUISITE_WEIGHT,
+} from "src/shared/constants/predict";
 import { normalizeToken } from "../keywords";
-
-const PREREQUISITE_WEIGHT = 0.85;
-const CO_OCCURRENCE_WEIGHT = 0.4;
-const MUTUALLY_EXCLUSIVE_WEIGHT = 1.0;
 
 export class ToolGraphCacheService {
   /** Grafos por scopeKey (chat general: scopeKey = tenant). */

@@ -7,16 +7,15 @@
  * previo; en caso contrario resetea el estado (topicShift = true).
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
-import { TOPIC_SHIFT_THRESHOLD } from "src/shared/constants/predict/general.predict";
+import {
+  BLEND_NEW,
+  BLEND_PREV,
+  TOPIC_SHIFT_THRESHOLD,
+} from "src/shared/constants/predict";
 
-const BLEND_PREV = 0.7;
-const BLEND_NEW = 0.3;
+import type { SessionStateResult } from "src/shared/interfaces";
 
-export interface SessionStateResult {
-  zt: Float32Array;
-  topicShift: boolean;
-  model: string;
-}
+export type { SessionStateResult };
 
 export class SessionStateCacheService {
   private readonly states = new Map<string, Float32Array>();

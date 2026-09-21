@@ -8,30 +8,22 @@ import type { AppConfig } from "../config";
 import { warn } from "../logger";
 import { createHash } from "node:crypto";
 
-export interface SparseVector {
-  indices: number[];
-  values: number[];
-}
+import {
+  QDRANT_DNS_NAMESPACE,
+  QDRANT_REQ_RETRIES,
+  QDRANT_REQ_TIMEOUT_MS,
+} from "src/shared/constants/qdrant";
 
-export interface QdrantPoint {
-  id: string | number;
-  payload: Record<string, unknown>;
-  /** Mapa nombre → vector (p. ej. `{ bm25_text: { indices, values } }`). */
-  vector: Record<string, SparseVector>;
-}
+import type { QdrantPoint, SearchResult, SparseVector } from "src/shared/interfaces";
 
-export interface SearchResult {
-  id: string;
-  score: number;
-  payload: Record<string, unknown>;
-}
+export type { SparseVector, QdrantPoint, SearchResult };
 
-const REQ_TIMEOUT_MS = 15000;
+const REQ_TIMEOUT_MS = QDRANT_REQ_TIMEOUT_MS;
 /** Reintentos ante fallos transitorios (timeout de red / Qdrant optimizando). */
-const REQ_RETRIES = 2;
+const REQ_RETRIES = QDRANT_REQ_RETRIES;
 
 /** Namespace DNS de RFC 4122 (mismo que `uuidv5.DNS` del monolith). */
-const DNS_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+const DNS_NAMESPACE = QDRANT_DNS_NAMESPACE;
 
 /**
  * UUIDv5 determinístico (RFC 4122). Replica el `uuidv5(name, uuidv5.DNS)` del

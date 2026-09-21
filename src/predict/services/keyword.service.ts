@@ -11,20 +11,10 @@
 import { createHash } from "node:crypto";
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log } from "src/logger";
-import type { ScoredTool, ToolDefinition } from "src/shared/interfaces/domain.interface";
+import type { ScoredTool, ToolDefinition, KeywordReduceResult, Entry } from "src/shared/interfaces";
 import { extractQueryKeywords, toolKeywords } from "../keywords";
 
-export interface KeywordReduceResult {
-  candidates: ScoredTool[];
-  modelSize: string;
-  recomputed: number;
-  cached: number;
-}
-
-interface Entry {
-  embedding: Float32Array;
-  hash: string;
-}
+export type { KeywordReduceResult, Entry };
 
 export class KeywordService {
   /** Caché de embeddings de keywords por scopeKey (chat general: scopeKey = tenant). */

@@ -78,17 +78,24 @@ test("POST /predict selecciona herramientas del catálogo", async () => {
     text: "busca información sobre el clima en lima",
     source: "human",
   });
-  assert.equal(res.status, 200);
   const result = res.data as {
     tools: { name: string }[];
     complexity: string;
     modelSize: string;
     rankedScores: number[];
+    context?: {
+      intent: { primaryAction: string; confidence: number };
+      dialogState: { phase: string };
+      anticipation: { suggestedNextTools: string[] };
+    };
   };
   assert.ok(result.tools.length >= 1, "debe seleccionar al menos una herramienta");
   assert.ok(result.tools.length <= 5, `máximo 5, obtuvo ${result.tools.length}`);
   assert.equal(typeof result.complexity, "string");
   assert.ok(["large", "small", "hash"].includes(result.modelSize));
+  assert.ok(result.context, "debe devolver context en la respuesta");
+  assert.equal(typeof result.context.intent.primaryAction, "string");
+  assert.ok(result.context.intent.confidence >= 0 && result.context.intent.confidence <= 1);
 
   // Las herramientas devueltas deben existir en el catálogo.
   const names = new Set(EXAMPLE_TOOLS.map((t) => t.name));

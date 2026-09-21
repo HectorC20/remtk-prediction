@@ -2,7 +2,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Trace } from "../../shared/interfaces/domain.interface";
 import { DebugStats } from "src/shared/interfaces";
-import { MAX_TRACES } from "src/shared/constants/predict";
+import { DEBUG_MAX_SNAPSHOT_TRACES, MAX_TRACES } from "src/shared/constants/predict";
 
 @Injectable()
 export class Debugger {
@@ -37,7 +37,7 @@ export class Debugger {
   snapshot(): { stats: DebugStats; traces: Trace[] } {
     return {
       stats: { ...this.stats },
-      traces: [...this.traces].slice(-20).reverse(),
+      traces: [...this.traces].slice(-DEBUG_MAX_SNAPSHOT_TRACES).reverse(),
     };
   }
 }

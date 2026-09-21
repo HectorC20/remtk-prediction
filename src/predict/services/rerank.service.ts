@@ -18,26 +18,22 @@
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import type { AppConfig } from "src/config";
 import { log } from "src/logger";
-import type { ScoredTool, ToolComplexity, ToolDefinition } from "src/shared/interfaces/domain.interface";
+import type { PredictedContext, ScoredTool, ToolComplexity, ToolDefinition } from "src/shared/interfaces/domain.interface";
 import type { GraphEdge, TenantToolGraph } from "src/shared/interfaces/graph.interface";
 import type { LearnedScores } from "src/shared/interfaces/lexical.interface";
-import { graphPropagationAlphaDefault } from "src/shared/constants/predict/general.predict";
+import {
+  COMPLEXITY_AVG_HIGH,
+  COMPLEXITY_AVG_MID,
+  COMPLEXITY_COUNT_HIGH,
+  COMPLEXITY_COUNT_MID,
+  graphPropagationAlphaDefault,
+} from "src/shared/constants/predict";
 import { isForeignFamily, nameAffinity, namedFamilies } from "../keywords";
+import { CalibrationService } from "./calibration.service";
 
-export interface RerankResult {
-  tools: ToolDefinition[];
-  complexity: ToolComplexity;
-  modelSize: string;
-  rankedScores: number[];
-}
+import type { GraphRerankResult, RerankResult } from "src/shared/interfaces";
 
-export interface GraphRerankResult extends RerankResult {
-  graph: {
-    nodes: string[];
-    edges: GraphEdge[];
-    executionOrder: string[];
-  };
-}
+export type { RerankResult, GraphRerankResult };
 
 /** Catálogo mínimo para resolver definiciones por nombre (evita acoplar Qdrant). */
 type Catalog = { get(name: string): ToolDefinition | undefined };
@@ -131,17 +127,53 @@ export class RerankService {
         log(
           `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) → 0 tools`,
         );
-        return { tools: [], complexity: "simple", modelSize, rankedScores: [relevance] };
+        return {
+          tools: [],
+          complexity: "simple",
+          modelSize,
+          rankedScores: [relevance],
+          calibratedScores: [CalibrationService.calibrateProbability(relevance)],
+          context: {
+            intent: {
+              primaryAction: "unknown",
+              confidence: 0,
+              summary: "Piso de relevancia no superado",
+            },
+            constraints: {
+              negations: [],
+              isConfirmation: false,
+              isExploratory: true,
+            },
+            dialogState: { phase: "discovery", topicShift: false },
+            anticipation: { suggestedNextTools: [], reasoning: "Sin herramientas activas" },
+          },
+        };
       }
       log(
         `[rerank] piso de relevancia no superado (relevancia=${relevance.toFixed(3)} < min=${this.config.adaptiveMinScore}) ` +
           `pero ${forced.length} tools explícitas → se devuelven`,
       );
+      const forcedScores = forced.map(() => relevance);
       return {
         tools: forced,
         complexity: "simple",
         modelSize,
-        rankedScores: forced.map(() => relevance),
+        rankedScores: forcedScores,
+        calibratedScores: CalibrationService.calibrateRankedScores(forcedScores),
+        context: {
+          intent: {
+            primaryAction: forced[0]?.category ?? "execute",
+            confidence: CalibrationService.calibrateProbability(relevance),
+            summary: "Herramientas forzadas explícitas",
+          },
+          constraints: {
+            negations: [],
+            isConfirmation: false,
+            isExploratory: false,
+          },
+          dialogState: { phase: "execution", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Herramientas forzadas por planificador" },
+        },
       };
     }
 
@@ -179,7 +211,40 @@ export class RerankService {
 
     const complexity = estimateComplexity(fused, tools.length);
     log(`[rerank] selected=${tools.length} complexity=${complexity}`);
-    return { tools, complexity, modelSize, rankedScores: scores };
+
+    const calibratedScores = CalibrationService.calibrateRankedScores(scores);
+    const topTool = tools[0];
+    const context: PredictedContext = {
+      intent: {
+        primaryAction: topTool?.category ?? "execute",
+        confidence: calibratedScores[0] ?? 0.5,
+        category: topTool?.group,
+        summary: tools.length > 0 ? `Seleccionadas ${tools.length} herramientas` : "Sin herramientas seleccionadas",
+      },
+      constraints: {
+        negations: [],
+        isConfirmation: false,
+        isExploratory: tools.length === 0,
+      },
+      dialogState: {
+        phase: tools.length > 0 ? "execution" : "discovery",
+        topicShift: false,
+        activeDomain: topTool?.group,
+      },
+      anticipation: {
+        suggestedNextTools: [],
+        reasoning: "Pipeline lineal sin grafo",
+      },
+    };
+
+    return {
+      tools,
+      complexity,
+      modelSize,
+      rankedScores: scores,
+      calibratedScores,
+      context,
+    };
   }
 
   /**
@@ -198,6 +263,8 @@ export class RerankService {
     exclude?: string[];
     queryTokens?: Set<string>;
     pinnedNames?: string[];
+    topicShift?: boolean;
+    turnType?: string;
   }): GraphRerankResult {
     const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude, queryTokens } = opts;
     // `total` es el tamaño COMPLETO del grafo: la matriz de adyacencia es
@@ -407,11 +474,58 @@ export class RerankService {
     log(
       `[rerank:graph] selected=${tools.length} order=${orderWithScores} complexity=${complexity}`,
     );
+    // Anticipación de herramientas siguientes en el flujo de trabajo:
+    // Identifica herramientas que tienen como PREREQUISITE alguna de las herramientas
+    // seleccionadas en este turno pero que aún no han sido ejecutadas.
+    const selectedSetNames = new Set(executionOrder);
+    const nextToolCandidates: string[] = [];
+    for (const e of edges) {
+      if (e.type === "PREREQUISITE" && selectedSetNames.has(e.from) && !selectedSetNames.has(e.to)) {
+        if (!nextToolCandidates.includes(e.to)) {
+          nextToolCandidates.push(e.to);
+        }
+      }
+    }
+
+    const calibratedScores = CalibrationService.calibrateRankedScores(scores);
+    const topTool = tools[0];
+    const isConfirm = Boolean(opts.turnType && opts.turnType.includes("confirm"));
+    const primaryAction = topTool?.category ?? "execute";
+    const context: PredictedContext = {
+      intent: {
+        primaryAction,
+        confidence: calibratedScores[0] ?? 0.5,
+        category: topTool?.group,
+        summary: tools.length > 0
+          ? `Ejecución topológica de ${tools.length} herramientas (${executionOrder.join(" -> ")})`
+          : "Sin herramientas seleccionadas",
+      },
+      constraints: {
+        negations: [],
+        isConfirmation: isConfirm,
+        isExploratory: tools.length === 0,
+      },
+      dialogState: {
+        phase: isConfirm ? "confirmation" : tools.length === 0 ? "discovery" : "execution",
+        topicShift: opts.topicShift ?? false,
+        activeDomain: topTool?.group,
+      },
+      anticipation: {
+        suggestedNextTools: nextToolCandidates.slice(0, 5),
+        reasoning:
+          nextToolCandidates.length > 0
+            ? `Próximos pasos inferidos del DAG tras ejecutar: ${executionOrder.join(" > ")}`
+            : "Flujo completado sin dependencias posteriores inmediatas",
+      },
+    };
+
     return {
       tools,
       complexity,
       modelSize,
       rankedScores: scores,
+      calibratedScores,
+      context,
       graph: { nodes: executionOrder, edges: subEdges, executionOrder },
     };
   }
@@ -632,7 +746,7 @@ export function adaptiveThreshold(
 export function estimateComplexity(scored: ScoredTool[], selectedCount: number): ToolComplexity {
   if (scored.length === 0) return "simple";
   const avg = scored.reduce((s, t) => s + t.score, 0) / scored.length;
-  if (selectedCount > 20 && avg > 0.65) return "complex";
-  if (selectedCount > 10 && avg > 0.55) return "moderate";
+  if (selectedCount > COMPLEXITY_COUNT_HIGH && avg > COMPLEXITY_AVG_HIGH) return "complex";
+  if (selectedCount > COMPLEXITY_COUNT_MID && avg > COMPLEXITY_AVG_MID) return "moderate";
   return "simple";
 }
