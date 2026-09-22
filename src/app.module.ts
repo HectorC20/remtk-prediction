@@ -29,6 +29,7 @@ async function startHttp(module: Type, port: number): Promise<ServerHandle> {
     bodyParser: false,
     logger: false,
   });
+  app.enableCors();
   app.use(express.json({ limit: LIMIT }));
   await app.listen(port);
   const addr = app.getHttpServer().address() as { port: number } | null;

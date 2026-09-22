@@ -11,3 +11,4 @@ export type * from "./session.interface";
 export type * from "./classifier.interface";
 export type * from "./rerank.interface";
 export type * from "./qdrant.interface";
+export type * from "./spatial.interface";

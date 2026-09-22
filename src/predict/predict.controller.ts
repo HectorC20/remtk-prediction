@@ -26,6 +26,8 @@ import type { Debugger } from "./helper/debugger.helper";
 import type { LexicalProfileService } from "./services/lexical-profile.service";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 import type { IPredictionOrchestrator } from "../shared/interfaces/orchestrator.interface";
+import type { SpatialPredictDto, VisualToolPayload } from "src/shared/interfaces";
+import { SpatialPredictService } from "./services/spatial-predict.service";
 import { normalizeAgentId, resolveScopeKey } from "../shared/scope";
 
 /** Contexto que necesita este controlador (provisto por PredictAppModule). */
@@ -34,6 +36,7 @@ export interface PredictContext {
   engine: EmbeddingEngineService;
   debugger: Debugger;
   lexical: LexicalProfileService;
+  spatial?: SpatialPredictService;
 }
 
 /** Token de inyección del contexto (no es una clase inyectable por tipo). */
@@ -46,6 +49,37 @@ export class PredictV1Controller {
   @Get("health")
   health(): { status: string } {
     return { status: "ok" };
+  }
+
+  /**
+   * POST /spatial/predict
+   * Predicción de acciones en lienzo visual interactivo con coordenadas y contexto anafórico.
+   */
+  @Post("spatial/predict")
+  @HttpCode(200)
+  async predictSpatial(@Body() body: SpatialPredictDto): Promise<VisualToolPayload> {
+    if (!body || typeof body.query !== "string" || body.query.trim() === "") {
+      throw new BadRequestException({ error: "El campo query (string) es requerido" });
+    }
+    const service = this.ctx.spatial ?? new SpatialPredictService(this.ctx.engine);
+    const cursorStr = body.cursor ? `(${body.cursor.x.toFixed(2)}, ${body.cursor.y.toFixed(2)})` : "(0.50, 0.50)";
+    console.log(`\n================== [SPATIAL HARNESS] ==================`);
+    console.log(`📥 TEXTO TRANSCRIBIENDO/RECIBIDO : "${body.query}"`);
+    console.log(`📍 CONTEXTO ESPACIAL             : Cursor=${cursorStr} | Seleccionado=${body.selectedId ?? "ninguno"}`);
+    
+    const result = await service.predict(body);
+    
+    console.log(`🛠️  HERRAMIENTA UTILIZADA        : [${result.tool}]`);
+    console.log(`📦 PARÁMETROS                    :`, JSON.stringify(result.parameters));
+    console.log(`🎯 CONFIANZA / LATENCIA          : ${(result.confidence * 100).toFixed(0)}% | ${result.executionTimeMs}ms`);
+    console.log(`=======================================================\n`);
+    return result;
+  }
+
+  @Post("predict/spatial")
+  @HttpCode(200)
+  async predictSpatialAlias(@Body() body: SpatialPredictDto): Promise<VisualToolPayload> {
+    return this.predictSpatial(body);
   }
 
   /**
