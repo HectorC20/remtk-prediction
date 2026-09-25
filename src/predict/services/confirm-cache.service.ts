@@ -11,4 +11,9 @@ export class ConfirmationCache {
   set(sessionId: string, result: GraphPredictionResult): void {
     this.store.set(sessionId, result);
   }
+
+  /** Invalida el plan cacheado (p. ej. veredicto de rechazo de la capa de juicio). */
+  delete(sessionId: string): void {
+    this.store.delete(sessionId);
+  }
 }

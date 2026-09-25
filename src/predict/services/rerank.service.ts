@@ -28,7 +28,7 @@ import {
   COMPLEXITY_COUNT_MID,
   graphPropagationAlphaDefault,
 } from "src/shared/constants/predict";
-import { isForeignFamily, nameAffinity, namedFamilies } from "../keywords";
+import { isForeignFamily, nameAffinity, namedFamilies, toolFamily } from "../keywords";
 import { CalibrationService } from "./calibration.service";
 
 import type { GraphRerankResult, RerankResult } from "src/shared/interfaces";
@@ -37,6 +37,32 @@ export type { RerankResult, GraphRerankResult };
 
 /** Catálogo mínimo para resolver definiciones por nombre (evita acoplar Qdrant). */
 type Catalog = { get(name: string): ToolDefinition | undefined };
+
+/**
+ * Conserva únicamente familias que representan un verdadero complemento
+ * multi-herramienta (≥ 2 herramientas en el catálogo comparten ese prefijo de
+ * familia). Una herramienta aislada (p. ej. `web_search` con familia `web` de
+ * 1 solo miembro) no forma un namespace de complemento y no debe penalizar al
+ * resto del catálogo en consultas multi-intención.
+ */
+function activePluginFamilies(
+  queryTokens: Set<string> | undefined,
+  names: string[],
+  catalogNames: string[] = names,
+): Set<string> {
+  const named = namedFamilies(queryTokens, names);
+  if (named.size === 0) return named;
+  const counts = new Map<string, number>();
+  for (const name of catalogNames) {
+    const fam = toolFamily(name);
+    if (fam) counts.set(fam, (counts.get(fam) ?? 0) + 1);
+  }
+  const out = new Set<string>();
+  for (const fam of named) {
+    if ((counts.get(fam) ?? 0) >= 2) out.add(fam);
+  }
+  return out;
+}
 
 export class RerankService {
   constructor(private readonly config: AppConfig) {}
@@ -91,7 +117,11 @@ export class RerankService {
     );
     // Puerta de familia: namespaces nombrados explícitamente en las palabras
     // clave. Vacío = la consulta no nombra familia ninguna → no se penaliza.
-    const families = namedFamilies(queryTokens, candidates.map((c) => c.name));
+    const families = activePluginFamilies(
+      queryTokens,
+      candidates.map((c) => c.name),
+      reduced.map((r) => r.name),
+    );
     const fused: ScoredTool[] = pool.map((r) => ({
       name: r.name,
       score:
@@ -301,7 +331,7 @@ export class RerankService {
     const baseByName = new Map(baseScores.map((s) => [s.name, s.score]));
     // Puerta de familia: namespaces nombrados explícitamente en las palabras
     // clave. Vacío = la consulta no nombra familia ninguna → no se penaliza.
-    const families = namedFamilies(queryTokens, names);
+    const families = activePluginFamilies(queryTokens, names, allNames);
 
     // 2. Refuerzo léxico BM25 + perfil aprendido del canal + afinidad por
     //    NOMBRE (única señal que separa familias dentro de un complemento).

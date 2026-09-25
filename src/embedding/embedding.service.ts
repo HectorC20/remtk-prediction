@@ -154,6 +154,29 @@ export class EmbeddingEngineService {
     return this.embed(`passage: ${text}`, size, opts);
   }
 
+  /**
+   * Embeddings a NIVEL TOKEN (sin pooling): base del MaxSim de interacción
+   * tardía (estilo ColBERT) de la capa de juicio. Devuelve los vectores de
+   * `last_hidden_state` filtrados por máscara, sin los tokens especiales
+   * (primero/último: CLS/SEP), cada uno normalizado L2. Sin ONNX → [].
+   */
+  async embedTokens(
+    text: string,
+    size?: ModelSize,
+    opts?: { high?: boolean },
+  ): Promise<Float32Array[]> {
+    if (!this.config.onnxEnabled) return [];
+    const s = size ?? this.defaultSize;
+    try {
+      const ok = await this.ensure(s);
+      if (!ok) return [];
+      return await this.enqueue(opts?.high ?? false, () => this.runModelTokens(s, text));
+    } catch (err) {
+      warn(`[embed] tokens ${s} falló: ${String((err as Error)?.message ?? err)}`);
+      return [];
+    }
+  }
+
   /** Encola una tarea de inferencia y resuelve cuando se ejecuta. */
   private enqueue<T>(high: boolean, fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -225,6 +248,44 @@ export class EmbeddingEngineService {
   }
 
   private async runModel(size: ModelSize, text: string): Promise<Float32Array> {
+    const { data, dims, mask } = await this.runRaw(size, text);
+
+    // [1, seq, dim] → mean-pooling por máscara; [1, dim] → directo.
+    const vec =
+      dims.length === 3 ? EmbeddingEngineService.meanPool(data, dims[1], dims[2], mask) : data;
+    return EmbeddingEngineService.normalizeL2(vec);
+  }
+
+  /**
+   * Vectores por token de `last_hidden_state` (MaxSim/ColBERT): filtra por
+   * máscara, descarta el primer y último token (CLS/SEP) y normaliza cada
+   * vector por separado. Requiere salida [1, seq, dim]; si el modelo devuelve
+   * [1, dim] (ya pooled) no hay nivel token disponible → [].
+   */
+  private async runModelTokens(size: ModelSize, text: string): Promise<Float32Array[]> {
+    const { data, dims, mask } = await this.runRaw(size, text);
+    if (dims.length !== 3) return [];
+
+    const seq = dims[1];
+    const dim = dims[2];
+    const out: Float32Array[] = [];
+    for (let s = 0; s < seq; s++) {
+      if (mask[s] === 0) continue;
+      out.push(EmbeddingEngineService.normalizeL2(data.slice(s * dim, (s + 1) * dim)));
+    }
+    // Descarta especiales de los extremos (CLS/SEP) si quedaron tokens.
+    if (out.length > 2) {
+      out.shift();
+      out.pop();
+    }
+    return out;
+  }
+
+  /** Tokeniza + ejecuta la sesión ONNX y devuelve la salida cruda del modelo. */
+  private async runRaw(
+    size: ModelSize,
+    text: string,
+  ): Promise<{ data: Float32Array; dims: readonly number[]; mask: number[] }> {
     const session = this.sessions.get(size)!;
     const tokenizer = this.tokenizers.get(size)!;
 
@@ -252,12 +313,11 @@ export class EmbeddingEngineService {
     const result = outputs["sentence_embedding"] ?? outputs["last_hidden_state"];
     if (!result) throw new Error(`sin salida de embedding (${Object.keys(outputs).join(",")})`);
 
-    const data = (result as { data: Float32Array }).data;
-    const dims = (result as OnnxTensorLike).dims;
-    // [1, seq, dim] → mean-pooling por máscara; [1, dim] → directo.
-    const vec =
-      dims.length === 3 ? EmbeddingEngineService.meanPool(data, dims[1], dims[2], mask) : data;
-    return EmbeddingEngineService.normalizeL2(vec);
+    return {
+      data: (result as { data: Float32Array }).data,
+      dims: (result as OnnxTensorLike).dims,
+      mask,
+    };
   }
 
   private hashEmbedding(text: string, dim: number): Float32Array {

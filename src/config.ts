@@ -48,6 +48,23 @@ import {
   SYNONYMSCOLLECTIONDEFAULT,
   TOOLSCOLLECTIONDEFAULT,
 } from "./shared/constants/qdrant/general.constant";
+import {
+  energyTauDefault,
+  energyTempDefault,
+  gateBetaDefault,
+  gateGammaDefault,
+  gateTextMinDefault,
+  juicioEnabledDefault,
+  juicioPostTopKDefault,
+  maxsimMaxTokensDefault,
+  maxsimWeightDefault,
+  nliMarginDefault,
+  noopMarginDefault,
+  problemMarginDefault,
+  rerankerAlphaDefault,
+  rerankerModelPathDefault,
+  specificityRhoDefault,
+} from "./shared/constants/juicio";
 
 export interface AppConfig {
   /** Puerto del API de predicción (endpoints /predict, /tools, /memory/predict...). */
@@ -113,6 +130,40 @@ export interface AppConfig {
   learnMaxPostings: number;
   /** Persistencia del perfil en `tool_lexicon` (Fase 4). */
   learnPersist: boolean;
+
+  // ── Capa de juicio (docs/juicio.md) ──────────────────────────────────────
+  /** Interruptor maestro: sin él, pre/post de juicio son pasa-through. */
+  juicioEnabled: boolean;
+  /** Margen entre pools rechazo/confirmación del veredicto NLI de estado. */
+  juicioNliMargin: number;
+  /** Carpeta del modelo NLI ONNX (vacío = fallback por arquetipos). */
+  juicioNliModelPath: string;
+  /** Margen del prototipo __NOOP__ sobre el mejor score de herramienta. */
+  juicioNoopMargin: number;
+  /** Temperatura T de la energía libre sobre las similitudes. */
+  juicioEnergyTemp: number;
+  /** Umbral τ de energía para abstención out-of-distribution. */
+  juicioEnergyTau: number;
+  /** β de la sigmoide de la puerta de coherencia (pendiente). */
+  juicioGateBeta: number;
+  /** γ de la sigmoide de la puerta de coherencia (desplazamiento). */
+  juicioGateGamma: number;
+  /** λ mínima para concatenar historial al prompt. */
+  juicioGateTextMin: number;
+  /** Carpeta del cross-encoder ONNX (vacío = inactivo). */
+  juicioRerankerModelPath: string;
+  /** Peso del logit del cross-encoder en la fusión. */
+  juicioRerankerAlpha: number;
+  /** Peso del MaxSim token-level en la fusión del re-rank de juicio. */
+  juicioMaxsimWeight: number;
+  /** Tope de tokens por texto en el MaxSim. */
+  juicioMaxsimMaxTokens: number;
+  /** ρ de la penalización por difusión semántica. */
+  juicioSpecificityRho: number;
+  /** Margen exigido al problemSpace para reemplazar al score fusionado. */
+  juicioProblemMargin: number;
+  /** Tope de candidatas re-puntuadas en el post de juicio. */
+  juicioPostTopK: number;
 
   qdrantEnabled: boolean;
   qdrantUrl: string;
@@ -214,6 +265,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     learnTermMinWeight: float(env.LEARN_TERM_MIN_WEIGHT, learnTermMinWeightDefault),
     learnMaxPostings: int(env.LEARN_MAX_POSTINGS, learnMaxPostingsDefault),
     learnPersist: bool(env.LEARN_PERSIST, learnPersistDefault),
+
+    // ── Capa de juicio ────────────────────────────────────────────────────
+    juicioEnabled: bool(env.JUICIO_ENABLED, juicioEnabledDefault),
+    juicioNliMargin: float(env.JUICIO_NLI_MARGIN, nliMarginDefault),
+    juicioNliModelPath: str(env.JUICIO_NLI_MODEL_PATH, ""),
+    juicioNoopMargin: float(env.JUICIO_NOOP_MARGIN, noopMarginDefault),
+    juicioEnergyTemp: float(env.JUICIO_ENERGY_T, energyTempDefault),
+    juicioEnergyTau: float(env.JUICIO_ENERGY_TAU, energyTauDefault),
+    juicioGateBeta: float(env.JUICIO_GATE_BETA, gateBetaDefault),
+    juicioGateGamma: float(env.JUICIO_GATE_GAMMA, gateGammaDefault),
+    juicioGateTextMin: float(env.JUICIO_GATE_TEXT_MIN, gateTextMinDefault),
+    juicioRerankerModelPath: str(env.JUICIO_RERANKER_MODEL_PATH, rerankerModelPathDefault),
+    juicioRerankerAlpha: float(env.JUICIO_RERANKER_ALPHA, rerankerAlphaDefault),
+    juicioMaxsimWeight: float(env.JUICIO_MAXSIM_WEIGHT, maxsimWeightDefault),
+    juicioMaxsimMaxTokens: int(env.JUICIO_MAXSIM_MAX_TOKENS, maxsimMaxTokensDefault),
+    juicioSpecificityRho: float(env.JUICIO_SPECIFICITY_RHO, specificityRhoDefault),
+    juicioProblemMargin: float(env.JUICIO_PROBLEM_MARGIN, problemMarginDefault),
+    juicioPostTopK: int(env.JUICIO_POST_TOP_K, juicioPostTopKDefault),
 
     // ── Motor Qdrant externo ────────────────────────────────────────────
     qdrantEnabled: bool(env.QDRANT_ENABLED, true),

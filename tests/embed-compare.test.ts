@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { EmbeddingEngineService } from "../src/embedding/embedding.service";
+import { juicioConfigDefaults } from "../src/shared/constants/juicio";
 import type { EmbedResult } from "../src/shared/interfaces/embedding.interface";
 
 const CFG = {
@@ -49,6 +50,7 @@ const CFG = {
   learnTermMinWeight: 0.05,
   learnMaxPostings: 200,
   learnPersist: false,
+  ...juicioConfigDefaults,
 };
 
 const SIZES: Array<{ size: "small" | "large"; dim: number }> = [

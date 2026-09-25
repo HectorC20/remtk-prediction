@@ -13,6 +13,8 @@ export interface OnnxTensorLike {
 
 export interface OnnxSessionLike {
   run(feeds: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /** Nombres de entrada declarados por el modelo (onnxruntime los expone siempre). */
+  inputNames?: string[];
 }
 
 export interface OnnxModuleLike {

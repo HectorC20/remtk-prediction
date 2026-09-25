@@ -27,6 +27,8 @@ import { LexicalProfileService } from "./services/lexical-profile.service";
 import { RerankService } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
+import { JuicioService } from "../juicio/juicio.service";
+import type { JuicioContext } from "../shared/interfaces/juicio.interface";
 import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, MemoryPredictionResult, InterestPredictionInput, InterestPredictionResult, InterestMatch } from "src/shared/interfaces/index";
 import {
   BLEND_NEW,
@@ -72,6 +74,7 @@ export class PredictionOrchestrator {
     private readonly debugger_: Debugger,
     private readonly config: AppConfig,
     private readonly lexical: LexicalProfileService,
+    private readonly juicio: JuicioService,
   ) {}
 
   /** Warm-ups de embeddings pendientes por scopeKey (deduplicado/encadenado). */
@@ -105,6 +108,9 @@ export class PredictionOrchestrator {
         // Tercer paso del warm-up: semilla del perfil léxico del canal (§7).
         // Síncrono y sin ONNX: no compite con la cola de inferencia.
         this.lexical.seedScope(scopeKey, tools);
+        // La capa de juicio cachea vectores por scope (MaxSim, difusión): se
+        // invalidan al re-registrar el catálogo.
+        this.juicio.clearScope(scopeKey);
         this.debugger_.bump({ embeddingsRecomputed: recomputed, embeddingsCached: cached });
         this.debugger_.setTenants(this.qdrant.countTools(scopeKey) > 0 ? Math.max(1, this.debugger_.snapshot().stats.tenants) : 0);
         log(`[tools] scope=${scopeKey} warm-up completo indexados=${tools.length} embeddings recomputed=${recomputed} cached=${cached}`);
@@ -214,6 +220,56 @@ export class PredictionOrchestrator {
       };
     }
 
+    // ── Capa de juicio: NLI de estado condicionado (§1) + puerta (§3) ──────
+    // El plan cacheado cuenta como "propuesta pendiente" para el veredicto.
+    const juicioCtx: JuicioContext = await this.juicio.pre({
+      scopeKey,
+      sessionId: input.sessionId,
+      text,
+      source: input.source,
+      history: input.history,
+      cachedPlan: this.confirmCache.get(input.sessionId),
+    });
+    trace.juicioGateLambda = juicioCtx.gateLambda;
+    trace.juicioEstado = juicioCtx.estado;
+
+    // Veredicto REJECT: el usuario niega la propuesta pendiente → 0 tools y el
+    // plan cacheado se invalida (sin esto el turno se clasificaría new_query y
+    // dispararía justo la herramienta rechazada).
+    if (juicioCtx.resolvedBy === "nli_reject") {
+      this.confirmCache.delete(input.sessionId);
+      this.finalize(trace, start, []);
+      return {
+        tools: [],
+        complexity: "simple",
+        modelSize: "hash",
+        rankedScores: [],
+        graph: { nodes: [], edges: [], executionOrder: [] },
+        context: {
+          intent: {
+            primaryAction: "unknown",
+            confidence: 0.9,
+            summary: "Rechazo de la propuesta pendiente (juicio NLI)",
+          },
+          constraints: { negations: [text], isConfirmation: false, isExploratory: false },
+          dialogState: { phase: "discovery", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Propuesta rechazada por el usuario" },
+        },
+      };
+    }
+
+    // Veredicto CONFIRM con plan pendiente: early-exit con el plan cacheado.
+    if (juicioCtx.resolvedBy === "nli_confirm") {
+      const cached = this.confirmCache.get(input.sessionId);
+      if (cached) {
+        trace.confirmHit = true;
+        this.debugger_.bump({ confirmGets: 1, confirmHits: 1 });
+        log(`[pipeline] early-exit: confirmación por juicio NLI con plan cacheado`);
+        this.finalize(trace, start, cached.tools.map((t) => t.name));
+        return cached;
+      }
+    }
+
     // Early exit: confirmación vacía con plan previo cacheado.
     if (turn === TurnType.ConfirmationEmpty) {
       this.debugger_.bump({ confirmGets: 1 });
@@ -228,11 +284,18 @@ export class PredictionOrchestrator {
     }
 
     // En turnos de confirmación (con matiz) o source=agent se predice sobre el plan previo.
-    // En consulta nueva se incorporan los mensajes previos para dar contexto.
+    // En consulta nueva se incorporan los mensajes previos para dar contexto —
+    // salvo que la puerta de coherencia (juicio §3) haya aislado el turno:
+    // ahí el historial contaminaría el ranking (caso cambio-tema).
     // Las `keywords` delegadas (planificador/cliente) se anexan a la consulta:
     // alimentan el match cross-idioma (capa 2), el recall BM25 y el z_t de sesión.
+    const effectiveText = juicioCtx.focusedText ?? text;
     const promptText = this.withKeywords(
-      turn === TurnType.NewQuery ? this.withHistory(text, input.history) : input.priorPlan ?? text,
+      turn === TurnType.NewQuery
+        ? juicioCtx.historyGated
+          ? effectiveText
+          : this.withHistory(effectiveText, input.history)
+        : input.priorPlan ?? effectiveText,
       input.keywords,
     );
 
@@ -256,11 +319,12 @@ export class PredictionOrchestrator {
     }
 
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.
+    // Con λ de juicio la mezcla es adaptativa (puerta de coherencia, §3).
     let zt: Float32Array | undefined;
     let sessionModel = "hash";
     let topicShift = false;
     try {
-      const s = await this.sessionState.resolve(input.sessionId, promptText);
+      const s = await this.sessionState.resolve(input.sessionId, promptText, juicioCtx.gateLambda);
       zt = s.zt;
       sessionModel = s.model;
       topicShift = s.topicShift;
@@ -274,7 +338,7 @@ export class PredictionOrchestrator {
     if (graph && zt) {
       const lexicalScores = await this.lexicalScores(scopeKey, promptText);
       const learned = this.lexical.score(scopeKey, promptText);
-      const result = this.rerank.graphFilter({
+      const raw = this.rerank.graphFilter({
         zt,
         graph,
         edges: this.graphCache.edges(scopeKey),
@@ -288,6 +352,9 @@ export class PredictionOrchestrator {
         topicShift,
         turnType: turn,
       });
+      // Capa de juicio (post): abstención + re-rank del top-K. Las órdenes
+      // explícitas (pinned por keywords) no se juzgan: las mandó el planificador.
+      const result = await this.judgeResult(scopeKey, effectiveText, juicioCtx, raw, pinnedNames, trace, input.exclude);
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
       trace.complexity = result.complexity;
@@ -297,7 +364,7 @@ export class PredictionOrchestrator {
       trace.learnTerms = learned.scores.size;
       this.debugger_.bump({ embeddingsCached: graph.nodes.size });
 
-      if (turn === TurnType.NewQuery) {
+      if (turn === TurnType.NewQuery && result.tools.length > 0) {
         this.confirmCache.set(input.sessionId, result);
         this.debugger_.bump({ confirmSets: 1 });
       }
@@ -348,10 +415,12 @@ export class PredictionOrchestrator {
       pinnedNames,
     );
     const order = base.tools.map((t) => t.name);
-    const result: GraphPredictionResult = {
+    const flat: GraphPredictionResult = {
       ...base,
       graph: { nodes: order, edges: [], executionOrder: order },
     };
+    // Capa de juicio (post), igual que en la ruta topológica.
+    const result = await this.judgeResult(scopeKey, effectiveText, juicioCtx, flat, pinnedNames, trace, input.exclude);
     trace.embeddingsRecomputed = recomputed;
     trace.embeddingsCached = cached;
     trace.learnWeight = learned.weight;
@@ -362,7 +431,7 @@ export class PredictionOrchestrator {
     trace.outputTools = result.tools.length;
 
     // Cachea el plan para confirmaciones posteriores de la sesión.
-    if (turn === TurnType.NewQuery) {
+    if (turn === TurnType.NewQuery && result.tools.length > 0) {
       this.confirmCache.set(input.sessionId, result);
       this.debugger_.bump({ confirmSets: 1 });
     }
@@ -377,6 +446,33 @@ export class PredictionOrchestrator {
     });
     this.finalize(trace, start, result.tools.map((t) => t.name));
     return result;
+  }
+
+  /**
+   * Post de juicio sobre el resultado del rerank (abstención + re-rank top-K).
+   * Las herramientas fijadas explícitamente por keywords del planificador no se
+   * juzgan: son una orden directa, no una hipótesis.
+   */
+  private async judgeResult(
+    scopeKey: string,
+    text: string,
+    ctx: JuicioContext,
+    result: GraphPredictionResult,
+    pinnedNames: string[],
+    trace: Trace,
+    exclude?: string[],
+  ): Promise<GraphPredictionResult> {
+    if (pinnedNames.length > 0) return result;
+    const judged = await this.juicio.post({ scopeKey, text, ctx, result, exclude });
+    if (judged.diag.abstained) trace.juicioAbstained = judged.diag.abstainReason;
+    trace.juicioNoopScore = judged.diag.noopScore;
+    trace.juicioEnergy = judged.diag.energy;
+    trace.juicioSignals = {
+      maxsim: judged.diag.maxsimApplied,
+      reranker: judged.diag.rerankerApplied,
+      specificity: judged.diag.specificityApplied,
+    };
+    return judged.result;
   }
 
   /**

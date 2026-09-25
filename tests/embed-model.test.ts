@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EmbeddingEngineService } from "../src/embedding/embedding.service";
 import { createSystem } from "../src/main";
+import { juicioConfigDefaults } from "../src/shared/constants/juicio";
 import { EXAMPLE_TOOLS } from "./example-tools";
 
 const CFG = {
@@ -46,6 +47,7 @@ const CFG = {
   learnTermMinWeight: 0.05,
   learnMaxPostings: 200,
   learnPersist: false,
+  ...juicioConfigDefaults,
 };
 
 test("e5-small real: modelo=small, dim=384, vector normalizado", { timeout: 300_000 }, async () => {

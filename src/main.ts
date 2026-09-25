@@ -27,6 +27,13 @@ import { TurnClassifier } from "./predict/turn-classifier";
 import { QdrantService } from "./qdrant/qdrant-service";
 import { createOrchestrator } from "./shared/factory/orchestrator.factory";
 import type { System } from "./shared/interfaces/system.interface";
+import { JuicioService } from "./juicio/juicio.service";
+import { AbstencionService } from "./juicio/services/abstencion.service";
+import { CrossEncoderService } from "./juicio/services/cross-encoder.service";
+import { EspecificidadService } from "./juicio/services/especificidad.service";
+import { EstadoNliService } from "./juicio/services/estado-nli.service";
+import { MaxSimService } from "./juicio/services/maxsim.service";
+import { PuertaContextoService } from "./juicio/services/puerta-contexto.service";
 
 // Contrato público del sistema: reexportado para `index.ts` y consumidores
 // externos (p. ej. tests) que importan `{ createSystem, type System }`.
@@ -51,6 +58,20 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
   const rerank = new RerankService(cfg);
   const lexical = new LexicalProfileService(cfg);
 
+  // Capa de juicio (docs/juicio.md): NLI de estado + abstención + puerta de
+  // coherencia + MaxSim + especificidad + cross-encoder opcional.
+  const juicio = new JuicioService(
+    engine,
+    sessionState,
+    new EstadoNliService(engine, cfg),
+    new AbstencionService(engine, cfg),
+    new PuertaContextoService(cfg),
+    new MaxSimService(engine, cfg),
+    new EspecificidadService(engine, graphCache, cfg),
+    new CrossEncoderService(cfg),
+    cfg,
+  );
+
   const orchestrator = createOrchestrator({
     engine,
     qdrant,
@@ -63,6 +84,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     debugger_,
     cfg,
     lexical,
+    juicio,
   });
 
   return {

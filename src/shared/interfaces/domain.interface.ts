@@ -24,6 +24,13 @@ export interface ToolDefinition {
   prerequisites?: string[];
   /** Herramientas mutuamente excluyentes (relaciones declaradas, opcional). */
   conflicts?: string[];
+  /**
+   * Espacio de necesidad (opcional, indexación dual de la capa de juicio):
+   * cómo un usuario expresaría el problema que esta herramienta resuelve
+   * ("mi jefe me pide el balance", "necesito saber si lloverá"). Si está
+   * presente se embebe y puntúa en paralelo a la descripción técnica.
+   */
+  problemSpace?: string;
 }
 
 export interface ScoredTool {
@@ -153,4 +160,16 @@ export interface Trace {
   learnWeight?: number;
   /** Herramientas del canal con score aprendido en esta predicción. */
   learnTerms?: number;
+  /** λ de la puerta de coherencia de juicio (undefined = capa inactiva). */
+  juicioGateLambda?: number;
+  /** Motivo de abstención de juicio si el turno terminó en ∅ (noop/energy). */
+  juicioAbstained?: string;
+  /** Veredicto NLI de estado del turno (confirm/reject/neutral). */
+  juicioEstado?: "confirm" | "reject" | "neutral";
+  /** Coseno máximo contra el prototipo __NOOP__ (0 = capa inactiva). */
+  juicioNoopScore?: number;
+  /** Energía libre de Helmholtz del ranking de herramienta. */
+  juicioEnergy?: number;
+  /** Señales de re-rank de juicio que intervinieron este turno. */
+  juicioSignals?: { maxsim: boolean; reranker: boolean; specificity: boolean };
 }

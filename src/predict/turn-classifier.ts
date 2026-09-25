@@ -98,14 +98,29 @@ export class TurnClassifier {
   /**
    * Detecta si el texto es una "meta-pregunta" sobre capacidades.
    * Compara por coseno contra los arquetipos embebidos; si el máximo
-   * supera el umbral, se resuelve sin herramientas.
+   * supera el umbral (en el texto íntegro o en el tramo conclusivo de un
+   * párrafo multi-oración), se resuelve sin herramientas.
    */
   async isMetaQuestion(text: string): Promise<boolean> {
     await this.ensureMetaEmbs();
     if (!this.metaEmbs || this.metaEmbs.length === 0) return false;
-    const input = await this.engine.embedQuery(text, "small", { high: true });
+    if (await this.matchesMetaPool(text)) return true;
+
+    const spans = text
+      .split(/[.!\n]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 15);
+    if (spans.length >= 2) {
+      const tail = spans[spans.length - 1];
+      if (tail !== text && (await this.matchesMetaPool(tail))) return true;
+    }
+    return false;
+  }
+
+  private async matchesMetaPool(segment: string): Promise<boolean> {
+    const input = await this.engine.embedQuery(segment, "small", { high: true });
     let max = 0;
-    for (const emb of this.metaEmbs) {
+    for (const emb of this.metaEmbs!) {
       const s = EmbeddingEngineService.cosine(input.embedding, emb);
       if (s > max) max = s;
     }

@@ -12,6 +12,7 @@ import {
   BLEND_PREV,
   TOPIC_SHIFT_THRESHOLD,
 } from "src/shared/constants/predict";
+import { gateTextMinDefault } from "src/shared/constants/juicio";
 
 import type { SessionStateResult } from "src/shared/interfaces";
 
@@ -22,12 +23,27 @@ export class SessionStateCacheService {
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
-  async resolve(sessionId: string, text: string): Promise<SessionStateResult> {
+  /** Estado actual de la sesión SIN mutarlo (lectura para la puerta de coherencia). */
+  peek(sessionId: string): Float32Array | undefined {
+    return this.states.get(sessionId);
+  }
+
+  /**
+   * Con `gateLambda` (puerta de coherencia semántica, capa de juicio) la mezcla
+   * es adaptativa: (1−λ)·zNew + λ·prev. Si la puerta aísla el turno
+   * (λ < gateTextMin), resetea el estado latente al nuevo vector (topicShift = true).
+   */
+  async resolve(sessionId: string, text: string, gateLambda?: number): Promise<SessionStateResult> {
     const res = await this.engine.embedQuery(text, "small", { high: true });
     const zNew = res.embedding;
     const prev = this.states.get(sessionId);
 
     if (!prev) {
+      this.states.set(sessionId, zNew);
+      return { zt: zNew, topicShift: true, model: res.model };
+    }
+
+    if (gateLambda !== undefined && gateLambda < gateTextMinDefault) {
       this.states.set(sessionId, zNew);
       return { zt: zNew, topicShift: true, model: res.model };
     }
@@ -38,9 +54,11 @@ export class SessionStateCacheService {
       return { zt: zNew, topicShift: true, model: res.model };
     }
 
+    const wPrev = gateLambda ?? BLEND_PREV;
+    const wNew = gateLambda === undefined ? BLEND_NEW : 1 - gateLambda;
     const blended = new Float32Array(zNew.length);
     for (let i = 0; i < zNew.length; i++) {
-      blended[i] = prev[i] * BLEND_PREV + zNew[i] * BLEND_NEW;
+      blended[i] = prev[i] * wPrev + zNew[i] * wNew;
     }
     const zt = EmbeddingEngineService.normalizeL2(blended);
     this.states.set(sessionId, zt);

@@ -35,7 +35,11 @@
     "test:model": "tsx --test tests/embed-model.test.ts",
     "test:compare": "tsx --test tests/embed-compare.test.ts",
     "test:bge": "tsx --test tests/embed-bge.test.ts",
-    "test:e2e": "tsx --test tests/e2e.test.ts"
+    "test:e2e": "tsx --test tests/e2e.test.ts",
+    "bench": "tsx bench/run.ts",
+    "bench:stress": "tsx bench/juicio-stress.ts",
+    "bench:intent": "tsx bench/intent-complex.ts",
+    "bench:stock": "tsx bench/stock-stress.ts"
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.3",

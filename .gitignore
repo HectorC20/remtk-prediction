@@ -25,3 +25,5 @@ runtime
 *.log
 *.tsbuildinfo
 /docs/
+# Benchmark results
+bench/results/
