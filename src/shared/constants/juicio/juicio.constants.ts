@@ -31,25 +31,11 @@ export const REJECT_ARCHETYPES = [
 ];
 
 /** Margen mínimo entre pools rechazo/confirmación para emitir veredicto. */
-export const nliMarginDefault = 0.03;
+export const nliMarginDefault = 0.06;
 
 // ── 2. Abstención: prototipo __NOOP__ + energía ──────────────────────────────
 
-/**
- * Vectores de control de interacción SIN herramienta (small-talk, reflexión,
- * agradecimiento). Si el máximo coseno contra este pool supera al de la mejor
- * herramienta (+ margen), el enrutador emite conjunto vacío.
- */
-export const NOOP_ARCHETYPES = [
-  "hola, ¿cómo estás?",
-  "buenos días, ¿qué tal?",
-  "gracias, eso era todo",
-  "ok, entendido, perfecto",
-  "jaja, qué gracioso",
-  "hello, how are you?",
-  "thanks, that's all",
-  "estaba pensando en voz alta, nada urgente",
-];
+
 
 /**
  * Margen del prototipo NOOP sobre el mejor score de herramienta. En la banda

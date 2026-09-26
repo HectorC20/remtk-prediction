@@ -137,8 +137,9 @@ export class JuicioService {
     text: string,
     ctx: JuicioContext,
   ): Promise<void> {
+    // Divide en oraciones completas evitando partir comas internas o puntos dentro de nombres de archivo/versiones
     const rawSpans = text
-      .split(/[,;:.?!\n…]+/)
+      .split(/(?:[\n…]+|(?<=[.?!;])\s+)/)
       .map((s) => s.trim())
       .filter((s) => s.length >= 18);
     if (rawSpans.length <= 1) return;
@@ -239,7 +240,11 @@ export class JuicioService {
 
     // (2) Abstención: prototipo __NOOP__, energía o ausencia de pico funcional en discurso multi-tramo.
     const verdict = await this.abstencion.shouldAbstain(ctx.uText, result.rankedScores);
-    if (ctx.allSpansNoop && !verdict.abstain) {
+    if (
+      ctx.allSpansNoop &&
+      !verdict.abstain &&
+      (result.rankedScores[0] ?? 0) < this.config.adaptiveMinScore
+    ) {
       verdict.abstain = true;
       verdict.reason = "noop";
     }
