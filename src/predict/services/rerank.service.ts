@@ -474,6 +474,28 @@ export class RerankService {
       log(`[rerank:graph] mutex removidos=${removed.join(",")} final=${selectedSet.size}`);
     }
 
+    // 6b. Pre-plan de Razonamiento del DAG (Herramientas Complementarias):
+    // Si una herramienta seleccionada en este turno tiene PREREQUISITES en el grafo
+    // (herramientas de preparación o consulta requeridas para resolver sus parámetros),
+    // se incorporan al conjunto para que el orden topológico las ejecute primero.
+    const prereqsToAdd: string[] = [];
+    for (const toolName of [...selectedSet]) {
+      for (const e of edges) {
+        if (e.type === "PREREQUISITE" && e.to === toolName) {
+          if (!selectedSet.has(e.from) && keptLower.has(e.from.toLowerCase())) {
+            prereqsToAdd.push(e.from);
+          }
+        }
+      }
+    }
+    for (const p of prereqsToAdd) {
+      if (selectedSet.size >= this.config.maxOutputTools) break;
+      selectedSet.add(p);
+      if (!propagated.has(p) || (propagated.get(p) ?? 0) === 0) {
+        propagated.set(p, 0.85);
+      }
+    }
+
     // 7. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo. Las
     //    herramientas nombradas explícitamente desempatan al frente; sus
     //    pre-requisitos seleccionados siguen ejecutándose antes que ellas.

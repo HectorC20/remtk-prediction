@@ -164,23 +164,33 @@ function inferEdges(
 }
 
 /**
- * Inferencia ligera de pre-requisitos por esquema: si una clave del
- * `inputSchema` de la herramienta coincide con el nombre o el grupo de otra
- * herramienta, ésta es un pre-requisito (produce ese argumento).
+ * Inferencia estructural de pre-requisitos por esquema:
+ * Conecta herramientas cuando una clave del esquema de entrada coincide
+ * estructuralmente con la firma o identificador de otra herramienta del catálogo.
+ * PROHIBIDO: palabras clave, diccionarios de verbos fijos o listas hardcodeadas.
  */
 function inferPrerequisitesFromSchema(tool: ToolDefinition, tools: ToolDefinition[]): string[] {
-  const keys = Object.keys(tool.inputSchema ?? {}).map((k) => normalizeToken(k));
-  if (keys.length === 0) return [];
+  const schemaObj = (tool.inputSchema?.properties ?? tool.inputSchema ?? {}) as Record<string, unknown>;
+  const rawKeys = Object.keys(schemaObj).filter(
+    (k) => !["type", "properties", "required", "$schema", "additionalProperties"].includes(k),
+  );
+  if (rawKeys.length === 0) return [];
   const out: string[] = [];
-  for (const other of tools) {
-    if (other.name === tool.name) continue;
-    const candidates = new Set([normalizeToken(other.name), normalizeToken(other.group)]);
-    for (const key of keys) {
-      if (candidates.has(key)) {
+
+  for (const rawKey of rawKeys) {
+    const normKey = normalizeToken(rawKey);
+    if (normKey.length < 3) continue;
+
+    for (const other of tools) {
+      if (other.name === tool.name) continue;
+      const otherName = normalizeToken(other.name);
+      const otherGroup = normalizeToken(other.group);
+
+      // Coincidencia estructural directa entre el argumento y la identidad del nodo
+      if (otherName.includes(normKey) || otherGroup === normKey) {
         out.push(other.name);
-        break;
       }
     }
   }
-  return out;
+  return [...new Set(out)];
 }

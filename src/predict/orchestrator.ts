@@ -55,10 +55,9 @@ const CANONICAL_INTEREST_PROBE =
   "interés comercial en adquirir, comprar, cotizar o contratar un producto o servicio";
 
 const CANONICAL_DENIAL_PROBES = [
-  "el asistente no tiene herramientas, no puede realizar la acción por falta de funciones o limitaciones técnicas del sistema",
-  "afirmaciones del agente negando herramientas o capacidades técnicas",
+  "afirmaciones del agente negando herramientas o capacidades técnicas para la tarea",
+  "el asistente afirma que no tiene herramientas ni funciones disponibles para realizar la acción",
   "no tengo ninguna herramienta ni función disponible para realizar esta tarea",
-  "el agente no crea ítems ni tiene herramientas",
 ];
 
 /** Acota un score al rango [0, 1]. */
@@ -723,6 +722,17 @@ export class PredictionOrchestrator {
   async judgeMemory(text: string): Promise<{ isNoise: boolean; noiseScore: number }> {
     const trimmed = String(text ?? "").trim();
     if (!trimmed) return { isNoise: false, noiseScore: 0 };
+
+    // Mensajes atribuidos directamente al usuario o historial de turnos nunca se catalogan como negaciones técnicas
+    if (
+      trimmed.startsWith("Prompt del usuario:") ||
+      trimmed.startsWith("[HISTORIAL RECIENTE]") ||
+      trimmed.startsWith("user:")
+    ) {
+      log(`[memory:judge] text="${trimmed.slice(0, 50)}" score=0.000 isNoise=false (origen usuario preservado)`);
+      return { isNoise: false, noiseScore: 0 };
+    }
+
     const embs = await this.ensureDenialEmbs();
     const promptEmb = await this.engine.embedQuery(trimmed, "small", { high: true });
     let max = 0;
@@ -730,7 +740,7 @@ export class PredictionOrchestrator {
       const s = EmbeddingEngineService.cosine(promptEmb.embedding, emb);
       if (s > max) max = s;
     }
-    const isNoise = max >= 0.81;
+    const isNoise = max >= 0.87;
     log(`[memory:judge] text="${trimmed.slice(0, 50)}" score=${max.toFixed(3)} isNoise=${isNoise}`);
     return { isNoise, noiseScore: max };
   }
