@@ -23,6 +23,7 @@ export interface TurnClassifierContext {
 
 export class TurnClassifier {
   private metaEmb?: Float32Array;
+  private catalogEmb?: Float32Array;
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
