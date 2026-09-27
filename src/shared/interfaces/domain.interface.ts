@@ -85,6 +85,7 @@ export interface PredictionResult {
   complexity: ToolComplexity;
   modelSize: string;
   rankedScores: number[];
+  calibratedScores?: number[];
   context?: PredictedContext;
 }
 
