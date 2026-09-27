@@ -19,7 +19,14 @@ import type {
 } from "../shared/interfaces/domain.interface";
 import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
 import { ConfirmationCache } from "./services/confirm-cache.service";
-import { explicitToolNames, extractQueryKeywords, matchTokenSet } from "./keywords";
+import {
+  explicitToolNames,
+  extractQueryKeywords,
+  isCatalogInquiry,
+  matchTokenSet,
+  namedFamilies,
+  toolFamily,
+} from "./keywords";
 import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
@@ -240,28 +247,68 @@ export class PredictionOrchestrator {
     trace.turnType = turn;
     log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} scope=${scopeKey} turn=${turn}`);
 
-    // Early exit: meta-pregunta sobre capacidades → 0 tools (respuesta directa).
-    // SOLO aplica al turno del usuario (source=human).
-    if (input.source === "human" && (await this.classifier.isMetaQuestion(text))) {
-      log(`[pipeline] early-exit: meta-pregunta (capacidades) → 0 tools`);
-      this.finalize(trace, start, []);
-      return {
-        tools: [],
-        complexity: "simple",
-        modelSize: "hash",
-        rankedScores: [],
-        graph: { nodes: [], edges: [], executionOrder: [] },
-        context: {
-          intent: {
-            primaryAction: "meta",
-            confidence: 0.95,
-            summary: "Pregunta sobre capacidades del sistema",
+    // Consulta de catálogo o meta-pregunta sobre capacidades del sistema
+    const isMeta = await this.classifier.isMetaQuestion(text);
+    const catalog = this.qdrant.catalog(scopeKey);
+    const allTools = catalog.all();
+    let queryTokens = matchTokenSet(text);
+    const families = namedFamilies(queryTokens, allTools.map((t) => t.name));
+
+    if (isMeta || (isCatalogInquiry(text) && families.size > 0)) {
+      if (families.size > 0) {
+        // Si el usuario o agente pregunta por las herramientas de una familia ("herramientas de mitumbes tienes"),
+        // retornamos todas las herramientas registradas de esa familia
+        const familyTools = allTools.filter((t) => {
+          const fam = toolFamily(t.name);
+          return fam && families.has(fam);
+        });
+        if (familyTools.length > 0) {
+          log(`[pipeline] consulta de catálogo con familia=[${[...families].join(",")}] → devolviendo ${familyTools.length} tools`);
+          this.finalize(trace, start, familyTools.map((t) => t.name));
+          return {
+            tools: familyTools,
+            complexity: "simple",
+            modelSize: "small",
+            rankedScores: familyTools.map(() => 1.0),
+            calibratedScores: familyTools.map(() => 0.98),
+            graph: { nodes: familyTools.map((t) => t.name), edges: [], executionOrder: familyTools.map((t) => t.name) },
+            context: {
+              intent: {
+                primaryAction: "meta",
+                confidence: 0.98,
+                category: familyTools[0]?.group,
+                summary: `Herramientas de la familia ${[...families].join(", ")}`,
+              },
+              constraints: { negations: [], isConfirmation: false, isExploratory: true },
+              dialogState: { phase: "discovery", topicShift: false },
+              anticipation: { suggestedNextTools: [], reasoning: "Catálogo de familia solicitado" },
+            },
+          };
+        }
+      }
+
+      if (input.source === "human" && isMeta) {
+        log(`[pipeline] early-exit: meta-pregunta general (capacidades) → 0 tools`);
+        this.finalize(trace, start, []);
+        return {
+          tools: [],
+          complexity: "simple",
+          modelSize: "hash",
+          rankedScores: [],
+          calibratedScores: [],
+          graph: { nodes: [], edges: [], executionOrder: [] },
+          context: {
+            intent: {
+              primaryAction: "meta",
+              confidence: 0.95,
+              summary: "Pregunta sobre capacidades del sistema",
+            },
+            constraints: { negations: [], isConfirmation: false, isExploratory: true },
+            dialogState: { phase: "discovery", topicShift: false },
+            anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
           },
-          constraints: { negations: [], isConfirmation: false, isExploratory: true },
-          dialogState: { phase: "discovery", topicShift: false },
-          anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
-        },
-      };
+        };
+      }
     }
 
     // Early exit: confirmación con plan cacheado previo (empty o nli_confirm).
@@ -297,14 +344,13 @@ export class PredictionOrchestrator {
     // Tokens de match de la consulta (incluidas las keywords delegadas): son la
     // señal con la que el rerank mide la afinidad contra el NOMBRE de cada
     // herramienta, lo único que distingue familias dentro de un complemento.
-    const queryTokens = matchTokenSet(promptText);
+    queryTokens = matchTokenSet(promptText);
 
     // Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas: una
     // keyword que coincide con el NOMBRE de una herramienta del catálogo es una
     // orden directa de uso, así que el rerank la fija al frente de la salida. Sin
     // este ancla el score por embeddings no distingue el verbo del nombre
     // (`mitumbes_item_crear` y `mitumbes_item_actualizar` comparten identidad).
-    const catalog = this.qdrant.catalog(scopeKey);
     const pinnedNames = explicitToolNames(
       input.keywords,
       catalog.all().map((t) => t.name),
