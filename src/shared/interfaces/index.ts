@@ -8,7 +8,7 @@ export type * from "./lexical.interface";
 export type * from "./keyword.interface";
 export type * from "./calibration.interface";
 export type * from "./session.interface";
-export type * from "./classifier.interface";
+export * from "./classifier.interface";
 export type * from "./rerank.interface";
 export type * from "./qdrant.interface";
 export type * from "./juicio.interface";

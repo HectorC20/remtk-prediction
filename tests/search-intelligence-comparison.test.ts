@@ -183,7 +183,7 @@ async function predictSmart(text: string, sessionId = "test-session-" + Math.ran
     }),
   });
   assert.equal(res.status, 200);
-  return await res.json();
+  return (await res.json()) as any;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

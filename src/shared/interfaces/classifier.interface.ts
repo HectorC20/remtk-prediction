@@ -1,4 +1,8 @@
-import type { TurnType } from "../dictionary/turn.dictionary";
+export enum TurnType {
+  NewQuery = "new_query",
+  ConfirmationEmpty = "confirmation_empty",
+  ConfirmationWithNuance = "confirmation_nuance",
+}
 
 export interface TurnClassificationResult {
   turn: TurnType;

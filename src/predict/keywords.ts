@@ -4,8 +4,27 @@
  * - `toolKeywords`: keywords canónicas internas de la tool (tags + intentSummary + description).
  * El match cross-idioma NO es léxico aquí: lo hace KeywordService por embeddings.
  */
-import { GENERIC_NAME_TOKENS, STOPWORDS } from "src/shared/dictionary";
 import type { ToolDefinition } from "../shared/interfaces/domain.interface";
+
+/**
+ * Verbos y ruido genérico para aislar el namespace de la herramienta.
+ */
+export const GENERIC_NAME_TOKENS = new Set([
+  "listar", "list", "obtener", "get", "consultar", "buscar", "search", "ver",
+  "crear", "create", "add", "nuevo", "new", "actualizar", "update", "editar",
+  "edit", "eliminar", "delete", "borrar", "remove", "enviar", "send",
+  "registrar", "register", "relacionar", "desrelacionar", "asignar", "quitar",
+  "generar", "resolver", "mcp", "tool", "api", "app", "server", "plugin",
+  "complemento", "servidor", "herramienta", "function", "call", "exec",
+]);
+
+/** Stopwords mínimas para extracción saliente de tokens en consultas */
+export const STOPWORDS = new Set([
+  "the", "and", "for", "that", "with", "from", "this", "will", "your", "are",
+  "was", "you", "our", "all", "its", "not", "can", "has", "have", "use", "using",
+  "para", "una", "uno", "del", "los", "las", "que", "con", "por", "como",
+  "pero", "mas", "des", "esta", "este", "eso", "sus",
+]);
 
 export function normalizeToken(raw: string): string {
   return raw

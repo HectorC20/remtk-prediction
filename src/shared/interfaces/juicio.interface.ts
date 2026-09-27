@@ -28,6 +28,10 @@ export interface JuicioContext {
   gateLambda?: number;
   /** true si el turno se aísla del historial (λ bajo el mínimo de texto). */
   historyGated: boolean;
+  /** Prominencia funcional del turno en el manifold de herramientas (especificidad funcional vs anáfora/elipsis). */
+  prominence?: number;
+  /** true si el turno es un pivote funcional autónomo que cambia de dominio respecto al estado previo. */
+  isAutonomousPivot?: boolean;
   /** true si el veredicto resolvió el turno (confirm → plan cacheado, reject → vacío). */
   resolved: boolean;
   /** Motivo de resolución anticipada, para trazas. */

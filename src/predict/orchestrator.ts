@@ -42,9 +42,11 @@ import {
   TOPIC_SHIFT_THRESHOLD,
 } from "src/shared/constants/predict";
 import { DEFAULT_MEMORY_PREDICTION_LIMIT } from "src/shared/constants/qdrant";
-import { INTEREST_ARCHETYPES } from "src/shared/constants/messages";
-import { TurnType } from "src/shared/dictionary";
+import { TurnType } from "../shared/interfaces";
 import { resolveScopeKey } from "src/shared/scope";
+
+const CANONICAL_INTEREST_PROBE =
+  "interés comercial en adquirir, comprar, cotizar o contratar un producto o servicio";
 
 /** Acota un score al rango [0, 1]. */
 function clamp01(value: number): number {
@@ -189,53 +191,23 @@ export class PredictionOrchestrator {
       };
     }
 
-    const turn = await this.classifier.classify(text);
-    trace.turnType = turn;
-    log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} scope=${scopeKey} turn=${turn}`);
+    const cachedPlan = this.confirmCache.get(input.sessionId);
+    const hasPendingPlan = !!cachedPlan;
 
-    // Early exit: meta-pregunta sobre capacidades → 0 tools (respuesta directa).
-    // SOLO aplica al turno del usuario (source=human). Las sub-tareas del plan
-    // (source=agent) son instrucciones internas del planificador y nunca son
-    // meta-preguntas: abortarlas rompe la predicción de tools (regresión del
-    // guardado #knowledge, 2026-09-07).
-    if (input.source === "human" && (await this.classifier.isMetaQuestion(text))) {
-      log(`[pipeline] early-exit: meta-pregunta (capacidades) → 0 tools`);
-      this.finalize(trace, start, []);
-      return {
-        tools: [],
-        complexity: "simple",
-        modelSize: "hash",
-        rankedScores: [],
-        graph: { nodes: [], edges: [], executionOrder: [] },
-        context: {
-          intent: {
-            primaryAction: "meta",
-            confidence: 0.95,
-            summary: "Pregunta sobre capacidades del sistema",
-          },
-          constraints: { negations: [], isConfirmation: false, isExploratory: true },
-          dialogState: { phase: "discovery", topicShift: false },
-          anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
-        },
-      };
-    }
-
-    // ── Capa de juicio: NLI de estado condicionado (§1) + puerta (§3) ──────
-    // El plan cacheado cuenta como "propuesta pendiente" para el veredicto.
+    // ── Capa de juicio: NLI de estado condicionado (§1) + puerta (§3) + proyección topológica ──────
     const juicioCtx: JuicioContext = await this.juicio.pre({
       scopeKey,
       sessionId: input.sessionId,
       text,
       source: input.source,
       history: input.history,
-      cachedPlan: this.confirmCache.get(input.sessionId),
+      cachedPlan,
     });
     trace.juicioGateLambda = juicioCtx.gateLambda;
     trace.juicioEstado = juicioCtx.estado;
 
     // Veredicto REJECT: el usuario niega la propuesta pendiente → 0 tools y el
-    // plan cacheado se invalida (sin esto el turno se clasificaría new_query y
-    // dispararía justo la herramienta rechazada).
+    // plan cacheado se invalida.
     if (juicioCtx.resolvedBy === "nli_reject") {
       this.confirmCache.delete(input.sessionId);
       this.finalize(trace, start, []);
@@ -258,26 +230,48 @@ export class PredictionOrchestrator {
       };
     }
 
-    // Veredicto CONFIRM con plan pendiente: early-exit con el plan cacheado.
-    if (juicioCtx.resolvedBy === "nli_confirm") {
-      const cached = this.confirmCache.get(input.sessionId);
-      if (cached) {
-        trace.confirmHit = true;
-        this.debugger_.bump({ confirmGets: 1, confirmHits: 1 });
-        log(`[pipeline] early-exit: confirmación por juicio NLI con plan cacheado`);
-        this.finalize(trace, start, cached.tools.map((t) => t.name));
-        return cached;
-      }
+    // Clasificación del turno mediante juicio topológico y estado de diálogo
+    const turn = await this.classifier.classify(text, {
+      hasPendingPlan,
+      prominence: juicioCtx.prominence,
+      isAutonomousPivot: juicioCtx.isAutonomousPivot,
+      estado: juicioCtx.estado,
+    });
+    trace.turnType = turn;
+    log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} scope=${scopeKey} turn=${turn}`);
+
+    // Early exit: meta-pregunta sobre capacidades → 0 tools (respuesta directa).
+    // SOLO aplica al turno del usuario (source=human).
+    if (input.source === "human" && (await this.classifier.isMetaQuestion(text))) {
+      log(`[pipeline] early-exit: meta-pregunta (capacidades) → 0 tools`);
+      this.finalize(trace, start, []);
+      return {
+        tools: [],
+        complexity: "simple",
+        modelSize: "hash",
+        rankedScores: [],
+        graph: { nodes: [], edges: [], executionOrder: [] },
+        context: {
+          intent: {
+            primaryAction: "meta",
+            confidence: 0.95,
+            summary: "Pregunta sobre capacidades del sistema",
+          },
+          constraints: { negations: [], isConfirmation: false, isExploratory: true },
+          dialogState: { phase: "discovery", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
+        },
+      };
     }
 
-    // Early exit: confirmación vacía con plan previo cacheado.
-    if (turn === TurnType.ConfirmationEmpty) {
+    // Early exit: confirmación con plan cacheado previo (empty o nli_confirm).
+    if (turn === TurnType.ConfirmationEmpty || juicioCtx.resolvedBy === "nli_confirm") {
       this.debugger_.bump({ confirmGets: 1 });
-      const cached = this.confirmCache.get(input.sessionId);
+      const cached = cachedPlan ?? this.confirmCache.get(input.sessionId);
       if (cached) {
         trace.confirmHit = true;
         this.debugger_.bump({ confirmHits: 1 });
-        log(`[pipeline] early-exit: confirmación vacía con plan cacheado`);
+        log(`[pipeline] early-exit: confirmación con plan cacheado`);
         this.finalize(trace, start, cached.tools.map((t) => t.name));
         return cached;
       }
@@ -290,14 +284,15 @@ export class PredictionOrchestrator {
     // Las `keywords` delegadas (planificador/cliente) se anexan a la consulta:
     // alimentan el match cross-idioma (capa 2), el recall BM25 y el z_t de sesión.
     const effectiveText = juicioCtx.focusedText ?? text;
-    const promptText = this.withKeywords(
+    const isAutonomous = juicioCtx.isAutonomousPivot === true;
+    const needsHistory = !juicioCtx.historyGated || !isAutonomous;
+    const baseText =
       turn === TurnType.NewQuery
-        ? juicioCtx.historyGated
-          ? effectiveText
-          : this.withHistory(effectiveText, input.history)
-        : input.priorPlan ?? effectiveText,
-      input.keywords,
-    );
+        ? needsHistory
+          ? this.withHistory(effectiveText, input.history)
+          : effectiveText
+        : input.priorPlan ?? this.withHistory(effectiveText, input.history);
+    const promptText = this.withKeywords(baseText, input.keywords);
 
     // Tokens de match de la consulta (incluidas las keywords delegadas): son la
     // señal con la que el rerank mide la afinidad contra el NOMBRE de cada
@@ -364,7 +359,7 @@ export class PredictionOrchestrator {
       trace.learnTerms = learned.scores.size;
       this.debugger_.bump({ embeddingsCached: graph.nodes.size });
 
-      if (turn === TurnType.NewQuery && result.tools.length > 0) {
+      if (result.tools.length > 0) {
         this.confirmCache.set(input.sessionId, result);
         this.debugger_.bump({ confirmSets: 1 });
       }
@@ -431,7 +426,7 @@ export class PredictionOrchestrator {
     trace.outputTools = result.tools.length;
 
     // Cachea el plan para confirmaciones posteriores de la sesión.
-    if (turn === TurnType.NewQuery && result.tools.length > 0) {
+    if (result.tools.length > 0) {
       this.confirmCache.set(input.sessionId, result);
       this.debugger_.bump({ confirmSets: 1 });
     }
@@ -649,13 +644,9 @@ export class PredictionOrchestrator {
 
   private async ensureIntentEmbs(): Promise<Float32Array[]> {
     if (this.intentEmbs) return this.intentEmbs;
-    const embs = await Promise.all(
-      INTEREST_ARCHETYPES.map((a: string) =>
-        this.engine.embedQuery(a, "small").then((r) => r.embedding),
-      ),
-    );
-    this.intentEmbs = embs;
-    return embs;
+    const res = await this.engine.embedQuery(CANONICAL_INTEREST_PROBE, "small");
+    this.intentEmbs = [res.embedding];
+    return this.intentEmbs;
   }
 
   /** Coseno del turno contra cada ancla, ordenado desc. */

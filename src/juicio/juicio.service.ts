@@ -20,6 +20,8 @@ import { log } from "src/logger";
 import type { ChatMessage, GraphPredictionResult, ToolDefinition } from "src/shared/interfaces";
 import type { JuicioContext, JuicioPostDiag } from "src/shared/interfaces/juicio.interface";
 import { SessionStateCacheService } from "src/predict/services/session-state-cache.service";
+import { adaptiveThreshold } from "src/predict/services/rerank.service";
+import { CalibrationService } from "src/predict/services/calibration.service";
 import { AbstencionService } from "./services/abstencion.service";
 import { CrossEncoderService } from "./services/cross-encoder.service";
 import { EspecificidadService } from "./services/especificidad.service";
@@ -77,8 +79,44 @@ export class JuicioService {
     if (res.model === "hash") return ctx;
     ctx.uText = res.embedding;
 
-    // (1) NLI de estado: solo turnos humanos y solo si hay propuesta pendiente.
-    if (input.source === "human") {
+    // (2b) Atención por saliencia sobre tramos estructurales (textos extensos con relleno).
+    if (input.scopeKey) {
+      await this.focusSalientSpans(input.scopeKey, input.text, ctx);
+    }
+
+    // (3) Proyección sobre la variedad de herramientas (Manifold Geometry) y puerta de coherencia.
+    const prev = this.sessionState.peek(input.sessionId);
+    ctx.gateLambda = this.puerta.lambda(ctx.uText, prev);
+
+    if (input.scopeKey && ctx.uText) {
+      const currProj = await this.especificidad.projectManifold(input.scopeKey, ctx.uText);
+      if (currProj) {
+        ctx.prominence = currProj.prominence;
+      }
+
+      if (prev && !ctx.allSpansNoop) {
+        const [prevProj, noop] = await Promise.all([
+          this.especificidad.projectManifold(input.scopeKey, prev),
+          this.abstencion.noopScore(ctx.uText),
+        ]);
+        if (currProj && prevProj && currProj.topTool !== prevProj.topTool) {
+          const scoreCurrOnPrev = currProj.scores.get(prevProj.topTool) ?? 0;
+          const shiftMargin = currProj.topScore - scoreCurrOnPrev;
+          const isFunctionalPivot =
+            (shiftMargin >= 0.020 && currProj.topScore >= 0.82) ||
+            (shiftMargin >= 0.035 && currProj.prominence >= 0.020) ||
+            (currProj.topScore > noop - 0.01 && shiftMargin >= 0.015);
+          if (isFunctionalPivot) {
+            ctx.gateLambda = 0.05;
+            ctx.isAutonomousPivot = true;
+          }
+        }
+      }
+    }
+
+    // (1) NLI de estado condicionado a la propuesta pendiente:
+    // Solo turnos humanos con propuesta y únicamente si el usuario no ha realizado un pivote funcional a otro dominio.
+    if (input.source === "human" && !ctx.isAutonomousPivot) {
       const premise = this.pendingPremise(input);
       if (premise) {
         ctx.estado = await this.nli.verdict(input.text, premise);
@@ -86,7 +124,7 @@ export class JuicioService {
           ctx.resolved = true;
           ctx.resolvedBy = "nli_reject";
           log(`[juicio] veredicto REJECT session=${input.sessionId} → propuesta descartada`);
-        } else if (ctx.estado === "confirm" && input.cachedPlan) {
+        } else if (input.cachedPlan && ctx.estado === "confirm") {
           ctx.resolved = true;
           ctx.resolvedBy = "nli_confirm";
           log(`[juicio] veredicto CONFIRM session=${input.sessionId} → plan cacheado`);
@@ -95,35 +133,12 @@ export class JuicioService {
     }
     if (ctx.resolved) return ctx;
 
-    // (2b) Atención por saliencia sobre tramos estructurales (textos extensos con relleno).
-    if (input.scopeKey) {
-      await this.focusSalientSpans(input.scopeKey, input.text, ctx);
-    }
-
-    // (3) Puerta de coherencia: λ entre el texto actual (enfocado) y el estado previo,
-    //     reforzada con coherencia funcional sobre la variedad de herramientas del grafo.
-    const prev = this.sessionState.peek(input.sessionId);
-    ctx.gateLambda = this.puerta.lambda(ctx.uText, prev);
-    if (prev && input.scopeKey && !ctx.allSpansNoop) {
-      const [currProj, prevProj, noop] = await Promise.all([
-        this.especificidad.projectManifold(input.scopeKey, ctx.uText),
-        this.especificidad.projectManifold(input.scopeKey, prev),
-        this.abstencion.noopScore(ctx.uText),
-      ]);
-      if (currProj && prevProj && currProj.topTool !== prevProj.topTool) {
-        const scoreCurrOnPrev = currProj.scores.get(prevProj.topTool) ?? 0;
-        const shiftMargin = currProj.topScore - scoreCurrOnPrev;
-        const isFunctionalPivot =
-          (currProj.topScore > noop - 0.01 && shiftMargin >= 0.02 && currProj.prominence >= 0.035) ||
-          (shiftMargin >= 0.04 && currProj.prominence >= 0.035 && currProj.topScore >= 0.84);
-        if (isFunctionalPivot) {
-          ctx.gateLambda = 0.05;
-        }
-      }
-    }
-    ctx.historyGated = this.puerta.gatesHistory(ctx.gateLambda, prev !== undefined);
+    // Juicio geométrico: solo se aísla el historial si el turno demuestra ser un pivote
+    // funcional autónomo (prominencia en un nuevo dominio). Nunca por conteo rígido de palabras ni diccionarios.
+    const isAutonomous = ctx.isAutonomousPivot === true;
+    ctx.historyGated = isAutonomous && this.puerta.gatesHistory(ctx.gateLambda, prev !== undefined);
     if (ctx.historyGated) {
-      log(`[juicio] puerta λ=${ctx.gateLambda.toFixed(3)} → turno aislado del historial`);
+      log(`[juicio] puerta λ=${ctx.gateLambda?.toFixed(3) ?? "0"} → turno aislado del historial`);
     }
     return ctx;
   }
@@ -298,10 +313,16 @@ export class JuicioService {
     //      centrado) para consultas multi-intención (≥ 2 sub-ventanas ganadoras).
     const winPeaks = await this.especificidad.subWindowPeaks(scopeKey, effectiveText);
     if (winPeaks.size >= 2 && adjusted.length > 0) {
-      const allTools = this.especificidad.catalogTools(scopeKey);
-      const tokenAnchors = await this.maxsim.anchorTools(scopeKey, effectiveText, allTools);
+      const top1Score = adjusted[0].score;
+      const relevanceFloor = Math.max(
+        this.config.adaptiveMinScore,
+        top1Score - this.config.adaptiveGapThreshold * 2,
+      );
+      // Anclas a nivel de token sobre las herramientas del pool candidato
+      const candidateTools = result.tools.length > 0 ? result.tools : this.especificidad.catalogTools(scopeKey);
+      const tokenAnchors = await this.maxsim.anchorTools(scopeKey, effectiveText, candidateTools);
       for (const [toolName, anchor] of tokenAnchors.entries()) {
-        if (!winPeaks.has(toolName)) {
+        if (!winPeaks.has(toolName) && anchor.score >= relevanceFloor) {
           winPeaks.set(toolName, {
             tool: anchor.tool,
             score: anchor.score,
@@ -309,16 +330,14 @@ export class JuicioService {
           });
         }
       }
-      const top1Score = adjusted[0].score;
       const excludedLower = new Set((params.exclude ?? []).map((e) => e.toLowerCase()));
       const winEntries = [...winPeaks.entries()].sort((a, b) => a[1].windowIdx - b[1].windowIdx);
       for (let idx = 0; idx < winEntries.length; idx++) {
         const [toolName, peak] = winEntries[idx];
         if (excludedLower.has(toolName.toLowerCase())) continue;
-        // Las herramientas ganadoras de su propia sub-ventana se promueven justo
-        // debajo de la líder global, preservando `adjusted[0]` intacto.
-        const targetScore = Math.max(peak.score, top1Score - 0.003 * (idx + 1));
-        const cappedScore = Math.min(top1Score - 0.001 * (idx + 1), targetScore);
+        if (peak.score < relevanceFloor) continue;
+        // La herramienta de sub-ventana preserva su afinidad real acotada bajo el líder
+        const cappedScore = Math.min(peak.score, top1Score - 0.005);
         const existing = adjusted.find((a) => a.tool.name === toolName);
         if (existing) {
           if (existing !== adjusted[0] && cappedScore > existing.score) {
@@ -331,26 +350,31 @@ export class JuicioService {
       adjusted.sort((a, b) => b.score - a.score);
     }
 
-    const adjustedNames = new Set(adjusted.map((a) => a.tool.name));
-    const rest: ToolDefinition[] = [];
-    const restScores: number[] = [];
-    for (let i = k; i < result.tools.length; i++) {
-      if (!adjustedNames.has(result.tools[i].name)) {
-        rest.push(result.tools[i]);
-        restScores.push(result.rankedScores[i] ?? 0);
-      }
-    }
-    const tools = [...adjusted.map((a) => a.tool), ...rest].slice(0, this.config.maxOutputTools);
-    const rankedScores = [...adjusted.map((a) => a.score), ...restScores].slice(
-      0,
-      this.config.maxOutputTools,
+    // Poda por umbral adaptativo sobre adjusted: preserva la agudeza del juicio y
+    // descarta herramientas irrelevantes o destructivas que caen tras un gap natural.
+    const scoredAdjusted = adjusted.map((a) => ({ name: a.tool.name, score: a.score }));
+    const selectedNames = new Set(
+      adaptiveThreshold(
+        scoredAdjusted,
+        this.config.adaptiveMinTools,
+        this.config.adaptiveMaxTools,
+        this.config.adaptiveGapThreshold,
+      ),
     );
+    const filteredAdjusted = adjusted.filter((a) => selectedNames.has(a.tool.name));
+    const tools = (filteredAdjusted.length > 0 ? filteredAdjusted : adjusted)
+      .map((a) => a.tool)
+      .slice(0, this.config.maxOutputTools);
+    const rankedScores = (filteredAdjusted.length > 0 ? filteredAdjusted : adjusted)
+      .map((a) => a.score)
+      .slice(0, this.config.maxOutputTools);
     const order = tools.map((t) => t.name);
 
     const judged: GraphPredictionResult = {
       ...result,
       tools,
       rankedScores,
+      calibratedScores: CalibrationService.calibrateRankedScores(rankedScores),
       graph: { ...result.graph, nodes: order },
       context: result.context
         ? {

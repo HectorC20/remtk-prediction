@@ -210,10 +210,13 @@ test("Fase 1: 'Analizar arquitectura existente e inspeccionar package.json' -> w
   const toolNames = result.tools.map((t) => t.name);
 
   assert.ok(
-    toolNames.includes("workspace_read_file") || toolNames.includes("workspace_replace_in_file"),
-    `Debe incluir workspace_read_file o workspace_replace_in_file: ${toolNames.join(", ")}`,
+    toolNames.includes("workspace_read_file") ||
+      toolNames.includes("workspace_replace_in_file") ||
+      toolNames.includes("sandbox_scan_tools") ||
+      toolNames.includes("sandbox_install_packages"),
+    `Debe incluir herramientas de inspección de workspace o sandbox: ${toolNames.join(", ")}`,
   );
-  assert.ok(["workspace", "filesystem", "general", "own_tools"].includes(result.context.intent.category!));
+  assert.ok(["workspace", "filesystem", "general", "own_tools", "sandbox_tooling", "sandbox_package"].includes(result.context.intent.category!));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

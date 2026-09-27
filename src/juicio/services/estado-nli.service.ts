@@ -24,8 +24,7 @@ import type { AppConfig } from "src/config";
 import { log, warn } from "src/logger";
 import type { JuicioEstado } from "src/shared/interfaces/juicio.interface";
 import type { OnnxModuleLike, OnnxSessionLike, TokenizerLike, TokenizerModuleLike } from "src/shared/interfaces";
-import { NLI_HYPOTHESIS, REJECT_ARCHETYPES } from "src/shared/constants/juicio";
-import { CONFIRM_ARCHETYPES } from "src/shared/constants/messages";
+import { NLI_HYPOTHESIS } from "src/shared/constants/juicio";
 import { onnxMaxTokens } from "src/shared/constants/predict/embedding.constants";
 
 const nodeRequire = createRequire(__filename);
@@ -39,9 +38,6 @@ export class EstadoNliService {
   private loadAttempted = false;
   private onnx?: OnnxModuleLike;
   private tokenizerModule?: TokenizerModuleLike;
-
-  private rejectEmbs?: Float32Array[];
-  private confirmEmbs?: Float32Array[];
 
   constructor(
     private readonly engine: EmbeddingEngineService,
@@ -129,38 +125,13 @@ export class EstadoNliService {
     }
   }
 
-  // ── Fallback por arquetipos embebidos (coseno, sin estado externo) ────────
+  // ── Fallback sin modelo externo ONNX ────────────────────────────────────────
 
-  private async verdictArchetypes(entryText: string): Promise<JuicioEstado> {
-    await this.ensurePools();
-    const input = await this.engine.embedQuery(entryText, "small", { high: true });
-    if (input.model === "hash") return "neutral";
-
-    const maxVs = (pool: Float32Array[]): number => {
-      let m = 0;
-      for (const emb of pool) {
-        const s = EmbeddingEngineService.cosine(input.embedding, emb);
-        if (s > m) m = s;
-      }
-      return m;
-    };
-    const sReject = maxVs(this.rejectEmbs!);
-    const sConfirm = maxVs(this.confirmEmbs!);
-    const margin = this.config.juicioNliMargin;
-    log(`[juicio:nli] arquetipos reject=${sReject.toFixed(3)} confirm=${sConfirm.toFixed(3)}`);
-    if (sReject >= sConfirm + margin) return "reject";
-    if (sConfirm >= sReject + margin) return "confirm";
+  private async verdictArchetypes(_entryText: string): Promise<JuicioEstado> {
+    // Sin modelo cross-encoder ONNX, no se fuerza confirmación o rechazo artificial
+    // mediante oraciones de texto fijas. Se mantiene neutral para que el estado
+    // de sesión y la variedad topológica (manifold) resuelvan el turno con precisión.
     return "neutral";
-  }
-
-  private async ensurePools(): Promise<void> {
-    if (this.rejectEmbs && this.confirmEmbs) return;
-    const [rejects, confirms] = await Promise.all([
-      Promise.all(REJECT_ARCHETYPES.map((a) => this.engine.embedQuery(a, "small").then((r) => r.embedding))),
-      Promise.all(CONFIRM_ARCHETYPES.map((a) => this.engine.embedQuery(a, "small").then((r) => r.embedding))),
-    ]);
-    this.rejectEmbs = rejects;
-    this.confirmEmbs = confirms;
   }
 }
 

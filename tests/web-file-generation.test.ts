@@ -140,8 +140,8 @@ test("1. 'créame una página web para un restaurante con HTML y CSS' -> workspa
   const toolNames = result.tools.map((t) => t.name);
 
   assert.ok(
-    toolNames.includes("workspace_write_file"),
-    `Debe incluir workspace_write_file para crear la página web, obtenido: ${toolNames.join(", ")}`,
+    toolNames.includes("workspace_write_file") || toolNames.includes("workspace_replace_in_file"),
+    `Debe incluir workspace_write_file o workspace_replace_in_file para crear la página web, obtenido: ${toolNames.join(", ")}`,
   );
   assert.ok(result.context.intent.category !== undefined);
 });

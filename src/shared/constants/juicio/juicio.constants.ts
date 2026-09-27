@@ -16,19 +16,12 @@ export const juicioEnabledDefault = true;
 export const NLI_HYPOTHESIS = "El usuario aprueba y autoriza proceder con la acción propuesta.";
 
 /**
- * Arquetipos de RECHAZO de la propuesta pendiente (fallback por coseno cuando
- * no hay modelo NLI cross-encoder en `JUICIO_NLI_MODEL_PATH`). Multi-idioma.
+ * Polo canónico de RECHAZO de la propuesta pendiente (eje direccional en espacio latente).
  */
-export const REJECT_ARCHETYPES = [
-  "no, todavía no",
-  "mejor no, ahora no",
-  "no lo hagas, cancela eso",
-  "ni de broma, olvídalo",
-  "ahora no puedo, más tarde",
-  "not yet, don't do it",
-  "neither, cancel that",
-  "pas encore, annule ça",
-];
+export const CANONICAL_REJECT_INTENT =
+  "rechazar, negar, cancelar o detener la propuesta o acción pendiente";
+
+export const REJECT_ARCHETYPES = [CANONICAL_REJECT_INTENT];
 
 /** Margen mínimo entre pools rechazo/confirmación para emitir veredicto. */
 export const nliMarginDefault = 0.06;

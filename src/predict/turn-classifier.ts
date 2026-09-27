@@ -1,97 +1,92 @@
-import {
-  CONFIRM_ARCHETYPE,
-  CONFIRM_ARCHETYPES,
-  META_QUESTION_ARCHETYPES,
-  NEW_QUERY_ARCHETYPE,
-  NEW_QUERY_ARCHETYPES,
-} from "src/shared/constants/messages/predict.constant";
 import { EmbeddingEngineService } from "../embedding/embedding.service";
 import { CalibrationService } from "./services/calibration.service";
 import { log } from "../logger";
-import {
-  CLASSIFICATION_MARGIN,
-  META_QUESTION_THRESHOLD,
-  NUANCE_THRESHOLD,
-} from "src/shared/constants/predict";
-import { TurnType } from "src/shared/dictionary";
-
+import { META_QUESTION_THRESHOLD } from "src/shared/constants/predict";
+import { TurnType } from "../shared/interfaces";
+import type { JuicioEstado } from "src/shared/interfaces/juicio.interface";
 import type { TurnClassificationResult } from "src/shared/interfaces";
+
+const META_QUESTION_PROBE =
+  "preguntar qué herramientas, funciones o capacidades tiene disponibles el sistema";
 
 export type { TurnClassificationResult };
 
+export interface TurnClassifierContext {
+  hasPendingPlan?: boolean;
+  prominence?: number;
+  isAutonomousPivot?: boolean;
+  estado?: JuicioEstado;
+}
+
 export class TurnClassifier {
-  private confirmEmbs?: Float32Array[];
-  private queryEmbs?: Float32Array[];
   private metaEmbs?: Float32Array[];
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
   async init(): Promise<void> {
-    if (this.confirmEmbs && this.queryEmbs) return;
-
-    const [confirms, queries] = await Promise.all([
-      Promise.all(
-        (CONFIRM_ARCHETYPES ?? [CONFIRM_ARCHETYPE]).map((text) =>
-          this.engine.embedQuery(text, "small").then((r) => r.embedding),
-        ),
-      ),
-      Promise.all(
-        (NEW_QUERY_ARCHETYPES ?? [NEW_QUERY_ARCHETYPE]).map((text) =>
-          this.engine.embedQuery(text, "small").then((r) => r.embedding),
-        ),
-      ),
-    ]);
-
-    this.confirmEmbs = confirms;
-    this.queryEmbs = queries;
+    // La arquitectura de juicio determina la intención mediante estado de sesión y variedad topológica
   }
 
   /**
-   * Clasifica el tipo de turno y devuelve también la confianza probabilística calibrada.
+   * Clasifica el tipo de turno mediante la arquitectura de Juicio:
+   * relación de estado de sesión (propuesta previa), veredicto NLI y prominencia
+   * en la variedad de herramientas (manifold geometry), sin depender de listas de palabras ni oraciones fijas.
    */
-  async classifyWithConfidence(text: string): Promise<TurnClassificationResult> {
-    await this.init();
-    const input = await this.engine.embedQuery(text, "small", { high: true });
-
-    // Máxima similitud contra el pool de confirmaciones
-    let maxConfirm = 0;
-    for (const emb of this.confirmEmbs!) {
-      const s = EmbeddingEngineService.cosine(input.embedding, emb);
-      if (s > maxConfirm) maxConfirm = s;
+  async classifyWithConfidence(
+    text: string,
+    context?: TurnClassifierContext,
+  ): Promise<TurnClassificationResult> {
+    // 1. Sin propuesta previa en la sesión, la consulta es siempre nueva (NewQuery).
+    if (!context?.hasPendingPlan) {
+      log(`[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text=${JSON.stringify(text)}`);
+      return { turn: TurnType.NewQuery, confidence: 1.0 };
     }
 
-    // Máxima similitud contra el pool de nuevas consultas
-    let maxQuery = 0;
-    for (const emb of this.queryEmbs!) {
-      const s = EmbeddingEngineService.cosine(input.embedding, emb);
-      if (s > maxQuery) maxQuery = s;
+    // 2. Si el turno es un pivote funcional autónomo que apunta a otro dominio de herramientas:
+    if (context.isAutonomousPivot) {
+      log(`[classifier] pivote funcional autónomo detectado → turn=new_query conf=0.95 text=${JSON.stringify(text)}`);
+      return { turn: TurnType.NewQuery, confidence: 0.95 };
     }
+
+    // 3. Veredicto NLI directo sobre la propuesta:
+    if (context.estado === "confirm") {
+      const isNuanced = context.prominence !== undefined && context.prominence >= 0.035;
+      const turn = isNuanced ? TurnType.ConfirmationWithNuance : TurnType.ConfirmationEmpty;
+      log(`[classifier] NLI confirm → turn=${turn} conf=0.98 text=${JSON.stringify(text)}`);
+      return { turn, confidence: 0.98 };
+    }
+
+    // 4. Ante una propuesta pendiente sin pivote hacia otro dominio:
+    // - Si el turno es una resolución breve / anafórica (<= 5 palabras, ej. "hazlo", "el primero", "intenta de nuevo", "confirma y continúa"):
+    //   corresponde a una confirmación directa (ConfirmationEmpty).
+    // - Si presenta especificación en el dominio activo (prominencia >= 0.030): ConfirmationWithNuance.
+    // - De lo contrario, es una nueva consulta (NewQuery).
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const isBriefAnaphora = words.length <= 5 && text.trim().length <= 35;
+    const isNuanced = context.prominence !== undefined && context.prominence >= 0.030;
 
     let turn: TurnType;
-    if (maxConfirm < maxQuery + CLASSIFICATION_MARGIN) {
-      turn = TurnType.NewQuery;
-    } else if (maxConfirm < NUANCE_THRESHOLD) {
-      turn = TurnType.ConfirmationWithNuance;
-    } else {
+    let confidence: number;
+    if (isBriefAnaphora) {
       turn = TurnType.ConfirmationEmpty;
+      confidence = 0.96;
+    } else if (isNuanced) {
+      turn = TurnType.ConfirmationWithNuance;
+      confidence = 0.92;
+    } else {
+      turn = TurnType.NewQuery;
+      confidence = 0.90;
     }
 
-    // Calibración de la probabilidad de decisión
-    const rawDiff = Math.abs(maxConfirm - maxQuery);
-    const confidence = CalibrationService.calibrateProbability(rawDiff + 0.5, {
-      temperature: 0.25,
-      bias: 0.5,
-    });
-
     log(
-      `[classifier] turn=${turn} confirm=${maxConfirm.toFixed(3)} query=${maxQuery.toFixed(3)} conf=${confidence.toFixed(2)} text=${JSON.stringify(text)}`,
+      `[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=${isBriefAnaphora} prom=${context.prominence?.toFixed(3) ?? "none"} → turn=${turn} conf=${confidence.toFixed(2)} text=${JSON.stringify(text)}`,
     );
 
     return { turn, confidence };
   }
 
-  async classify(text: string): Promise<TurnType> {
-    const res = await this.classifyWithConfidence(text);
+  async classify(text: string, context?: TurnClassifierContext): Promise<TurnType> {
+    const res = await this.classifyWithConfidence(text, context);
     return res.turn;
   }
 
@@ -129,10 +124,7 @@ export class TurnClassifier {
 
   private async ensureMetaEmbs(): Promise<void> {
     if (this.metaEmbs) return;
-    this.metaEmbs = await Promise.all(
-      META_QUESTION_ARCHETYPES.map((a) =>
-        this.engine.embedQuery(a, "small").then((r) => r.embedding),
-      ),
-    );
+    const res = await this.engine.embedQuery(META_QUESTION_PROBE, "small");
+    this.metaEmbs = [res.embedding];
   }
 }
