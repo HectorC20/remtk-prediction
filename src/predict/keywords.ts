@@ -149,21 +149,6 @@ export function isForeignFamily(families: Set<string>, name: string): boolean {
 }
 
 /**
- * Detecta si una consulta solicita listar, conocer o explorar el catálogo de herramientas
- * de una o más familias (o del sistema completo).
- * Excluye explícitamente órdenes de creación, registro o implementación de herramientas.
- */
-export function isCatalogInquiry(text: string): boolean {
-  const isCreation = /\b(crear|nuevo|nueva|registrar nueva|implementar|instalar|generar|modificar|ejecutar|correr|actualizar)\b/i.test(text);
-  if (isCreation) return false;
-
-  const hasCatalogVerb = /\b(que|cuales|listar|lista|dime|mostrar|muestra|ver|consultar|consulta|tienes|disponibles|dispones|existen|catalogo)\b/i.test(text);
-  const hasToolNoun = /\b(herramienta|herramientas|tool|tools|capacidad|capacidades|funciones)\b/i.test(text);
-
-  return hasToolNoun && hasCatalogVerb;
-}
-
-/**
  * Herramientas nombradas EXPLICITAMENTE en las palabras clave delegadas: una
  * keyword que coincide con el NOMBRE de una herramienta del catálogo es una
  * orden directa de uso, no una pista semántica mas del texto.

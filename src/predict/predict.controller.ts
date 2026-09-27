@@ -209,6 +209,23 @@ export class PredictV1Controller {
   }
 
   /**
+   * POST /memory/judge
+   * Evalúa semánticamente si un hecho o texto representa ruido de negación de herramientas
+   * no apto para persistir en memoria contextual de largo plazo.
+   */
+  @Post("memory/judge")
+  @HttpCode(200)
+  async judgeMemory(@Body() body: Record<string, unknown>): Promise<{ isNoise: boolean; noiseScore: number }> {
+    const text = String(body?.text ?? "").trim();
+    if (!text) return { isNoise: false, noiseScore: 0 };
+    try {
+      return await this.ctx.orchestrator.judgeMemory(text);
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
+  /**
    * POST /interest
    * Body: { sessionId, tenant, agentId?, text, anchors?: string[], limit? }
    * Respuesta: { interestScore, topic, topicScore, intentScore, matches, method }

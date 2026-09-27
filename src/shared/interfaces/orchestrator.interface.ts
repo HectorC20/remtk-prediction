@@ -20,4 +20,6 @@ export interface IPredictionOrchestrator {
   countTools(tenant: string, agentId?: string): number;
   /** Señal de refuerzo del perfil léxico del canal (§8.1). */
   feedback(input: FeedbackInput): FeedbackResult;
+  /** Juicio semántico sobre hechos o texto para memoria contextual sin diccionarios ni regex. */
+  judgeMemory(text: string): Promise<{ isNoise: boolean; noiseScore: number }>;
 }

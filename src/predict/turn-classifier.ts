@@ -9,6 +9,9 @@ import type { TurnClassificationResult } from "src/shared/interfaces";
 const META_QUESTION_PROBE =
   "preguntar qué herramientas, funciones o capacidades tiene disponibles el sistema";
 
+const CATALOG_INQUIRY_PROBE =
+  "preguntar por las herramientas o funciones disponibles de un complemento o catálogo";
+
 export type { TurnClassificationResult };
 
 export interface TurnClassifierContext {
@@ -19,7 +22,7 @@ export interface TurnClassifierContext {
 }
 
 export class TurnClassifier {
-  private metaEmbs?: Float32Array[];
+  private metaEmb?: Float32Array;
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
@@ -92,13 +95,13 @@ export class TurnClassifier {
 
   /**
    * Detecta si el texto es una "meta-pregunta" sobre capacidades.
-   * Compara por coseno contra los arquetipos embebidos; si el máximo
-   * supera el umbral (en el texto íntegro o en el tramo conclusivo de un
-   * párrafo multi-oración), se resuelve sin herramientas.
+   * Compara por coseno contra el arquetipo canónico; si supera el umbral
+   * (en el texto íntegro o en el tramo conclusivo de un párrafo multi-oración),
+   * se resuelve sin herramientas.
    */
   async isMetaQuestion(text: string): Promise<boolean> {
-    await this.ensureMetaEmbs();
-    if (!this.metaEmbs || this.metaEmbs.length === 0) return false;
+    await this.ensureMetaEmb();
+    if (!this.metaEmb) return false;
     if (await this.matchesMetaPool(text)) return true;
 
     const spans = text
@@ -114,17 +117,28 @@ export class TurnClassifier {
 
   private async matchesMetaPool(segment: string): Promise<boolean> {
     const input = await this.engine.embedQuery(segment, "small", { high: true });
-    let max = 0;
-    for (const emb of this.metaEmbs!) {
-      const s = EmbeddingEngineService.cosine(input.embedding, emb);
-      if (s > max) max = s;
-    }
-    return max >= META_QUESTION_THRESHOLD;
+    const s = EmbeddingEngineService.cosine(input.embedding, this.metaEmb!);
+    return s >= META_QUESTION_THRESHOLD;
   }
 
-  private async ensureMetaEmbs(): Promise<void> {
-    if (this.metaEmbs) return;
+  private async ensureMetaEmb(): Promise<void> {
+    if (this.metaEmb) return;
     const res = await this.engine.embedQuery(META_QUESTION_PROBE, "small");
-    this.metaEmbs = [res.embedding];
+    this.metaEmb = res.embedding;
+  }
+
+  /**
+   * Detecta semánticamente si una consulta pide el catálogo o inventario de herramientas.
+   * Utiliza similitud vectorial e5-small sin requerir regex ni listas de palabras.
+   */
+  async isCatalogInquiry(text: string): Promise<boolean> {
+    if (!this.catalogEmb) {
+      const res = await this.engine.embedQuery(CATALOG_INQUIRY_PROBE, "small");
+      this.catalogEmb = res.embedding;
+    }
+    const input = await this.engine.embedQuery(text, "small", { high: true });
+    const s = EmbeddingEngineService.cosine(input.embedding, this.catalogEmb);
+    // Exigimos alta afinidad semántica con el arquetipo de listar/preguntar por herramientas disponibles
+    return s >= 0.865;
   }
 }

@@ -22,7 +22,6 @@ import { ConfirmationCache } from "./services/confirm-cache.service";
 import {
   explicitToolNames,
   extractQueryKeywords,
-  isCatalogInquiry,
   matchTokenSet,
   namedFamilies,
   toolFamily,
@@ -54,6 +53,13 @@ import { resolveScopeKey } from "src/shared/scope";
 
 const CANONICAL_INTEREST_PROBE =
   "interés comercial en adquirir, comprar, cotizar o contratar un producto o servicio";
+
+const CANONICAL_DENIAL_PROBES = [
+  "el asistente no tiene herramientas, no puede realizar la acción por falta de funciones o limitaciones técnicas del sistema",
+  "afirmaciones del agente negando herramientas o capacidades técnicas",
+  "no tengo ninguna herramienta ni función disponible para realizar esta tarea",
+  "el agente no crea ítems ni tiene herramientas",
+];
 
 /** Acota un score al rango [0, 1]. */
 function clamp01(value: number): number {
@@ -249,12 +255,13 @@ export class PredictionOrchestrator {
 
     // Consulta de catálogo o meta-pregunta sobre capacidades del sistema
     const isMeta = await this.classifier.isMetaQuestion(text);
+    const isCatalog = !isMeta && (await this.classifier.isCatalogInquiry(text));
     const catalog = this.qdrant.catalog(scopeKey);
     const allTools = catalog.all();
     let queryTokens = matchTokenSet(text);
     const families = namedFamilies(queryTokens, allTools.map((t) => t.name));
 
-    if (isMeta || (isCatalogInquiry(text) && families.size > 0)) {
+    if (isMeta || (isCatalog && families.size > 0)) {
       if (families.size > 0) {
         // Si el usuario o agente pregunta por las herramientas de una familia ("herramientas de mitumbes tienes"),
         // retornamos todas las herramientas registradas de esa familia
@@ -693,6 +700,39 @@ export class PredictionOrchestrator {
     const res = await this.engine.embedQuery(CANONICAL_INTEREST_PROBE, "small");
     this.intentEmbs = [res.embedding];
     return this.intentEmbs;
+  }
+
+  private denialEmbs?: Float32Array[];
+
+  private async ensureDenialEmbs(): Promise<Float32Array[]> {
+    if (this.denialEmbs) return this.denialEmbs;
+    const embs: Float32Array[] = [];
+    for (const p of CANONICAL_DENIAL_PROBES) {
+      const res = await this.engine.embedQuery(p, "small");
+      embs.push(res.embedding);
+    }
+    this.denialEmbs = embs;
+    return this.denialEmbs;
+  }
+
+  /**
+   * Juicio semántico sobre hechos o texto para memoria contextual sin diccionarios ni regex.
+   * Determina si un texto representa ruido de negación de herramientas o limitaciones técnicas
+   * no aptas para persistir en memoria contextual de largo plazo.
+   */
+  async judgeMemory(text: string): Promise<{ isNoise: boolean; noiseScore: number }> {
+    const trimmed = String(text ?? "").trim();
+    if (!trimmed) return { isNoise: false, noiseScore: 0 };
+    const embs = await this.ensureDenialEmbs();
+    const promptEmb = await this.engine.embedQuery(trimmed, "small", { high: true });
+    let max = 0;
+    for (const emb of embs) {
+      const s = EmbeddingEngineService.cosine(promptEmb.embedding, emb);
+      if (s > max) max = s;
+    }
+    const isNoise = max >= 0.81;
+    log(`[memory:judge] text="${trimmed.slice(0, 50)}" score=${max.toFixed(3)} isNoise=${isNoise}`);
+    return { isNoise, noiseScore: max };
   }
 
   /** Coseno del turno contra cada ancla, ordenado desc. */

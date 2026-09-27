@@ -362,10 +362,11 @@ export class JuicioService {
       ),
     );
     const filteredAdjusted = adjusted.filter((a) => selectedNames.has(a.tool.name));
-    const tools = (filteredAdjusted.length > 0 ? filteredAdjusted : adjusted)
+    const finalAdjusted = filteredAdjusted.length > 0 ? filteredAdjusted : adjusted;
+    const tools = finalAdjusted
       .map((a) => a.tool)
       .slice(0, this.config.maxOutputTools);
-    const rankedScores = (filteredAdjusted.length > 0 ? filteredAdjusted : adjusted)
+    const rankedScores = finalAdjusted
       .map((a) => a.score)
       .slice(0, this.config.maxOutputTools);
     const order = tools.map((t) => t.name);

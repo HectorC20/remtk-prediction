@@ -134,3 +134,29 @@ test("Subtarea de agente: 'Listar herramientas MCP disponibles de mitumbes' entr
   assert.ok(names.includes("mitumbes_item_listar"));
   assert.ok(names.includes("mitumbes_hero_obtener"));
 });
+
+test("Juicio semántico de memoria contextual: POST /memory/judge detecta negaciones de herramientas como ruido", async () => {
+  const denialRes = await fetch(`${serverUrl}/memory/judge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: "No tengo ninguna herramienta llamada mitumbes_item_crear ni, en general, ninguna función para crear ítems en el catálogo.",
+    }),
+  });
+  assert.equal(denialRes.status, 200);
+  const denialData = (await denialRes.json()) as { isNoise: boolean; noiseScore: number };
+  assert.equal(denialData.isNoise, true, "Debe clasificar la negación de herramientas como ruido parásito");
+  assert.ok(denialData.noiseScore >= 0.81, "El score de ruido debe ser alto");
+
+  const legitimateRes = await fetch(`${serverUrl}/memory/judge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: "El hotel Karibian cuenta con piscina frente al mar, Wi-Fi gratis y desayuno incluido en Punta Sal.",
+    }),
+  });
+  assert.equal(legitimateRes.status, 200);
+  const legitimateData = (await legitimateRes.json()) as { isNoise: boolean; noiseScore: number };
+  assert.equal(legitimateData.isNoise, false, "Información legítima de negocio NO debe ser marcada como ruido");
+  assert.ok(legitimateData.noiseScore < 0.81, "El score de ruido para datos reales debe ser bajo");
+});
