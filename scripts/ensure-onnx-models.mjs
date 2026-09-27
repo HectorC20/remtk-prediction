@@ -42,6 +42,12 @@ const MODELS = [
     base: "https://huggingface.co/gpahal/bge-m3-onnx-int8/resolve/main",
     files: ["model_quantized.onnx", "tokenizer.json", "tokenizer_config.json"],
   },
+  {
+    name: "ms-marco-minilm-l6-int8 (Cross-Encoder)",
+    dir: "ms-marco-minilm-l6-int8-onnx",
+    base: "https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/onnx",
+    files: ["model.onnx", "tokenizer.json", "tokenizer_config.json"],
+  },
 ];
 
 const log = (...args) => console.log("[onnx]", ...args);
