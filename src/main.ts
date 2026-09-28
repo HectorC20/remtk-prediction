@@ -49,7 +49,8 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     await qdrant.ensureCollections();
   }
 
-  const classifier = new TurnClassifier(engine);
+  const crossEncoder = new CrossEncoderService(cfg);
+  const classifier = new TurnClassifier(engine, crossEncoder);
   const confirmCache = new ConfirmationCache();
   const keywords = new KeywordService(engine, cfg.keywordTopK);
   const graphCache = new ToolGraphCacheService(engine);
@@ -68,7 +69,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     new PuertaContextoService(cfg),
     new MaxSimService(engine, cfg),
     new EspecificidadService(engine, graphCache, cfg),
-    new CrossEncoderService(cfg),
+    crossEncoder,
     cfg,
   );
 

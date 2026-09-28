@@ -88,35 +88,18 @@ export class JuicioService {
     const prev = this.sessionState.peek(input.sessionId);
     ctx.gateLambda = this.puerta.lambda(ctx.uText, prev);
 
+    let currProj: { scores: Map<string, number>; topTool: string; topScore: number; prominence: number } | undefined;
     if (input.scopeKey && ctx.uText) {
-      const currProj = await this.especificidad.projectManifold(input.scopeKey, ctx.uText);
+      currProj = await this.especificidad.projectManifold(input.scopeKey, ctx.uText);
       if (currProj) {
         ctx.prominence = currProj.prominence;
-      }
-
-      if (prev && !ctx.allSpansNoop) {
-        const [prevProj, noop] = await Promise.all([
-          this.especificidad.projectManifold(input.scopeKey, prev),
-          this.abstencion.noopScore(ctx.uText),
-        ]);
-        if (currProj && prevProj && currProj.topTool !== prevProj.topTool) {
-          const scoreCurrOnPrev = currProj.scores.get(prevProj.topTool) ?? 0;
-          const shiftMargin = currProj.topScore - scoreCurrOnPrev;
-          const isFunctionalPivot =
-            (shiftMargin >= 0.020 && currProj.topScore >= 0.82) ||
-            (shiftMargin >= 0.035 && currProj.prominence >= 0.020) ||
-            (currProj.topScore > noop - 0.01 && shiftMargin >= 0.015);
-          if (isFunctionalPivot) {
-            ctx.gateLambda = 0.05;
-            ctx.isAutonomousPivot = true;
-          }
-        }
       }
     }
 
     // (1) NLI de estado condicionado a la propuesta pendiente:
-    // Solo turnos humanos con propuesta y únicamente si el usuario no ha realizado un pivote funcional a otro dominio.
-    if (input.source === "human" && !ctx.isAutonomousPivot) {
+    // Solo turnos humanos con propuesta. Si el usuario confirma o rechaza la propuesta,
+    // es una respuesta directa al asistente, nunca un pivote ajeno a otro dominio.
+    if (input.source === "human") {
       const premise = this.pendingPremise(input);
       if (premise) {
         ctx.estado = await this.nli.verdict(input.text, premise);
@@ -124,14 +107,33 @@ export class JuicioService {
           ctx.resolved = true;
           ctx.resolvedBy = "nli_reject";
           log(`[juicio] veredicto REJECT session=${input.sessionId} → propuesta descartada`);
+          return ctx;
         } else if (input.cachedPlan && ctx.estado === "confirm") {
           ctx.resolved = true;
           ctx.resolvedBy = "nli_confirm";
           log(`[juicio] veredicto CONFIRM session=${input.sessionId} → plan cacheado`);
+          return ctx;
         }
       }
     }
-    if (ctx.resolved) return ctx;
+
+    // Si el usuario no está respondiendo a una propuesta pendiente, evalúa si es un pivote funcional
+    if (prev && !ctx.allSpansNoop && ctx.estado !== "confirm" && ctx.estado !== "reject") {
+      const [prevProj] = await Promise.all([
+        this.especificidad.projectManifold(input.scopeKey, prev),
+      ]);
+      if (currProj && prevProj && currProj.topTool !== prevProj.topTool) {
+        const scoreCurrOnPrev = currProj.scores.get(prevProj.topTool) ?? 0;
+        const shiftMargin = currProj.topScore - scoreCurrOnPrev;
+        const isFunctionalPivot =
+          (shiftMargin >= 0.040 && currProj.topScore >= 0.85) ||
+          (shiftMargin >= 0.050 && currProj.prominence >= 0.035);
+        if (isFunctionalPivot) {
+          ctx.gateLambda = 0.05;
+          ctx.isAutonomousPivot = true;
+        }
+      }
+    }
 
     // Juicio geométrico: solo se aísla el historial si el turno demuestra ser un pivote
     // funcional autónomo (prominencia en un nuevo dominio). Nunca por conteo rígido de palabras ni diccionarios.
@@ -241,8 +243,9 @@ export class JuicioService {
     ctx: JuicioContext;
     result: GraphPredictionResult;
     exclude?: string[];
+    source?: "human" | "agent";
   }): Promise<{ result: GraphPredictionResult; diag: JuicioPostDiag }> {
-    const { scopeKey, text, ctx, result } = params;
+    const { scopeKey, text, ctx, result, source } = params;
     const diag: JuicioPostDiag = {
       abstained: false,
       noopScore: 0,
@@ -298,7 +301,8 @@ export class JuicioService {
       const ms = maxsimScores.get(tool.name);
       if (ms !== undefined) score = (1 - w) * score + w * ms;
       if (rerankerOn) {
-        const ce = await this.reranker.score(effectiveText, `${tool.intentSummary}. ${tool.description}`);
+        const summary = tool.intentSummary ? `${tool.intentSummary}. ` : "";
+        const ce = await this.reranker.score(effectiveText, `${tool.name}: ${summary}${tool.description}`);
         if (ce !== undefined) score = (1 - alpha) * score + alpha * ce;
       }
       const problem = await this.especificidad.problemScore(scopeKey, tool, ctx.uText);
@@ -353,23 +357,53 @@ export class JuicioService {
     // Poda por umbral adaptativo sobre adjusted: preserva la agudeza del juicio y
     // descarta herramientas irrelevantes o destructivas que caen tras un gap natural.
     const scoredAdjusted = adjusted.map((a) => ({ name: a.tool.name, score: a.score }));
+    const maxAdaptive = 5;
+    const maxOutput = 5;
     const selectedNames = new Set(
       adaptiveThreshold(
         scoredAdjusted,
         this.config.adaptiveMinTools,
-        this.config.adaptiveMaxTools,
+        maxAdaptive,
         this.config.adaptiveGapThreshold,
       ),
     );
     const filteredAdjusted = adjusted.filter((a) => selectedNames.has(a.tool.name));
     const finalAdjusted = filteredAdjusted.length > 0 ? filteredAdjusted : adjusted;
-    const tools = finalAdjusted
-      .map((a) => a.tool)
-      .slice(0, this.config.maxOutputTools);
-    const rankedScores = finalAdjusted
-      .map((a) => a.score)
-      .slice(0, this.config.maxOutputTools);
+    const toolMap = new Map<string, ToolDefinition>();
+    for (const a of finalAdjusted) toolMap.set(a.tool.name, a.tool);
+
+    // Preservar herramientas antecedentes del pre-plan DAG (AGENT.md)
+    if (result.graph?.edges) {
+      for (const tName of [...toolMap.keys()]) {
+        for (const e of result.graph.edges) {
+          if (e.type === "PREREQUISITE" && e.to === tName) {
+            if (!toolMap.has(e.from) && toolMap.size < maxOutput) {
+              const preTool = result.tools.find((t) => t.name === e.from);
+              if (preTool) toolMap.set(e.from, preTool);
+            }
+          }
+        }
+      }
+    }
+
+    // Ordenar respetando el orden topológico (Kahn) del grafo precomputado
+    const execOrder = result.graph?.executionOrder ?? [];
+    const tools = [...toolMap.values()]
+      .sort((a, b) => {
+        const idxA = execOrder.indexOf(a.name);
+        const idxB = execOrder.indexOf(b.name);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return 0;
+      })
+      .slice(0, maxOutput);
+
     const order = tools.map((t) => t.name);
+    const rankedScores = tools.map((t) => {
+      const found = adjusted.find((a) => a.tool.name === t.name);
+      return found ? found.score : 0.85;
+    });
 
     const judged: GraphPredictionResult = {
       ...result,
@@ -383,7 +417,8 @@ export class JuicioService {
             intent: {
               ...result.context.intent,
               primaryAction: tools[0]?.category ?? "unknown",
-              confidence: rankedScores[0] ?? 0,
+              category: tools[0]?.group ?? result.context.intent?.category,
+              confidence: Math.max(result.context?.intent?.confidence ?? 0.85, CalibrationService.calibrateProbability(rankedScores[0] ?? 0.85)),
             },
           }
         : result.context,

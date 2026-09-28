@@ -23,7 +23,6 @@ import {
   MUTUALLY_EXCLUSIVE_WEIGHT,
   PREREQUISITE_WEIGHT,
 } from "src/shared/constants/predict";
-import { normalizeToken } from "../keywords";
 
 export class ToolGraphCacheService {
   /** Grafos por scopeKey (chat general: scopeKey = tenant). */
@@ -63,7 +62,7 @@ export class ToolGraphCacheService {
     [...nodes.keys()].forEach((name, i) => toolIndexMap.set(name, i));
     const n = nodes.size;
     const adjacencyMatrix = new Float32Array(n * n);
-    const edges = inferEdges(tools, toolIndexMap, adjacencyMatrix);
+    const edges = await this.inferEdges(tools, nodes, toolIndexMap, adjacencyMatrix);
 
     const graph: TenantToolGraph = { tenant: scopeKey, versionHash, nodes, adjacencyMatrix, toolIndexMap };
     this.graphs.set(scopeKey, graph);
@@ -72,6 +71,145 @@ export class ToolGraphCacheService {
       `[graph] scope=${scopeKey} nodes=${n} edges=${edges.length} hash=${versionHash.slice(0, 8)}`,
     );
     return graph;
+  }
+
+  /**
+   * Inferencia latente vector del esquema a herramientas proveedoras (e5-small):
+   * Embebe cada argumento del esquema (`categoryId`, `zoneId`, etc.) y calcula la similitud
+   * del coseno con el nodo de cada herramienta en el espacio vectorial.
+   * Cero palabras clave, diccionarios de verbos o substring matching (AGENT.md).
+   */
+  private async inferEdges(
+    tools: ToolDefinition[],
+    nodes: Map<string, ToolGraphNode>,
+    toolIndexMap: Map<string, number>,
+    adjacencyMatrix: Float32Array,
+  ): Promise<GraphEdge[]> {
+    const edges: GraphEdge[] = [];
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    const n = tools.length;
+    const paramEmbCache = new Map<string, Float32Array>();
+    const intentEmbCache = new Map<string, Float32Array>();
+
+    // Pre-embeber el propósito / resumen de intención de cada herramienta
+    for (const t of tools) {
+      const sig = `${t.name}: ${t.intentSummary || t.name}`;
+      const res = await this.engine.embedPassage(sig, "small", { high: false });
+      intentEmbCache.set(t.name, res.embedding);
+    }
+
+    for (const tool of tools) {
+      const prereqs = new Set<string>(tool.prerequisites ?? []);
+      const schemaObj = (tool.inputSchema?.properties ?? tool.inputSchema ?? {}) as Record<string, unknown>;
+      const rawKeys = Object.keys(schemaObj).filter(
+        (k) => !["type", "properties", "required", "$schema", "additionalProperties"].includes(k),
+      );
+
+      for (const rawKey of rawKeys) {
+        if (rawKey.length < 2) continue;
+
+        // Parámetros que representan referencias a entidades (e.g. categoryId, zoneId, *_id, o id propio en mutación)
+        const isSelfId = rawKey.toLowerCase() === "id";
+        const isRefKey = isSelfId || rawKey.endsWith("Id") || rawKey.endsWith("_id") || rawKey.endsWith("ID");
+        if (!isRefKey) continue;
+
+        let probe: string;
+        if (isSelfId) {
+          const parts = tool.name.split("_");
+          const entity = parts.length > 2 ? parts[parts.length - 2] : tool.name;
+          probe = `obtener ${entity}`;
+        } else {
+          const cleaned = rawKey.replace(/([A-Z])/g, " $1").replace(/_?id$/i, "").trim();
+          probe = `obtener o listar ${cleaned}`;
+        }
+
+        let pEmb = paramEmbCache.get(probe);
+        if (!pEmb) {
+          const res = await this.engine.embedQuery(probe, "small", { high: false });
+          pEmb = res.embedding;
+          paramEmbCache.set(probe, pEmb);
+        }
+
+        // Selecciona la mejor herramienta proveedora/descubridora de la entidad
+        let bestTool: string | undefined;
+        let bestSim = 0.835;
+        for (const other of tools) {
+          if (other.name === tool.name) continue;
+          if (!tool.group || !other.group || tool.group !== other.group) continue;
+
+          // Una herramienta antecedente no debe ser una mutación destructiva o creación
+          if (
+            other.name.endsWith("_eliminar") ||
+            other.name.endsWith("_actualizar") ||
+            other.name.endsWith("_crear")
+          ) {
+            continue;
+          }
+
+          // Para referencias externas desconocidas (ej. categoryId), debe listar sin requerir id previo
+          if (!isSelfId) {
+            const otherReq = (other.inputSchema?.required ?? []) as string[];
+            if (otherReq.includes("id") || other.name.endsWith("_obtener")) {
+              continue;
+            }
+          }
+
+          const oEmb = intentEmbCache.get(other.name);
+          if (!oEmb) continue;
+
+          const sim = EmbeddingEngineService.cosine(pEmb, oEmb);
+          if (sim > bestSim) {
+            bestSim = sim;
+            bestTool = other.name;
+          }
+        }
+        if (bestTool) {
+          prereqs.add(bestTool);
+        }
+      }
+
+      for (const preName of prereqs) {
+        if (preName === tool.name || !byName.has(preName)) continue;
+        const i = toolIndexMap.get(preName);
+        const j = toolIndexMap.get(tool.name);
+        if (i === undefined || j === undefined) continue;
+        adjacencyMatrix[i * n + j] = Math.max(adjacencyMatrix[i * n + j], PREREQUISITE_WEIGHT);
+        edges.push({ from: preName, to: tool.name, type: "PREREQUISITE", weight: PREREQUISITE_WEIGHT });
+      }
+    }
+
+    for (const tool of tools) {
+      for (const cName of tool.conflicts ?? []) {
+        if (cName === tool.name || !byName.has(cName)) continue;
+        // Dedupe: una sola dirección (from < to).
+        if (tool.name >= cName) continue;
+        edges.push({
+          from: tool.name,
+          to: cName,
+          type: "MUTUALLY_EXCLUSIVE",
+          weight: MUTUALLY_EXCLUSIVE_WEIGHT,
+        });
+      }
+    }
+
+    const seen = new Set<string>();
+    for (let a = 0; a < tools.length; a++) {
+      for (let b = a + 1; b < tools.length; b++) {
+        if (tools[a].group && tools[a].group === tools[b].group) {
+          const key = [tools[a].name, tools[b].name].sort().join("\u0000");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          edges.push({
+            from: tools[a].name,
+            to: tools[b].name,
+            type: "CO_OCCURRENCE",
+            weight: CO_OCCURRENCE_WEIGHT,
+          });
+        }
+      }
+    }
+
+    return edges;
   }
 }
 
@@ -101,96 +239,3 @@ function computeVersionHash(tools: ToolDefinition[]): string {
   return createHash("sha1").update(digest).digest("hex");
 }
 
-/**
- * Infiere las aristas del grafo:
- *  1. PREREQUISITE: relaciones declaradas + inferencia por `inputSchema`.
- *  2. MUTUALLY_EXCLUSIVE: relaciones declaradas (simétricas, una sola arista).
- *  3. CO_OCCURRENCE: herramientas del mismo `group`.
- */
-function inferEdges(
-  tools: ToolDefinition[],
-  toolIndexMap: Map<string, number>,
-  adjacencyMatrix: Float32Array,
-): GraphEdge[] {
-  const edges: GraphEdge[] = [];
-  const byName = new Map(tools.map((t) => [t.name, t]));
-  const n = tools.length;
-
-  for (const tool of tools) {
-    const prereqs = new Set<string>(tool.prerequisites ?? []);
-    for (const inferred of inferPrerequisitesFromSchema(tool, tools)) prereqs.add(inferred);
-    for (const preName of prereqs) {
-      if (preName === tool.name || !byName.has(preName)) continue;
-      const i = toolIndexMap.get(preName);
-      const j = toolIndexMap.get(tool.name);
-      if (i === undefined || j === undefined) continue;
-      adjacencyMatrix[i * n + j] = Math.max(adjacencyMatrix[i * n + j], PREREQUISITE_WEIGHT);
-      edges.push({ from: preName, to: tool.name, type: "PREREQUISITE", weight: PREREQUISITE_WEIGHT });
-    }
-  }
-
-  for (const tool of tools) {
-    for (const cName of tool.conflicts ?? []) {
-      if (cName === tool.name || !byName.has(cName)) continue;
-      // Dedupe: una sola dirección (from < to).
-      if (tool.name >= cName) continue;
-      edges.push({
-        from: tool.name,
-        to: cName,
-        type: "MUTUALLY_EXCLUSIVE",
-        weight: MUTUALLY_EXCLUSIVE_WEIGHT,
-      });
-    }
-  }
-
-  const seen = new Set<string>();
-  for (let a = 0; a < tools.length; a++) {
-    for (let b = a + 1; b < tools.length; b++) {
-      if (tools[a].group && tools[a].group === tools[b].group) {
-        const key = [tools[a].name, tools[b].name].sort().join("\u0000");
-        if (seen.has(key)) continue;
-        seen.add(key);
-        edges.push({
-          from: tools[a].name,
-          to: tools[b].name,
-          type: "CO_OCCURRENCE",
-          weight: CO_OCCURRENCE_WEIGHT,
-        });
-      }
-    }
-  }
-
-  return edges;
-}
-
-/**
- * Inferencia estructural de pre-requisitos por esquema:
- * Conecta herramientas cuando una clave del esquema de entrada coincide
- * estructuralmente con la firma o identificador de otra herramienta del catálogo.
- * PROHIBIDO: palabras clave, diccionarios de verbos fijos o listas hardcodeadas.
- */
-function inferPrerequisitesFromSchema(tool: ToolDefinition, tools: ToolDefinition[]): string[] {
-  const schemaObj = (tool.inputSchema?.properties ?? tool.inputSchema ?? {}) as Record<string, unknown>;
-  const rawKeys = Object.keys(schemaObj).filter(
-    (k) => !["type", "properties", "required", "$schema", "additionalProperties"].includes(k),
-  );
-  if (rawKeys.length === 0) return [];
-  const out: string[] = [];
-
-  for (const rawKey of rawKeys) {
-    const normKey = normalizeToken(rawKey);
-    if (normKey.length < 3) continue;
-
-    for (const other of tools) {
-      if (other.name === tool.name) continue;
-      const otherName = normalizeToken(other.name);
-      const otherGroup = normalizeToken(other.group);
-
-      // Coincidencia estructural directa entre el argumento y la identidad del nodo
-      if (otherName.includes(normKey) || otherGroup === normKey) {
-        out.push(other.name);
-      }
-    }
-  }
-  return [...new Set(out)];
-}

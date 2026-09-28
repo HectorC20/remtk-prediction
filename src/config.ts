@@ -218,6 +218,26 @@ function resolveModelsPath(env: NodeJS.ProcessEnv): string {
   return fromPackage[0];
 }
 
+/** Resuelve la carpeta del cross-encoder / reranker (ms-marco INT8). */
+function resolveRerankerModelPath(env: NodeJS.ProcessEnv): string {
+  const explicit = (env.JUICIO_RERANKER_MODEL_PATH ?? "").trim();
+  if (explicit) return explicit;
+  const fromPackage = [
+    require("node:path").resolve(__dirname, "../models/ms-marco-minilm-l6-int8-onnx"),
+    require("node:path").resolve(__dirname, "../../models/ms-marco-minilm-l6-int8-onnx"),
+    "./models/ms-marco-minilm-l6-int8-onnx",
+    "models/ms-marco-minilm-l6-int8-onnx",
+  ];
+  for (const p of fromPackage) {
+    try {
+      if (require("node:fs").existsSync(require("node:path").join(p, "model.onnx"))) return p;
+    } catch {
+      /* noop */
+    }
+  }
+  return rerankerModelPathDefault;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   // Tope final de tools de salida: env opcional recortado al rango permitido [0, 150].
   const maxOutputTools = Math.max(
@@ -275,8 +295,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     juicioEnergyTau: float(env.JUICIO_ENERGY_TAU, energyTauDefault),
     juicioGateBeta: float(env.JUICIO_GATE_BETA, gateBetaDefault),
     juicioGateGamma: float(env.JUICIO_GATE_GAMMA, gateGammaDefault),
-    juicioGateTextMin: float(env.JUICIO_GATE_TEXT_MIN, gateTextMinDefault),
-    juicioRerankerModelPath: str(env.JUICIO_RERANKER_MODEL_PATH, rerankerModelPathDefault),
+    juicioRerankerModelPath: resolveRerankerModelPath(env),
     juicioRerankerAlpha: float(env.JUICIO_RERANKER_ALPHA, rerankerAlphaDefault),
     juicioMaxsimWeight: float(env.JUICIO_MAXSIM_WEIGHT, maxsimWeightDefault),
     juicioMaxsimMaxTokens: int(env.JUICIO_MAXSIM_MAX_TOKENS, maxsimMaxTokensDefault),

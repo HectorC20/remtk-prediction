@@ -7,6 +7,8 @@
  * se comparan por coseno, igual que CONFIRM/META_QUESTION del clasificador.
  */
 
+import { existsSync } from "node:fs";
+
 /** Interruptor maestro de la capa de juicio (env `JUICIO_ENABLED`). */
 export const juicioEnabledDefault = true;
 

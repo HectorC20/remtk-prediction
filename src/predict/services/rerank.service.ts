@@ -295,6 +295,7 @@ export class RerankService {
     pinnedNames?: string[];
     topicShift?: boolean;
     turnType?: string;
+    source?: "human" | "agent";
   }): GraphRerankResult {
     const { zt, graph, edges, lexicalScores, learned, catalog, modelSize, exclude, queryTokens } = opts;
     // `total` es el tamaño COMPLETO del grafo: la matriz de adyacencia es
@@ -348,20 +349,25 @@ export class RerankService {
     }
 
     // 3. Propagación de pre-requisitos: S_propagado = S + alpha · (Aᵀ · S).
-    //    La matriz de adyacencia es global (total × total): se indexa con
-    //    `toolIndexMap`, no con la posición dentro del pool filtrado.
+    // Si una herramienta dependiente v tiene score alto, sus pre-requisitos u
+    // reciben un impulso proporcional y acotado (máximo 1 dependiente de referencia).
     const propagated = new Map<string, number>();
-    for (const jName of keptNames) {
-      const j = graph.toolIndexMap.get(jName);
+    for (const uName of keptNames) {
+      const u = graph.toolIndexMap.get(uName);
       let boost = 0;
-      if (j !== undefined) {
-        for (const iName of keptNames) {
-          const i = graph.toolIndexMap.get(iName);
-          if (i === undefined) continue;
-          boost += graph.adjacencyMatrix[i * total + j] * (fused.get(iName) ?? 0);
+      if (u !== undefined) {
+        for (const vName of keptNames) {
+          const v = graph.toolIndexMap.get(vName);
+          if (v === undefined || u === v) continue;
+          const fwd = graph.adjacencyMatrix[v * total + u];
+          const bwd = graph.adjacencyMatrix[u * total + v];
+          const weight = Math.max(fwd, bwd);
+          if (weight > 0) {
+            boost = Math.max(boost, weight * (fused.get(vName) ?? 0));
+          }
         }
       }
-      propagated.set(jName, (fused.get(jName) ?? 0) + graphPropagationAlphaDefault * boost);
+      propagated.set(uName, (fused.get(uName) ?? 0) + graphPropagationAlphaDefault * boost);
     }
 
     // 4. Piso de relevancia sobre la señal fusionada (§6.6): el término
@@ -414,12 +420,13 @@ export class RerankService {
           .join(", ")}`,
       );
     }
+    const maxAdaptive = Math.min(5, this.config.adaptiveMaxTools);
     const selectedNames = adaptiveThreshold(
       scored,
       this.config.adaptiveMinTools,
-      this.config.adaptiveMaxTools,
+      maxAdaptive,
       this.config.adaptiveGapThreshold,
-    ).slice(0, this.config.maxOutputTools);
+    ).slice(0, maxAdaptive);
 
     // 6. Resolución de mutexes: de dos nodos excluidos, queda el de mayor score.
     const selectedSet = new Set(selectedNames);
@@ -482,14 +489,18 @@ export class RerankService {
     for (const toolName of [...selectedSet]) {
       for (const e of edges) {
         if (e.type === "PREREQUISITE" && e.to === toolName) {
-          if (!selectedSet.has(e.from) && keptLower.has(e.from.toLowerCase())) {
+          if (
+            !selectedSet.has(e.from) &&
+            graph.nodes.has(e.from) &&
+            (!excluded || !excluded.has(e.from.toLowerCase()))
+          ) {
             prereqsToAdd.push(e.from);
           }
         }
       }
     }
     for (const p of prereqsToAdd) {
-      if (selectedSet.size >= this.config.maxOutputTools) break;
+      if (selectedSet.size >= maxAdaptive) break;
       selectedSet.add(p);
       if (!propagated.has(p) || (propagated.get(p) ?? 0) === 0) {
         propagated.set(p, 0.85);

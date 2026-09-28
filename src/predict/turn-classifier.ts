@@ -12,6 +12,8 @@ const META_QUESTION_PROBE =
 const CATALOG_INQUIRY_PROBE =
   "preguntar por las herramientas o funciones disponibles de un complemento o catálogo";
 
+import type { CrossEncoderService } from "src/juicio/services/cross-encoder.service";
+
 export type { TurnClassificationResult };
 
 export interface TurnClassifierContext {
@@ -25,7 +27,10 @@ export class TurnClassifier {
   private metaEmb?: Float32Array;
   private catalogEmb?: Float32Array;
 
-  constructor(private readonly engine: EmbeddingEngineService) {}
+  constructor(
+    private readonly engine: EmbeddingEngineService,
+    private readonly crossEncoder?: CrossEncoderService,
+  ) {}
 
   async init(): Promise<void> {
     // La arquitectura de juicio determina la intención mediante estado de sesión y variedad topológica
@@ -133,13 +138,23 @@ export class TurnClassifier {
    * Utiliza similitud vectorial e5-small sin requerir regex ni listas de palabras.
    */
   async isCatalogInquiry(text: string): Promise<boolean> {
+    if (this.crossEncoder && (await this.crossEncoder.ready())) {
+      const sCat = await this.crossEncoder.score(
+        text,
+        "listar o preguntar qué herramientas, funciones o catálogo tiene disponibles un complemento.",
+      );
+      const sSpec = await this.crossEncoder.score(
+        text,
+        "solicitar o verificar una herramienta para realizar una acción específica como crear o modificar.",
+      );
+      return sCat > 0.5 && sCat > sSpec;
+    }
     if (!this.catalogEmb) {
       const res = await this.engine.embedQuery(CATALOG_INQUIRY_PROBE, "small");
       this.catalogEmb = res.embedding;
     }
     const input = await this.engine.embedQuery(text, "small", { high: true });
     const s = EmbeddingEngineService.cosine(input.embedding, this.catalogEmb);
-    // Exigimos alta afinidad semántica con el arquetipo de listar/preguntar por herramientas disponibles
-    return s >= 0.865;
+    return s >= 0.92;
   }
 }

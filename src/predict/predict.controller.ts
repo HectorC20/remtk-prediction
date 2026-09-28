@@ -182,6 +182,17 @@ export class PredictV1Controller {
     return { count: t ? this.ctx.orchestrator.countTools(t, normalizeAgentId(agentId)) : 0 };
   }
 
+  /** GET /tools/ready?tenant=&agentId= → espera a que el warm-up del scope concluya */
+  @Get("tools/ready")
+  async toolsReady(
+    @Query("tenant") tenant?: string,
+    @Query("agentId") agentId?: string,
+  ): Promise<{ ready: boolean }> {
+    const t = typeof tenant === "string" ? tenant : "";
+    if (t) await this.ctx.orchestrator.waitForWarmup(t, normalizeAgentId(agentId));
+    return { ready: true };
+  }
+
   /**
    * POST /memory/predict
    * Body: { sessionId, tenant, agentId?, text, limit }

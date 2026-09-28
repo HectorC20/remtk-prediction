@@ -143,6 +143,13 @@ export class PredictionOrchestrator {
     return this.qdrant.countTools(resolveScopeKey(tenant, agentId));
   }
 
+  async waitForWarmup(tenant: string, agentId?: string): Promise<void> {
+    const scopeKey = resolveScopeKey(tenant, agentId);
+    while (this.warmups.has(scopeKey)) {
+      await this.warmups.get(scopeKey);
+    }
+  }
+
   /**
    * POST /predict/feedback: aplica una señal de refuerzo al perfil léxico del
    * canal. `used` debe traer solo herramientas con éxito real (§8.1): usar "fue
@@ -262,13 +269,12 @@ export class PredictionOrchestrator {
 
     if (isMeta || (isCatalog && families.size > 0)) {
       if (families.size > 0) {
-        // Si el usuario o agente pregunta por las herramientas de una familia ("herramientas de mitumbes tienes"),
-        // retornamos todas las herramientas registradas de esa familia
+        // Retornamos todas las herramientas registradas de esa familia
         const familyTools = allTools.filter((t) => {
           const fam = toolFamily(t.name);
           return fam && families.has(fam);
         });
-        if (familyTools.length > 0) {
+        if (familyTools.length > 0 && familyTools.length <= this.config.maxOutputTools) {
           log(`[pipeline] consulta de catálogo con familia=[${[...families].join(",")}] → devolviendo ${familyTools.length} tools`);
           this.finalize(trace, start, familyTools.map((t) => t.name));
           return {
@@ -398,10 +404,11 @@ export class PredictionOrchestrator {
         pinnedNames,
         topicShift,
         turnType: turn,
+        source: input.source,
       });
       // Capa de juicio (post): abstención + re-rank del top-K. Las órdenes
       // explícitas (pinned por keywords) no se juzgan: las mandó el planificador.
-      const result = await this.judgeResult(scopeKey, effectiveText, juicioCtx, raw, pinnedNames, trace, input.exclude);
+      const result = await this.judgeResult(scopeKey, effectiveText, juicioCtx, raw, pinnedNames, trace, input.exclude, input.source);
       trace.recall = graph.nodes.size;
       trace.modelSize = result.modelSize;
       trace.complexity = result.complexity;
@@ -467,7 +474,16 @@ export class PredictionOrchestrator {
       graph: { nodes: order, edges: [], executionOrder: order },
     };
     // Capa de juicio (post), igual que en la ruta topológica.
-    const result = await this.judgeResult(scopeKey, effectiveText, juicioCtx, flat, pinnedNames, trace, input.exclude);
+    const result = await this.judgeResult(
+      scopeKey,
+      effectiveText,
+      juicioCtx,
+      flat,
+      pinnedNames,
+      trace,
+      input.exclude,
+      input.source,
+    );
     trace.embeddingsRecomputed = recomputed;
     trace.embeddingsCached = cached;
     trace.learnWeight = learned.weight;
@@ -508,9 +524,10 @@ export class PredictionOrchestrator {
     pinnedNames: string[],
     trace: Trace,
     exclude?: string[],
+    source?: "human" | "agent",
   ): Promise<GraphPredictionResult> {
     if (pinnedNames.length > 0) return result;
-    const judged = await this.juicio.post({ scopeKey, text, ctx, result, exclude });
+    const judged = await this.juicio.post({ scopeKey, text, ctx, result, exclude, source });
     if (judged.diag.abstained) trace.juicioAbstained = judged.diag.abstainReason;
     trace.juicioNoopScore = judged.diag.noopScore;
     trace.juicioEnergy = judged.diag.energy;
