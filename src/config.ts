@@ -295,6 +295,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     juicioEnergyTau: float(env.JUICIO_ENERGY_TAU, energyTauDefault),
     juicioGateBeta: float(env.JUICIO_GATE_BETA, gateBetaDefault),
     juicioGateGamma: float(env.JUICIO_GATE_GAMMA, gateGammaDefault),
+    juicioGateTextMin: float(env.JUICIO_GATE_TEXT_MIN, gateTextMinDefault),
     juicioRerankerModelPath: resolveRerankerModelPath(env),
     juicioRerankerAlpha: float(env.JUICIO_RERANKER_ALPHA, rerankerAlphaDefault),
     juicioMaxsimWeight: float(env.JUICIO_MAXSIM_WEIGHT, maxsimWeightDefault),

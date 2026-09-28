@@ -22,4 +22,6 @@ export interface IPredictionOrchestrator {
   feedback(input: FeedbackInput): FeedbackResult;
   /** Juicio semántico sobre hechos o texto para memoria contextual sin diccionarios ni regex. */
   judgeMemory(text: string): Promise<{ isNoise: boolean; noiseScore: number }>;
+  /** Espera a que el warm-up de embeddings y construcción del grafo del scope concluyan. */
+  waitForWarmup(tenant: string, agentId?: string): Promise<void>;
 }

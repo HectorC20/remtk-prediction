@@ -118,7 +118,7 @@ export class JuicioService {
     }
 
     // Si el usuario no está respondiendo a una propuesta pendiente, evalúa si es un pivote funcional
-    if (prev && !ctx.allSpansNoop && ctx.estado !== "confirm" && ctx.estado !== "reject") {
+    if (prev && input.scopeKey && !ctx.allSpansNoop && ctx.estado !== "confirm" && ctx.estado !== "reject") {
       const [prevProj] = await Promise.all([
         this.especificidad.projectManifold(input.scopeKey, prev),
       ]);

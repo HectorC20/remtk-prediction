@@ -147,6 +147,7 @@ export class TurnClassifier {
         text,
         "solicitar o verificar una herramienta para realizar una acción específica como crear o modificar.",
       );
+      if (sCat === undefined || sSpec === undefined) return false;
       return sCat > 0.5 && sCat > sSpec;
     }
     if (!this.catalogEmb) {
