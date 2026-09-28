@@ -24,6 +24,7 @@ import { PREDICT_CONTEXT, PredictV1Controller } from "./predict.controller";
           engine: system.engine,
           debugger: system.debugger,
           lexical: system.lexical,
+          skillMemory: system.skillMemory,
         };
       },
     },

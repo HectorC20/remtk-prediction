@@ -15,6 +15,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Inject,
   InternalServerErrorException,
@@ -28,7 +29,9 @@ import type { ToolDefinition } from "../shared/interfaces/domain.interface";
 import type { IPredictionOrchestrator } from "../shared/interfaces/orchestrator.interface";
 import type { SpatialPredictDto, VisualToolPayload } from "src/shared/interfaces";
 import { SpatialPredictService } from "./services/spatial-predict.service";
-import { normalizeAgentId, resolveScopeKey } from "../shared/scope";
+import { SkillMemoryService } from "./services/skill-memory.service";
+import { normalizeAgentId, parseKeyRemtk, resolveScopeKey } from "../shared/scope";
+import type { SkillPredictInput } from "../shared/interfaces/skill.interface";
 
 /** Contexto que necesita este controlador (provisto por PredictAppModule). */
 export interface PredictContext {
@@ -37,6 +40,7 @@ export interface PredictContext {
   debugger: Debugger;
   lexical: LexicalProfileService;
   spatial?: SpatialPredictService;
+  skillMemory?: SkillMemoryService;
 }
 
 /** Token de inyección del contexto (no es una clase inyectable por tipo). */
@@ -84,21 +88,27 @@ export class PredictV1Controller {
 
   /**
    * POST /predict
-   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan?, keywords?, intentContext?, exclude? }
+   * Body: { sessionId, tenant, agentId?, keyRemtk?, text, source: "human"|"agent", priorPlan?, keywords?, intentContext?, exclude? }
+   * Headers: key-remtk / x-remtk-key
    * Respuesta: { tools, complexity, modelSize, rankedScores }
-   *
-   * `exclude` omite del resultado las herramientas ya ofrecidas en una pasada
-   * previa (reintento del mini-agente con otras palabras clave).
-   * `intentContext` amplía el pool de candidatas con la interpretación interna que el
-   * consumidor produjo antes de formularla (no reordena la consulta).
    */
   @Post("predict")
   @HttpCode(200)
-  async predict(@Body() body: Record<string, unknown>): Promise<unknown> {
+  async predict(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
     const b = body ?? {};
-    const { sessionId, tenant, text, source, priorPlan, history, keywords, exclude, intentContext } = b;
-    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
-      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    const { tenant, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { sessionId, text, source, priorPlan, history, keywords, exclude, intentContext } = b;
+    if (typeof sessionId !== "string" || !tenant || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant (o key-remtk) y text (string) requeridos" });
     }
     try {
       return await this.ctx.orchestrator.predict({
@@ -106,7 +116,7 @@ export class PredictV1Controller {
         tenant,
         text,
         source: source === "agent" ? "agent" : "human",
-        agentId: normalizeAgentId(b.agentId),
+        agentId,
         priorPlan: typeof priorPlan === "string" ? priorPlan : undefined,
         intentContext: typeof intentContext === "string" ? intentContext : undefined,
         keywords: Array.isArray(keywords) ? asNames(keywords) : undefined,
@@ -124,21 +134,32 @@ export class PredictV1Controller {
 
   /**
    * POST /tools
-   * Body: { tenant, agentId?, tools: ToolDefinition[] }
+   * Body: { tenant, agentId?, keyRemtk?, tools: ToolDefinition[] }
+   * Headers: key-remtk / x-remtk-key
    * Respuesta: { indexed: number }
    */
   @Post("tools")
   @HttpCode(200)
-  async registerTools(@Body() body: Record<string, unknown>): Promise<unknown> {
+  async registerTools(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
     const b = body ?? {};
-    if (typeof b.tenant !== "string" || !Array.isArray(b.tools)) {
-      throw new BadRequestException({ error: "tenant y tools[] requeridos" });
+    const { tenant, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    if (!tenant || !Array.isArray(b.tools)) {
+      throw new BadRequestException({ error: "tenant (o key-remtk) y tools[] requeridos" });
     }
     try {
       return await this.ctx.orchestrator.registerTools(
-        b.tenant,
+        tenant,
         b.tools as ToolDefinition[],
-        normalizeAgentId(b.agentId),
+        agentId,
       );
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
@@ -147,26 +168,34 @@ export class PredictV1Controller {
 
   /**
    * POST /predict/feedback
-   * Body: { tenant, agentId?, sessionId, text, used: string[], rejected?: string[] }
+   * Body: { tenant, agentId?, keyRemtk?, sessionId, text, used: string[], rejected?: string[] }
+   * Headers: key-remtk / x-remtk-key
    * Respuesta: { ok: true, events }
-   *
-   * `used` debe contener SOLO herramientas cuya ejecución confirmó éxito real
-   * (§8.1): reforzar las meramente predichas realimentaría los errores.
    */
   @Post("predict/feedback")
   @HttpCode(200)
-  feedback(@Body() body: Record<string, unknown>): unknown {
+  feedback(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): unknown {
     const b = body ?? {};
-    const { sessionId, tenant, text } = b;
-    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
-      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    const { tenant, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { sessionId, text } = b;
+    if (typeof sessionId !== "string" || !tenant || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant (o key-remtk) y text (string) requeridos" });
     }
     try {
       return this.ctx.orchestrator.feedback({
         sessionId,
         tenant,
         text,
-        agentId: normalizeAgentId(b.agentId),
+        agentId,
         used: asNames(b.used),
         rejected: asNames(b.rejected),
       });
@@ -180,9 +209,11 @@ export class PredictV1Controller {
   toolsCount(
     @Query("tenant") tenant?: string,
     @Query("agentId") agentId?: string,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
   ): { count: number } {
-    const t = typeof tenant === "string" ? tenant : "";
-    return { count: t ? this.ctx.orchestrator.countTools(t, normalizeAgentId(agentId)) : 0 };
+    const parsed = parseKeyRemtk(keyRemtkHeader ?? xRemtkKeyHeader, tenant, agentId);
+    return { count: parsed.tenant ? this.ctx.orchestrator.countTools(parsed.tenant, parsed.agentId) : 0 };
   }
 
   /** GET /tools/ready?tenant=&agentId= → espera a que el warm-up del scope concluya */
@@ -190,33 +221,68 @@ export class PredictV1Controller {
   async toolsReady(
     @Query("tenant") tenant?: string,
     @Query("agentId") agentId?: string,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
   ): Promise<{ ready: boolean }> {
-    const t = typeof tenant === "string" ? tenant : "";
-    if (t) await this.ctx.orchestrator.waitForWarmup(t, normalizeAgentId(agentId));
+    const parsed = parseKeyRemtk(keyRemtkHeader ?? xRemtkKeyHeader, tenant, agentId);
+    if (parsed.tenant) await this.ctx.orchestrator.waitForWarmup(parsed.tenant, parsed.agentId);
     return { ready: true };
   }
 
   /**
    * POST /memory/predict
-   * Body: { sessionId, tenant, agentId?, text, limit }
-   * Respuesta: { memories, topicShift, topicScore, modelSize, rankedScores }
+   * Body: { sessionId, tenant, agentId?, keyRemtk?, text, limit }
+   * Headers: key-remtk / x-remtk-key
+   * Respuesta: { memories, topicShift, topicScore, modelSize, rankedScores, activeEntities, skillContext }
    */
   @Post("memory/predict")
   @HttpCode(200)
-  async predictMemory(@Body() body: Record<string, unknown>): Promise<unknown> {
+  async predictMemory(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
     const b = body ?? {};
-    const { sessionId, tenant, text } = b;
-    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
-      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    const { tenant, agentId, scopeKey } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { sessionId, text } = b;
+    if (typeof sessionId !== "string" || !tenant || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant (o key-remtk) y text (string) requeridos" });
     }
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
     try {
-      return await this.ctx.orchestrator.predictMemory({
+      const memRes = await this.ctx.orchestrator.predictMemory({
         sessionId,
         tenant,
         text,
-        agentId: normalizeAgentId(b.agentId),
+        agentId,
         limit: Number.isFinite(Number(b.limit)) ? Number(b.limit) : 8,
       });
+
+      // Enriquecer con el contexto activo de habilidades y entidades de sesión para remtk-memory
+      const activeEntities = skillService.getSessionEntities(sessionId, scopeKey);
+      let skillContext;
+      try {
+        skillContext = await skillService.predictSkill({
+          sessionId,
+          tenant,
+          agentId,
+          keyRemtk: scopeKey,
+          text,
+        });
+      } catch {
+        // Fallback suave
+      }
+
+      return {
+        ...memRes,
+        activeEntities,
+        skillContext,
+      };
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
     }
@@ -241,23 +307,34 @@ export class PredictV1Controller {
 
   /**
    * POST /interest
-   * Body: { sessionId, tenant, agentId?, text, anchors?: string[], limit? }
+   * Body: { sessionId, tenant, agentId?, keyRemtk?, text, anchors?: string[], limit? }
+   * Headers: key-remtk / x-remtk-key
    * Respuesta: { interestScore, topic, topicScore, intentScore, matches, method }
    */
   @Post("interest")
   @HttpCode(200)
-  async predictInterest(@Body() body: Record<string, unknown>): Promise<unknown> {
+  async predictInterest(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
     const b = body ?? {};
-    const { sessionId, tenant, text } = b;
-    if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
-      throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
+    const { tenant, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { sessionId, text } = b;
+    if (typeof sessionId !== "string" || !tenant || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant (o key-remtk) y text (string) requeridos" });
     }
     try {
       return await this.ctx.orchestrator.predictInterest({
         sessionId,
         tenant,
         text,
-        agentId: normalizeAgentId(b.agentId),
+        agentId,
         anchors: Array.isArray(b.anchors)
           ? (b.anchors as unknown[]).filter((a): a is string => typeof a === "string")
           : undefined,
@@ -266,6 +343,157 @@ export class PredictV1Controller {
     } catch (err) {
       throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
     }
+  }
+
+  /**
+   * POST /skills/learn
+   * Registra o refuerza una habilidad aprendida con su grafo y anclas de parámetros.
+   * Headers: key-remtk / x-remtk-key
+   */
+  @Post("skills/learn")
+  @HttpCode(200)
+  async learnSkill(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
+    const b = body ?? {};
+    const { tenant, agentId, scopeKey } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { id, name, description, intentSummary, tools, parameterGrounding } = b;
+    if (
+      !tenant ||
+      typeof id !== "string" ||
+      typeof name !== "string" ||
+      !Array.isArray(tools)
+    ) {
+      throw new BadRequestException({ error: "tenant (o key-remtk), id, name y tools[] son requeridos" });
+    }
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
+    try {
+      return await skillService.learnSkill(
+        scopeKey,
+        {
+          id,
+          name,
+          description: typeof description === "string" ? description : name,
+          intentSummary: typeof intentSummary === "string" ? intentSummary : name,
+          tools: asNames(tools),
+          parameterGrounding: parameterGrounding as Record<string, { id: string; name: string }[]> | undefined,
+        },
+        agentId,
+      );
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
+  /**
+   * POST /skills/predict
+   * Predice la habilidad adecuada y resuelve entidades y parámetros pre-calculados.
+   * Headers: key-remtk / x-remtk-key
+   */
+  @Post("skills/predict")
+  @HttpCode(200)
+  async predictSkill(
+    @Body() body: SkillPredictInput,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
+    const b = body ?? {};
+    const { tenant, agentId, scopeKey } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      b.tenant,
+      b.agentId,
+      b.keyRemtk,
+    );
+    const { sessionId, text } = b;
+    if (typeof sessionId !== "string" || !tenant || typeof text !== "string") {
+      throw new BadRequestException({ error: "sessionId, tenant (o key-remtk) y text son requeridos" });
+    }
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
+    try {
+      return await skillService.predictSkill({
+        ...b,
+        tenant,
+        agentId,
+        keyRemtk: scopeKey,
+      });
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
+  /**
+   * POST /entities/track
+   * Registra o actualiza el ciclo de vida y acción pendiente de una entidad en la sesión.
+   * Headers: key-remtk / x-remtk-key
+   */
+  @Post("entities/track")
+  @HttpCode(200)
+  async trackEntity(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): Promise<unknown> {
+    const b = body ?? {};
+    const { scopeKey, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof b.tenant === "string" ? b.tenant : undefined,
+      typeof b.agentId === "string" ? b.agentId : undefined,
+      typeof b.keyRemtk === "string" ? b.keyRemtk : (typeof b.key_remtk === "string" ? b.key_remtk : undefined),
+    );
+    const { sessionId, id, type, name, slug, state, attributes } = b;
+    if (typeof sessionId !== "string" || typeof id !== "string" || typeof type !== "string" || typeof name !== "string") {
+      throw new BadRequestException({ error: "sessionId, id, type y name son requeridos" });
+    }
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
+    try {
+      return await skillService.trackEntity(
+        sessionId,
+        {
+          id,
+          type,
+          name,
+          slug: typeof slug === "string" ? slug : undefined,
+          state: typeof state === "object" && state !== null ? (state as any) : undefined,
+          attributes: typeof attributes === "object" && attributes !== null ? (attributes as any) : undefined,
+        },
+        scopeKey,
+        agentId,
+      );
+    } catch (err) {
+      throw new InternalServerErrorException({ error: String((err as Error)?.message ?? err) });
+    }
+  }
+
+  /**
+   * POST /entities/clear
+   * Limpia el grafo de entidades de una sesión específica.
+   * Headers: key-remtk / x-remtk-key
+   */
+  @Post("entities/clear")
+  @HttpCode(200)
+  clearEntities(
+    @Body() body: Record<string, unknown>,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): { ok: boolean } {
+    const { scopeKey, agentId } = parseKeyRemtk(
+      keyRemtkHeader ?? xRemtkKeyHeader,
+      typeof body?.tenant === "string" ? body.tenant : undefined,
+      typeof body?.agentId === "string" ? body.agentId : undefined,
+      typeof body?.keyRemtk === "string" ? body.keyRemtk : (typeof body?.key_remtk === "string" ? body.key_remtk : undefined),
+    );
+    const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+    if (!sessionId) throw new BadRequestException({ error: "sessionId requerido" });
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
+    skillService.clearSession(sessionId, scopeKey, agentId);
+    return { ok: true };
   }
 
   /**

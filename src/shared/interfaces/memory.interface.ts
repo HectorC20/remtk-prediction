@@ -14,9 +14,12 @@ export interface MemoryCandidate {
   retrievalScore: number;
 }
 
+import type { SessionEntityState, SkillPredictResult } from "./skill.interface";
+
 export interface MemoryPredictionInput {
   sessionId: string;
-  tenant: string;
+  tenant?: string;
+  keyRemtk?: string;
   text: string;
   limit: number;
   /** Agente opcional: ausente/'' ⇒ filtro legacy por userId; 'general' ⇒ userId + agente general. */
@@ -29,6 +32,8 @@ export interface MemoryPredictionResult {
   topicScore: number;
   modelSize: string;
   rankedScores: number[];
+  skillContext?: SkillPredictResult;
+  activeEntities?: SessionEntityState[];
 }
 
 /**

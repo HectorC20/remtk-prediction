@@ -7,6 +7,7 @@ import type { SessionStateCacheService } from "../../predict/services/session-st
 import type { TurnClassifier } from "../../predict/turn-classifier";
 import type { QdrantService } from "../../qdrant/qdrant-service";
 import type { LexicalProfileService } from "../../predict/services/lexical-profile.service";
+import type { SkillMemoryService } from "../../predict/services/skill-memory.service";
 import { IPredictionOrchestrator } from "./orchestrator.interface";
 
 export interface System {
@@ -20,5 +21,7 @@ export interface System {
   debugger: Debugger;
   /** Perfil léxico aprendido por canal (cuarta señal del ranking). */
   lexical: LexicalProfileService;
-  orchestrator: IPredictionOrchestrator; // <-- Cambia PredictionOrchestrator por IPredictionOrchestrator
+  orchestrator: IPredictionOrchestrator;
+  /** Memoria de Habilidades y Grafo de Entidades Paramétricas */
+  skillMemory?: SkillMemoryService;
 }

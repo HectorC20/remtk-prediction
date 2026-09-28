@@ -25,6 +25,7 @@ import { SessionStateCacheService } from "./predict/services/session-state-cache
 import { RerankService } from "./predict/services/rerank.service";
 import { TurnClassifier } from "./predict/turn-classifier";
 import { QdrantService } from "./qdrant/qdrant-service";
+import { SkillMemoryService } from "./predict/services/skill-memory.service";
 import { createOrchestrator } from "./shared/factory/orchestrator.factory";
 import type { System } from "./shared/interfaces/system.interface";
 import { JuicioService } from "./juicio/juicio.service";
@@ -88,6 +89,8 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     juicio,
   });
 
+  const skillMemory = new SkillMemoryService(engine);
+
   return {
     engine,
     qdrant,
@@ -99,5 +102,6 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     debugger: debugger_,
     lexical,
     orchestrator,
+    skillMemory,
   };
 }

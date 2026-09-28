@@ -35,8 +35,10 @@ export { SessionStateCacheService } from "./predict/services/session-state-cache
 export { RerankService, adaptiveThreshold, estimateComplexity, topologicalSort, type RerankResult, type GraphRerankResult } from "./predict/services/rerank.service";
 export { ConfirmationCache } from "./predict/services/confirm-cache.service";
 export { Debugger } from "./predict/helper/debugger.helper";
-export { extractQueryKeywords, toolKeywords, normalizeToken } from "./predict/keywords";
 export { MemoryCandidate, MemoryDefinition } from "src/shared/interfaces/index";
+export { SkillMemoryService } from "./predict/services/skill-memory.service";
+export { RemtkMemorySkillsAdapter, type RemtkMemoryAdapterConfig } from "./predict/services/remtk-memory-skills.adapter";
+export { parseKeyRemtk, resolveScopeKey, normalizeAgentId } from "./shared/scope";
 // Tipos del contrato.
 export type {
   ToolDefinition,
@@ -53,4 +55,12 @@ export type {
   TenantToolGraph,
   GraphPredictionResult,
 } from "./shared/interfaces/index";
+export type {
+  SkillDefinition,
+  ParameterAnchor,
+  SessionEntityState,
+  SkillPredictInput,
+  SkillPredictResult,
+  GroundedParameterMatch,
+} from "./shared/interfaces/skill.interface";
 export type { ModelSize } from "./shared/constants/predict/version.constants";
