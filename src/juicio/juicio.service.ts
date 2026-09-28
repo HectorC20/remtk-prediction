@@ -18,9 +18,16 @@ import type { AppConfig } from "src/config";
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log } from "src/logger";
 import type { ChatMessage, GraphPredictionResult, ToolDefinition } from "src/shared/interfaces";
+import type { GraphEdge } from "src/shared/interfaces/graph.interface";
 import type { JuicioContext, JuicioPostDiag } from "src/shared/interfaces/juicio.interface";
 import { SessionStateCacheService } from "src/predict/services/session-state-cache.service";
-import { adaptiveThreshold, topologicalSort } from "src/predict/services/rerank.service";
+import {
+  adaptiveThreshold,
+  topologicalSort,
+  activePluginFamilies,
+  isForeignFamily,
+} from "src/predict/services/rerank.service";
+import { matchTokenSet, nameAffinity } from "src/predict/keywords";
 import { CalibrationService } from "src/predict/services/calibration.service";
 import { AbstencionService } from "./services/abstencion.service";
 import { CrossEncoderService } from "./services/cross-encoder.service";
@@ -313,6 +320,13 @@ export class JuicioService {
     }
     adjusted.sort((a, b) => b.score - a.score);
 
+    const catalogTools = scopeKey ? this.especificidad.catalogTools(scopeKey) : [];
+    const scopeEdges = scopeKey ? this.especificidad.graphEdges(scopeKey) : [];
+    const queryTokens = matchTokenSet(effectiveText);
+    const allCatalogNames =
+      catalogTools.length > 0 ? catalogTools.map((t) => t.name) : adjusted.map((a) => a.tool.name);
+    const families = activePluginFamilies(queryTokens, allCatalogNames, allCatalogNames);
+
     // (5b) Alineación por sub-ventanas y anclas token-a-herramienta (ColBERT doblemente
     //      centrado) para consultas multi-intención (≥ 2 sub-ventanas ganadoras).
     const winPeaks = await this.especificidad.subWindowPeaks(scopeKey, effectiveText);
@@ -322,8 +336,13 @@ export class JuicioService {
         this.config.adaptiveMinScore,
         top1Score - this.config.adaptiveGapThreshold * 2,
       );
-      // Anclas a nivel de token sobre las herramientas del pool candidato
-      const candidateTools = result.tools.length > 0 ? result.tools : this.especificidad.catalogTools(scopeKey);
+      // Anclas a nivel de token sobre las herramientas del pool candidato (respetando la puerta de familia y afinidad de dominio)
+      const candidateTools = (result.tools.length > 0 ? result.tools : catalogTools).filter((t) => {
+        if (isForeignFamily(families, t.name)) return false;
+        const isSameGroup = !adjusted[0]?.tool.group || !t.group || t.group === adjusted[0].tool.group;
+        const hasAffinity = nameAffinity(queryTokens, t.name) > 0;
+        return isSameGroup || hasAffinity;
+      });
       const tokenAnchors = await this.maxsim.anchorTools(scopeKey, effectiveText, candidateTools);
       for (const [toolName, anchor] of tokenAnchors.entries()) {
         if (!winPeaks.has(toolName) && anchor.score >= relevanceFloor) {
@@ -339,6 +358,10 @@ export class JuicioService {
       for (let idx = 0; idx < winEntries.length; idx++) {
         const [toolName, peak] = winEntries[idx];
         if (excludedLower.has(toolName.toLowerCase())) continue;
+        if (isForeignFamily(families, toolName)) continue;
+        const isSameGroup = !adjusted[0]?.tool.group || !peak.tool.group || peak.tool.group === adjusted[0].tool.group;
+        const hasAffinity = nameAffinity(queryTokens, toolName) > 0;
+        if (!isSameGroup && !hasAffinity) continue;
         if (peak.score < relevanceFloor) continue;
         // La herramienta de sub-ventana preserva su afinidad real acotada bajo el líder
         const cappedScore = Math.min(peak.score, top1Score - 0.005);
@@ -377,9 +400,11 @@ export class JuicioService {
     // de podar, las anclas de sub-ventana llenaban las 5 salidas y la mutación
     // sobrevivia sola — sin los listados que le dan los identificadores.
     const byName = new Map<string, ToolDefinition>();
+    for (const t of catalogTools) byName.set(t.name, t);
     for (const t of result.tools) byName.set(t.name, t);
     for (const a of adjusted) byName.set(a.tool.name, a.tool);
-    const edges = result.graph?.edges ?? [];
+
+    const edges = scopeEdges.length > 0 ? scopeEdges : (result.graph?.edges ?? []);
     const excludedLower = new Set((params.exclude ?? []).map((e) => e.toLowerCase()));
     const prereqsOf = (name: string): string[] => {
       const declared = byName.get(name)?.prerequisites ?? [];
@@ -409,19 +434,28 @@ export class JuicioService {
     const floorScore = survivors.length > 0
       ? Math.min(...survivors.map((a) => a.score))
       : 0;
-    const prereqNames = [...required].sort(
-      (a, b) => (scoreByName.get(b) ?? floorScore) - (scoreByName.get(a) ?? floorScore),
-    );
-    const finalNames = [...prereqNames];
+    const finalNames: string[] = [];
+    
     for (const a of survivors) {
       if (finalNames.length >= maxOutput) break;
-      if (!required.has(a.tool.name)) finalNames.push(a.tool.name);
+      if (!finalNames.includes(a.tool.name)) finalNames.push(a.tool.name);
+      
+      const myPrereqs = prereqsOf(a.tool.name);
+      const sortedMyPrereqs = [...myPrereqs].sort(
+        (p1, p2) => (scoreByName.get(p2) ?? floorScore) - (scoreByName.get(p1) ?? floorScore)
+      );
+      
+      for (const req of sortedMyPrereqs) {
+        if (finalNames.length >= maxOutput) break;
+        if (!finalNames.includes(req)) finalNames.push(req);
+      }
     }
     const ordered = topologicalSort(finalNames.slice(0, maxOutput), edges, scoreByName);
     const tools = ordered
       .map((name) => byName.get(name))
       .filter((t): t is ToolDefinition => t !== undefined);
     const rankedScores = ordered.map((name) => scoreByName.get(name) ?? floorScore);
+    const activeEdges = edges.filter((e) => ordered.includes(e.from) && ordered.includes(e.to));
 
     const judged: GraphPredictionResult = {
       ...result,
@@ -432,7 +466,7 @@ export class JuicioService {
         ...result.graph,
         nodes: ordered,
         executionOrder: ordered,
-        edges: edges.filter((e) => ordered.includes(e.from) && ordered.includes(e.to)),
+        edges: activeEdges,
       },
       context: result.context
         ? {

@@ -34,6 +34,7 @@ import { CalibrationService } from "./calibration.service";
 import type { GraphRerankResult, RerankResult } from "src/shared/interfaces";
 
 export type { RerankResult, GraphRerankResult };
+export { isForeignFamily };
 
 /** Catálogo mínimo para resolver definiciones por nombre (evita acoplar Qdrant). */
 type Catalog = { get(name: string): ToolDefinition | undefined };
@@ -45,7 +46,7 @@ type Catalog = { get(name: string): ToolDefinition | undefined };
  * 1 solo miembro) no forma un namespace de complemento y no debe penalizar al
  * resto del catálogo en consultas multi-intención.
  */
-function activePluginFamilies(
+export function activePluginFamilies(
   queryTokens: Set<string> | undefined,
   names: string[],
   catalogNames: string[] = names,
@@ -499,13 +500,36 @@ export class RerankService {
         }
       }
     }
-    for (const p of prereqsToAdd) {
-      if (selectedSet.size >= maxAdaptive) break;
-      selectedSet.add(p);
-      if (!propagated.has(p) || (propagated.get(p) ?? 0) === 0) {
-        propagated.set(p, 0.85);
+    const finalSelected = new Set<string>();
+    
+    for (const name of pinned) {
+      const actual = nodeNameByLower.get(name.toLowerCase());
+      if (actual) finalSelected.add(actual);
+    }
+
+    const sortedSelected = [...selectedSet].sort((a, b) => (propagated.get(b) ?? 0) - (propagated.get(a) ?? 0));
+    
+    for (const s of sortedSelected) {
+      if (finalSelected.size >= maxAdaptive) break;
+      finalSelected.add(s);
+      
+      const myPrereqs = edges
+        .filter((e) => e.type === "PREREQUISITE" && e.to === s)
+        .map((e) => e.from)
+        .filter((from) => graph.nodes.has(from) && (!excluded || !excluded.has(from.toLowerCase())));
+        
+      const sortedMyPrereqs = [...new Set(myPrereqs)].sort((a, b) => (propagated.get(b) ?? 0) - (propagated.get(a) ?? 0));
+      for (const p of sortedMyPrereqs) {
+        if (finalSelected.size >= maxAdaptive) break;
+        finalSelected.add(p);
+        if (!propagated.has(p) || (propagated.get(p) ?? 0) === 0) {
+          propagated.set(p, 0.85);
+        }
       }
     }
+
+    selectedSet.clear();
+    for (const f of finalSelected) selectedSet.add(f);
 
     // 7. Orden topológico (Kahn) sobre las aristas PREREQUISITE del subgrafo. Las
     //    herramientas nombradas explícitamente desempatan al frente; sus

@@ -19,6 +19,7 @@ import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import type { AppConfig } from "src/config";
 import type { ToolGraphCacheService } from "src/predict/services/graph-cache.service";
 import type { ToolDefinition } from "src/shared/interfaces/domain.interface";
+import type { GraphEdge } from "src/shared/interfaces/graph.interface";
 
 export class EspecificidadService {
   /** scopeKey → (nombre → difusión) + media del scope. */
@@ -43,6 +44,11 @@ export class EspecificidadService {
     const graph = this.graphCache.get(scopeKey);
     if (!graph) return [];
     return [...graph.nodes.values()].map((n) => n.definition);
+  }
+
+  /** Devuelve las aristas del grafo del scope. */
+  graphEdges(scopeKey: string): GraphEdge[] {
+    return this.graphCache.edges(scopeKey);
   }
 
   /**
