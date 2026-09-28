@@ -84,17 +84,19 @@ export class PredictV1Controller {
 
   /**
    * POST /predict
-   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan?, keywords?, exclude? }
+   * Body: { sessionId, tenant, agentId?, text, source: "human"|"agent", priorPlan?, keywords?, intentContext?, exclude? }
    * Respuesta: { tools, complexity, modelSize, rankedScores }
    *
    * `exclude` omite del resultado las herramientas ya ofrecidas en una pasada
    * previa (reintento del mini-agente con otras palabras clave).
+   * `intentContext` amplía el pool de candidatas con la interpretación interna que el
+   * consumidor produjo antes de formularla (no reordena la consulta).
    */
   @Post("predict")
   @HttpCode(200)
   async predict(@Body() body: Record<string, unknown>): Promise<unknown> {
     const b = body ?? {};
-    const { sessionId, tenant, text, source, priorPlan, history, keywords, exclude } = b;
+    const { sessionId, tenant, text, source, priorPlan, history, keywords, exclude, intentContext } = b;
     if (typeof sessionId !== "string" || typeof tenant !== "string" || typeof text !== "string") {
       throw new BadRequestException({ error: "sessionId, tenant y text (string) requeridos" });
     }
@@ -106,6 +108,7 @@ export class PredictV1Controller {
         source: source === "agent" ? "agent" : "human",
         agentId: normalizeAgentId(b.agentId),
         priorPlan: typeof priorPlan === "string" ? priorPlan : undefined,
+        intentContext: typeof intentContext === "string" ? intentContext : undefined,
         keywords: Array.isArray(keywords) ? asNames(keywords) : undefined,
         exclude: Array.isArray(exclude) ? asNames(exclude) : undefined,
         history: Array.isArray(history)

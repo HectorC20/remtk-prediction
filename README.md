@@ -148,6 +148,7 @@ umbral adaptativo + recorte final según `MAX_OUTPUT_TOOLS`).
 | `source` | `"human"` \| `"agent"` | no | Origen del turno |
 | `priorPlan` | string (JSON) | no | Plan previo para turnos de confirmación |
 | `keywords` | string[] | no | Palabras clave que acompañan al texto (p. ej. las que el planificador delega a cada mini-agente). Se normalizan/deduplican y se anexan a la consulta para afinar el recall léxico y el match cross-idioma |
+| `intentContext` | string | no | Prosa interna que el consumidor produjo ANTES de preguntar (el pre-pensamiento del planificador). No es una orden de herramienta: se parte por ideas y los segmentos más próximos a la consulta (`MAX_INTENT_SEGMENTS`, con tope de caracteres `MAX_INTENT_CONTEXT_CHARS`) **amplían el pool de candidatas** —entran solo las que la consulta cruda no traía, sin tocar su score ni su orden—. `text` sigue siendo lo que se pidió y lo que puntúa |
 | `history` | `{role,content}[]` | no | Mensajes previos de la conversación (contexto) |
 
 **Respuesta 200:**

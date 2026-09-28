@@ -106,6 +106,15 @@ export interface PredictionInput {
    */
   keywords?: string[];
   /**
+   * Enriquecimiento interno de la consulta: la interpretación que el consumidor
+   * produjo ANTES de formularla (el pre-pensamiento del planificador por
+   * subtarea). Es RECALL, no ranking: amplía el pool de candidatas con las que
+   * la consulta no traía, sin tocar el score ni el orden de las presentes. A
+   * diferencia de `keywords` no ancla herramientas por nombre porque es prosa,
+   * no una decisión tomada.
+   */
+  intentContext?: string;
+  /**
    * Nombres de herramientas a OMITIR del resultado. Es la palanca de la
    * segunda pasada del mini-agente: ya se ofrecieron esas herramientas y no
    * resolvieron la subtarea, así que se descartan antes del umbral adaptativo
@@ -175,4 +184,8 @@ export interface Trace {
   juicioSignals?: { maxsim: boolean; reranker: boolean; specificity: boolean };
   /** El warm-up del scope no concluyó dentro de `PREDICT_WARMUP_WAIT_MS`. */
   warmupWaitTimeout?: boolean;
+  /** Caracteres de `intentContext` que se conservaron tras seleccionar segmentos. */
+  intentContextChars?: number;
+  /** Candidatas que el enriquecimiento metió en el pool sin tocar las de la consulta. */
+  intentPoolAdded?: number;
 }

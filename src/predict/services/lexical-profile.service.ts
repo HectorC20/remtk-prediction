@@ -177,6 +177,16 @@ export class LexicalProfileService {
    * `learnWeightEfectivo`: 0 si la capa está desactivada, el canal no tiene
    * perfil o aún no alcanzó `LEARN_MIN_EVENTS` (§6.5) — con él en 0 la
    * predicción es idéntica a la de hoy.
+   *
+   * Lee SOLO evidencia de uso (`sources === "learned"`) y la normaliza por la
+   * masa informativa de la consulta, no por el máximo de la tanda. Medido en
+   * vivo sobre el catálogo del log: con la semilla en el mismo índice la lectura
+   * devolvía score aprendido para las 196 tools (`learnTerms=196`) y el máximo de
+   * la tanda regalaba el peso entero de la capa (+0.25) a la herramienta que
+   * había coincidido en dos términos de quince. Así, tres eventos de una subtarea
+   * de consulta hermanaban su refuerzo en la subtarea de escritura —por repetir
+   * ambas el nombre de la entidad— y `mitumbes_item_crear` caía de la tanda de
+   * cinco: §6.5 prometía exactamente lo contrario.
    */
   score(scopeKey: string, prompt: string): LearnedScores {
     const terms = extractQueryKeywords(prompt);
@@ -192,27 +202,38 @@ export class LexicalProfileService {
     const now = Date.now();
     const accum = new Map<string, number>();
     let budget = Math.max(0, this.config.learnMaxPostings);
+    // Techo de la cobertura: Σ idf de los términos de la consulta que tienen
+    // postings. 1.0 exige evidencia aprendida en todos ellos.
+    let masa = 0;
 
     outer: for (const term of terms) {
       const posting = profile.postings.get(term);
       if (!posting) continue;
       const idf = this.idf(profile, term);
+      masa += idf;
       for (const name of posting) {
         if (budget-- <= 0) break outer;
         const lexicon = profile.tools.get(name);
         if (!lexicon) continue;
         this.decayTool(lexicon, now);
+        if (lexicon.sources.get(term) !== "learned") continue;
         const w = lexicon.terms.get(term) ?? 0;
         if (w <= 0) continue;
-        accum.set(name, (accum.get(name) ?? 0) + idf * w);
+        // Un término aporta como mucho lo que vale: `observe` acumula `η·idf` por
+        // evento y, sin tope, al tercer refuerzo `idf·w` desbordaba la masa de la
+        // consulta y el `min(1, …)` devolvía el peso entero de la capa a una
+        // herramienta que solo cubría una fracción de los términos. Medido: el
+        // éxito de `mitumbes_item_crear` en el turno (2) llegaba al (3) con +0.25
+        // completo y desalojaba `mitumbes_item_imagen_adjuntar` de la tanda.
+        accum.set(name, (accum.get(name) ?? 0) + Math.min(w, idf));
       }
     }
     if (accum.size === 0) return { scores: new Map(), weight: 0, terms };
 
-    // Normalización a [0,1] por el máximo de la tanda, igual que el BM25 (§6.2).
-    const max = Math.max(...accum.values());
+    // Cobertura en [0,1] contra la masa de la consulta, topada: el refuerzo
+    // acumulado de un término puede superar su idf.
     const scores = new Map<string, number>();
-    for (const [name, value] of accum) scores.set(name, max > 0 ? value / max : 0);
+    for (const [name, value] of accum) scores.set(name, Math.min(1, masa > 0 ? value / masa : 0));
     return { scores, weight, terms };
   }
 

@@ -314,6 +314,39 @@ test("§1-F sin regresión: con la capa inactiva el ranking es idéntico al de h
   );
 });
 
+/**
+ * §1-G — La lectura solo devuelve evidencia de uso.
+ *
+ * Medido en el catálogo real del log: la lectura recorría los postings de la
+ * SEMILLA como si fueran refuerzo, así que devolvía score aprendido para las 196
+ * tools (`learnTerms=196`) y repartía `+learnWeight` entre herramientas que
+ * ningún turno usó nunca. Con tres eventos de una subtarea hermana, ese reparto
+ * desalojaba a `mitumbes_item_crear` de la tanda de cinco (§6.5 prohíbe justo
+ * eso). La semilla sigue siendo el sustrato que `observe` refuerza; dejar de
+ * contarla como evidencia es lo que devuelve la garantía.
+ */
+test("§1-G la lectura no devuelve evidencia que no existe: la semilla del catálogo no puntúa", () => {
+  const cfg = makeConfig();
+  const lexical = new LexicalProfileService(cfg);
+  const { tools } = scenario();
+  lexical.seedScope(TRAINED_SCOPE, tools);
+
+  // Semilla cargada: hay postings, no hay uso.
+  const sembrado = lexical.score(TRAINED_SCOPE, LOG_PROMPT);
+  assert.equal(sembrado.weight, 0, "sin eventos la capa pesa exactamente cero (§6.5)");
+  assert.equal(sembrado.scores.size, 0, "la semilla no es evidencia de uso");
+
+  const entrenada = train(cfg, TRAINED_SCOPE, LEARN_MIN_EVENTS);
+  const aprendido = entrenada.score(TRAINED_SCOPE, LOG_PROMPT);
+  assert.equal(aprendido.weight, LEARN_WEIGHT);
+  assert.deepEqual(
+    [...aprendido.scores.keys()],
+    ["schedule_task"],
+    `la lectura debe limitarse a la herramienta reforzada por el uso, no al catálogo sembrado ` +
+      `(${aprendido.scores.size} tools puntuadas de ${tools.length})`,
+  );
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // §2 E2E — el contrato completo sobre el puerto 6776
 // ───────────────────────────────────────────────────────────────────────────

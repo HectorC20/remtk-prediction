@@ -45,6 +45,8 @@ import {
   INTEREST_TOPIC_WEIGHT,
   INTEREST_TOP_MATCHES,
   MAX_HISTORY_MESSAGES,
+  MAX_INTENT_CONTEXT_CHARS,
+  MAX_INTENT_SEGMENTS,
   MAX_MESSAGE_CHARS,
   PREREQUISITE_WEIGHT,
   TOPIC_SHIFT_THRESHOLD,
@@ -230,7 +232,13 @@ export class PredictionOrchestrator {
       };
     }
 
-    const cachedPlan = this.confirmCache.get(input.sessionId);
+    // El cache de confirmacion es estado del DIÁLOGO: lo escribe un turno humano
+    // y lo consume su confirmacion ("hazlo"). Un /predict con source=agent es una
+    // SUBCONSULTA por subtarea dentro del MISMO sessionId del chat: si lee el
+    // cache recibe las herramientas de otra subtarea (y con ellas el resto de la
+    // consulta —enriquecida o no— queda sin evaluar).
+    const esAgente = input.source === "agent";
+    const cachedPlan = esAgente ? undefined : this.confirmCache.get(input.sessionId);
     const hasPendingPlan = !!cachedPlan;
 
     // ── Capa de juicio: NLI de estado condicionado (§1) + puerta (§3) + proyección topológica ──────
@@ -344,7 +352,9 @@ export class PredictionOrchestrator {
     }
 
     // Early exit: confirmación con plan cacheado previo (empty o nli_confirm).
-    if (turn === TurnType.ConfirmationEmpty || juicioCtx.resolvedBy === "nli_confirm") {
+    // Solo de un turno HUMANO: un /predict de agente trae su propia subtarea y
+    // debe juzgarse con ella.
+    if (!esAgente && (turn === TurnType.ConfirmationEmpty || juicioCtx.resolvedBy === "nli_confirm")) {
       this.debugger_.bump({ confirmGets: 1 });
       const cached = cachedPlan ?? this.confirmCache.get(input.sessionId);
       if (cached) {
@@ -365,6 +375,16 @@ export class PredictionOrchestrator {
     const effectiveText = juicioCtx.focusedText ?? text;
     const isAutonomous = juicioCtx.isAutonomousPivot === true;
     const needsHistory = !juicioCtx.historyGated || !isAutonomous;
+    // Enriquecimiento interno del consumidor (pre-pensamiento del planificador):
+    // ensancha la búsqueda SIN tocar `text`, que sigue siendo lo que se pidió. El
+    // bloque describe TODO el plan, así que se queda con los segmentos que más se
+    // pegan a esta consulta (ver `segmentosRelevantesDeIntent`) y entra solo por
+    // el recall léxico, nunca por el vector de la subtarea.
+    const intentText = await this.segmentosRelevantesDeIntent(
+      effectiveText,
+      input.intentContext,
+    );
+    if (intentText) trace.intentContextChars = intentText.length;
     const baseText =
       turn === TurnType.NewQuery
         ? needsHistory
@@ -372,6 +392,11 @@ export class PredictionOrchestrator {
           : effectiveText
         : input.priorPlan ?? this.withHistory(effectiveText, input.history);
     const promptText = this.withKeywords(baseText, input.keywords);
+    // Consulta con la que se BUSCA cuando hay enriquecimiento. No es la consulta
+    // con la que se PUNTÚA: `promptText`, su vector y sus tokens mandan, así que
+    // el bloque puede traer candidatas pero no moverle el lugar a ninguna
+    // (ver `recallAmpliado`).
+    const lexicalText = intentText ? `${promptText}\n${intentText}` : promptText;
 
     // Tokens de match de la consulta (incluidas las keywords delegadas): son la
     // señal con la que el rerank mide la afinidad contra el NOMBRE de cada
@@ -406,6 +431,21 @@ export class PredictionOrchestrator {
     } catch (err) {
       warn(`[pipeline] estado de sesión degradado: ${String((err as Error)?.message ?? err)}`);
     }
+    // Un /predict de agente es una SUBCONSULTA por subtarea dentro del MISMO
+    // sessionId del chat, y el suavizado 70/30 de z_t le heredaría el tema de las
+    // OTRAS subtareas del plan. Medido en `agent-secuencia-imagen.test.mjs`: la
+    // subtarea de escritura, séptima llamada de la sesión, perdía a
+    // `mitumbes_item_imagen_adjuntar` en la tanda por esa herencia y no por su
+    // consulta —en sesión fresca el mismo texto la devuelve primera—. La
+    // subconsulta se basta: se juzga por su propio vector.
+    if (esAgente) {
+      try {
+        const fresco = await this.engine.embedQuery(promptText, undefined, { high: true });
+        zt = EmbeddingEngineService.normalizeL2(fresco.embedding);
+      } catch (err) {
+        warn(`[pipeline] subconsulta sin estado fresco: ${String((err as Error)?.message ?? err)}`);
+      }
+    }
 
     // Warm-up en vuelo: `POST /tools` responde indexando y construye el grafo en
     // background. Sin esta espera (acotada), el primer turno de un catálogo frío
@@ -425,7 +465,12 @@ export class PredictionOrchestrator {
 
     // Ruta topológica: el grafo del scope está precomputado en POST /tools.
     if (graph && zt) {
-      const lexicalScores = await this.lexicalScores(scopeKey, promptText);
+      const { scores: lexicalScores, agregadas } = await this.recallAmpliado(
+        scopeKey,
+        promptText,
+        lexicalText,
+      );
+      if (agregadas) trace.intentPoolAdded = agregadas;
       const learned = this.lexical.score(scopeKey, promptText);
       const raw = this.rerank.graphFilter({
         zt,
@@ -454,7 +499,7 @@ export class PredictionOrchestrator {
       trace.learnTerms = learned.scores.size;
       this.debugger_.bump({ embeddingsCached: graph.nodes.size });
 
-      if (result.tools.length > 0) {
+      if (result.tools.length > 0 && !esAgente) {
         this.confirmCache.set(input.sessionId, result);
         this.debugger_.bump({ confirmSets: 1 });
       }
@@ -482,6 +527,10 @@ export class PredictionOrchestrator {
       modelSize = r.modelSize;
       recomputed = r.recomputed;
       cached = r.cached;
+      // La ruta plana NO amplía el pool con `intentContext`: aquí `reduce` elige y
+      // puntúa a la vez, así que recuperar con el bloque reescribiría el ranking de
+      // la consulta (lo que `recallAmpliado` evita en la topológica). Una
+      // subconsulta de agente llega caliente al grafo; esta es la ruta degradada.
     } catch (err) {
       warn(`[pipeline] keyword reduce degradado: ${String((err as Error)?.message ?? err)}`);
     }
@@ -529,8 +578,9 @@ export class PredictionOrchestrator {
     trace.complexity = result.complexity;
     trace.outputTools = result.tools.length;
 
-    // Cachea el plan para confirmaciones posteriores de la sesión.
-    if (result.tools.length > 0) {
+    // Cachea el plan para confirmaciones posteriores de la sesión (solo turnos
+    // humanos: el plan de una subtarea no es estado del diálogo).
+    if (result.tools.length > 0 && !esAgente) {
       this.confirmCache.set(input.sessionId, result);
       this.debugger_.bump({ confirmSets: 1 });
     }
@@ -703,6 +753,37 @@ export class PredictionOrchestrator {
       warn(`[pipeline] confirm léxica degradada: ${String((err as Error)?.message ?? err)}`);
     }
     return scores;
+  }
+
+  /**
+   * Pool de candidatas con el enriquecimiento interno ya aplicado, por UNIÓN
+   * estrictamente aditiva: lo que el bloque recupera entra SOLO donde la consulta
+   * cruda no trajo nada, con su propio score y sin tocar a las ya presentes.
+   *
+   * Medido con el catálogo real y la subtarea de escritura de
+   * `nest-2026-09-28 (3).log`: recuperar con el bloque enriquecido y mezclar los
+   * scores por máximo reordenaba a las ya presentes (`mitumbes_item_crear`
+   * 1.134→1.148), la normalización del pool cambiaba y la selección dejaba de
+   * 5 a 4 botando justamente `mitumbes_item_imagen_adjuntar`. El bloque describe
+   * TODO el plan, así que su búsqueda es otra consulta: amplía el pool, no
+   * reescribe el ranking de la consulta real.
+   */
+  private async recallAmpliado(
+    scopeKey: string,
+    promptText: string,
+    lexicalText: string,
+  ): Promise<{ scores: Map<string, number>; agregadas: number }> {
+    const scores = await this.lexicalScores(scopeKey, promptText);
+    if (lexicalText === promptText) return { scores, agregadas: 0 };
+    const ampliada = await this.lexicalScores(scopeKey, lexicalText);
+    let agregadas = 0;
+    for (const [name, score] of ampliada) {
+      if (scores.has(name)) continue;
+      scores.set(name, score);
+      agregadas++;
+    }
+    log(`[intentContext] pool=${scores.size} agregadas=${agregadas}`);
+    return { scores, agregadas };
   }
 
   /** POST /memory/predict: memorias contextuales + detección de cambio de tema. */
@@ -923,6 +1004,68 @@ export class PredictionOrchestrator {
       .map((c) => (c.length > MAX_MESSAGE_CHARS ? c.slice(0, MAX_MESSAGE_CHARS) : c));
     if (recent.length === 0) return text;
     return [...recent, text].join("\n");
+  }
+
+  /** Embeddings de segmentos ya puntuados (el mismo plan se consulta por N subtareas). */
+  private readonly intentSegmentCache = new Map<string, Float32Array>();
+
+  /**
+   * Recorta el pre-pensamiento del planificador a los segmentos que más se
+   * pegan a ESTA consulta y los acota.
+   *
+   * No es un corte por similitud absoluta: medido con el catálogo real, un
+   * segmento que habla de OTRA subtarea puntúa en la misma banda (0.83-0.87) que
+   * uno que habla de ésta (0.83-0.93), así que un umbral fijo no filtraría nada.
+   * Se conservan los MAX_INTENT_SEGMENTS mejores, que es lo que evita que un
+   * bloque de todo el plan se vuelva el tema dominante de la consulta.
+   *
+   * La división del bloque es estructural (salto de línea o fin de oración); la
+   * decisión de qué aporta es vectorial —no hay palabras clave ni diccionarios—.
+   */
+  private async segmentosRelevantesDeIntent(
+    consulta: string,
+    raw?: string,
+  ): Promise<string> {
+    const bloque = (raw ?? "").trim().slice(0, MAX_INTENT_CONTEXT_CHARS);
+    if (!bloque) return "";
+    const segmentos = bloque
+      .split(/\n+|(?<=[.!?])\s+(?=\S)/)
+      .map((s) => s.replace(/\s+/g, " ").trim())
+      .filter((s) => s.length >= 12);
+    if (segmentos.length === 0) return "";
+    // Un bloque de una sola idea no tiene nada que seleccionar: se usa tal cual.
+    if (segmentos.length === 1) return segmentos[0].slice(0, MAX_INTENT_CONTEXT_CHARS);
+
+    try {
+      const q = await this.engine.embedQuery(consulta, undefined, { high: true });
+      const puntuados: { texto: string; sim: number }[] = [];
+      for (const s of segmentos) {
+        let emb = this.intentSegmentCache.get(s);
+        if (!emb) {
+          emb = (await this.engine.embedPassage(s, undefined, { high: true })).embedding;
+          if (this.intentSegmentCache.size > 400) this.intentSegmentCache.clear();
+          this.intentSegmentCache.set(s, emb);
+        }
+        puntuados.push({ texto: s, sim: EmbeddingEngineService.cosine(q.embedding, emb) });
+      }
+      const elegidos = puntuados.sort((a, b) => b.sim - a.sim).slice(0, MAX_INTENT_SEGMENTS);
+      log(
+        `[intentContext] segmentos=${segmentos.length} conservados=${elegidos.length} | ` +
+          puntuados.map((p) => `${p.sim.toFixed(3)}:${p.texto.slice(0, 40)}`).join(" | "),
+      );
+      if (elegidos.length === 0) return "";
+      let presupuesto = MAX_INTENT_CONTEXT_CHARS;
+      const partes: string[] = [];
+      for (const e of elegidos) {
+        if (e.texto.length > presupuesto) break;
+        partes.push(e.texto);
+        presupuesto -= e.texto.length;
+      }
+      return partes.join(" ");
+    } catch (err) {
+      warn(`[intentContext] selección degradada: ${String((err as Error)?.message ?? err)}`);
+      return "";
+    }
   }
 
   /**

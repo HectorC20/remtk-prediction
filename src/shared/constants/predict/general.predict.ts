@@ -94,6 +94,19 @@ export const TOPIC_SHIFT_THRESHOLD = 0.86;
 export const MAX_HISTORY_MESSAGES = 4;
 /** Tope de caracteres por mensaje de historial (evita prompts gigantes). */
 export const MAX_MESSAGE_CHARS = 300;
+/**
+ * Tope de caracteres del enriquecimiento interno de la consulta (`intentContext`).
+ * Es prosa que el consumidor produce ANTES de preguntar (interpretación del
+ * planificador); se recorta porque su tamaño no lo limita ningún contrato de
+ * mensaje y un bloque largo desplazaria el texto propio de la subtarea.
+ */
+export const MAX_INTENT_CONTEXT_CHARS = 600;
+/**
+ * Segmentos del enriquecimiento que se conservan como máximo para una consulta.
+ * El bloque describe TODO el plan; lo que le sirve a una subtarea son uno o dos
+ * segmentos, y pasar de ahí vuelve a diluir el texto propio de la tarea.
+ */
+export const MAX_INTENT_SEGMENTS = 3;
 
 export const MAX_TRACES = 200;
 
