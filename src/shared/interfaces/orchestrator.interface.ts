@@ -24,4 +24,5 @@ export interface IPredictionOrchestrator {
   judgeMemory(text: string): Promise<{ isNoise: boolean; noiseScore: number }>;
   /** Espera a que el warm-up de embeddings y construcción del grafo del scope concluyan. */
   waitForWarmup(tenant: string, agentId?: string): Promise<void>;
+  waitForWarmupBounded(scopeKey: string, ms: number): Promise<boolean>;
 }

@@ -184,6 +184,49 @@ describe("Reproducción E2E del Escenario nest-2026-09-27 (3).log bajo Ruido Mas
     );
   });
 
+  test("2ª pasada del planificador - el pre-plan DAG sobrevive al juicio", async () => {
+    // Texto EXACTO del task-0 del log: el PlannerV5 planifica sin tools y encuadra
+    // la tarea como redacción, así que bi/cross-encoder llenaban el top-5 con
+    // mutaciones y `item_crear` se devolvía sin los listados que le dan los uuid.
+    const res = await fetch(`${serverUrl}/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "session-nest-second-pass",
+        tenant: TENANT_ID,
+        text: "Redactar y guardar el ítem La Pichanga Gastrobar en ES, EN, PT y QU",
+        source: "agent",
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = (await res.json()) as {
+      tools: ToolDefinition[];
+      graph?: { edges?: Array<{ from: string; to: string; type: string }>; executionOrder?: string[] };
+    };
+    const names = data.tools.map((t) => t.name);
+    const order = data.graph?.executionOrder ?? [];
+
+    console.log(`\n[E2E 2ª pasada] Tools devueltas (${names.length}):`, names, "orden:", order);
+
+    assert.ok(names.includes("mitumbes_item_crear"), "la mutación objetivo debe seguir presente");
+    assert.ok(
+      names.includes("mitumbes_categoria_listar") && names.includes("mitumbes_zona_listar"),
+      `los dos antecedentes deben acompañar a la mutación: ${names.join(",")}`,
+    );
+    assert.ok(
+      order.indexOf("mitumbes_categoria_listar") < order.indexOf("mitumbes_item_crear") &&
+        order.indexOf("mitumbes_zona_listar") < order.indexOf("mitumbes_item_crear"),
+      `el orden de ejecución debe anteponer los listados: ${order.join(" > ")}`,
+    );
+    assert.ok(
+      (data.graph?.edges ?? []).some(
+        (e) => e.type === "PREREQUISITE" && e.to === "mitumbes_item_crear",
+      ),
+      "el grafo publicado debe traer las aristas de pre-requisito de la mutación",
+    );
+  });
+
   test("Memoria Contextual - Juicio Semántico sin Dependencia de Keywords", async () => {
     // 1. Negación de capacidades del asistente en el log:
     // "No dispongo en esta conversación de una acción ejecutable confirmada para crear el ítem en el catálogo..."

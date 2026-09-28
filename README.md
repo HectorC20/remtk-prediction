@@ -102,6 +102,7 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 | `QDRANT_URL` | `http://localhost:6333` | URL del Qdrant |
 | `QDRANT_API_KEY` | *(vacío)* | API key opcional |
 | `RECALL_LIMIT` | `50` | Límite de recall por consulta |
+| `PREDICT_WARMUP_WAIT_MS` | `15000` | Espera máxima de `/predict` al warm-up en vuelo de un catálogo recién registrado (rango `0-60000`; `0` → degrada de inmediato a la ruta plana) |
 | `MAX_CATEGORIES` | `60` | Tope de **categorías** (`group`) que alimentan el decisor de herramientas (etapa A) |
 | `MAX_OUTPUT_TOOLS` | `150` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo (rango `0-150`; `0` → nunca devolver herramientas) |
 

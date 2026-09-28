@@ -39,6 +39,8 @@ import {
   minToolsDefault,
   nameAffinityBoostDefault,
   outputToolsCeiling,
+  predictWarmupWaitMsCeiling,
+  predictWarmupWaitMsDefault,
   recallLimitDefault,
 } from "./shared/constants/predict/general.predict";
 import {
@@ -99,6 +101,11 @@ export interface AppConfig {
   keywordTopK: number;
   /** Tope de candidatas recuperadas del recall BM25 por consulta. */
   recallLimit: number;
+  /**
+   * Ms que `/predict` espera el warm-up (grafo) de un scope recién registrado
+   * antes de degradar a la ruta plana (env `PREDICT_WARMUP_WAIT_MS`, 0-60000).
+   */
+  predictWarmupWaitMs: number;
   /** Tope final de tools devueltas tras el umbral adaptativo (env `MAX_OUTPUT_TOOLS`, rango 0-150). */
   maxOutputTools: number;
   /**
@@ -246,6 +253,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   );
   // Etapa A: al menos 1 categoría para que el decisor siempre tenga candidatas.
   const maxCategories = Math.max(1, int(env.MAX_CATEGORIES, maxCategoriesDefault));
+  // Espera del warm-up del scope: acotada para que el turno no se cuelgue.
+  const predictWarmupWaitMs = Math.max(
+    0,
+    Math.min(int(env.PREDICT_WARMUP_WAIT_MS, predictWarmupWaitMsDefault), predictWarmupWaitMsCeiling),
+  );
 
   return {
     // ── Puertos de los listeners HTTP ───────────────────────────────────
@@ -270,6 +282,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     familyGatePenalty: float(env.FAMILY_GATE_PENALTY, familyGatePenaltyDefault),
     keywordTopK: int(env.KEYWORD_TOP_K, keywordTopKDefault),
     recallLimit: int(env.RECALL_LIMIT, recallLimitDefault),
+    predictWarmupWaitMs,
     maxOutputTools,
     maxCategories,
 

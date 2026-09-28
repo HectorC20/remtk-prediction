@@ -17,7 +17,7 @@ import type {
   Trace,
   ToolDefinition,
 } from "../shared/interfaces/domain.interface";
-import type { GraphPredictionResult } from "../shared/interfaces/graph.interface";
+import type { GraphEdge, GraphPredictionResult } from "../shared/interfaces/graph.interface";
 import { ConfirmationCache } from "./services/confirm-cache.service";
 import {
   explicitToolNames,
@@ -30,7 +30,8 @@ import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
 import { LexicalProfileService } from "./services/lexical-profile.service";
-import { RerankService } from "./services/rerank.service";
+import { CalibrationService } from "./services/calibration.service";
+import { RerankService, topologicalSort, type RerankResult } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
 import { JuicioService } from "../juicio/juicio.service";
@@ -45,6 +46,7 @@ import {
   INTEREST_TOP_MATCHES,
   MAX_HISTORY_MESSAGES,
   MAX_MESSAGE_CHARS,
+  PREREQUISITE_WEIGHT,
   TOPIC_SHIFT_THRESHOLD,
 } from "src/shared/constants/predict";
 import { DEFAULT_MEMORY_PREDICTION_LIMIT } from "src/shared/constants/qdrant";
@@ -148,6 +150,24 @@ export class PredictionOrchestrator {
     while (this.warmups.has(scopeKey)) {
       await this.warmups.get(scopeKey);
     }
+  }
+
+  /**
+   * Variante acotada de `waitForWarmup`: espera como máximo `ms` a que concluya
+   * el warm-up del scope (incluidos los encadenados por un re-registro). Devuelve
+   * false si expira la cota, para que el llamador degrade de forma consciente.
+   */
+  async waitForWarmupBounded(scopeKey: string, ms: number): Promise<boolean> {
+    const deadline = Date.now() + Math.max(0, ms);
+    while (this.warmups.has(scopeKey)) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return false;
+      await Promise.race([
+        this.warmups.get(scopeKey)!.catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, Math.min(remaining, 200))),
+      ]);
+    }
+    return true;
   }
 
   /**
@@ -376,13 +396,29 @@ export class PredictionOrchestrator {
     let zt: Float32Array | undefined;
     let sessionModel = "hash";
     let topicShift = false;
+    let topicSim: number | undefined;
     try {
       const s = await this.sessionState.resolve(input.sessionId, promptText, juicioCtx.gateLambda);
       zt = s.zt;
       sessionModel = s.model;
       topicShift = s.topicShift;
+      topicSim = s.topicSim;
     } catch (err) {
       warn(`[pipeline] estado de sesión degradado: ${String((err as Error)?.message ?? err)}`);
+    }
+
+    // Warm-up en vuelo: `POST /tools` responde indexando y construye el grafo en
+    // background. Sin esta espera (acotada), el primer turno de un catálogo frío
+    // caería a la ruta plana y entregaría la mutación sin sus antecedentes.
+    if (!this.graphCache.get(scopeKey) && this.warmups.has(scopeKey)) {
+      const warmed = await this.waitForWarmupBounded(scopeKey, this.config.predictWarmupWaitMs);
+      if (!warmed) {
+        trace.warmupWaitTimeout = true;
+        warn(
+          `[pipeline] warm-up scope=${scopeKey} no concluyó en ${this.config.predictWarmupWaitMs}ms → ` +
+            `ruta plana (pre-plan DAG solo por prerequisites declaradas)`,
+        );
+      }
     }
 
     const graph = this.graphCache.get(scopeKey);
@@ -426,7 +462,7 @@ export class PredictionOrchestrator {
       this.trackTurn({
         input,
         turn,
-        topicShift,
+        topicSim,
         scopeKey,
         promptText,
         tools: result.tools.map((t) => t.name),
@@ -468,11 +504,11 @@ export class PredictionOrchestrator {
       queryTokens,
       pinnedNames,
     );
-    const order = base.tools.map((t) => t.name);
-    const flat: GraphPredictionResult = {
-      ...base,
-      graph: { nodes: order, edges: [], executionOrder: order },
-    };
+    // Ruta plana: no hay grafo precomputado, así que el pre-plan DAG se repone con
+    // las pre-relaciones DECLARADAS del catálogo. Sin esto un catálogo frío (o un
+    // warm-up que agotó su cota) entrega la mutación sola y el ejecutor tiene que
+    // adivinar los listados que le dan los identificadores.
+    const flat = this.withDeclaredPrerequisites(base, catalog, input.exclude);
     // Capa de juicio (post), igual que en la ruta topológica.
     const result = await this.judgeResult(
       scopeKey,
@@ -502,13 +538,75 @@ export class PredictionOrchestrator {
     this.trackTurn({
       input,
       turn,
-      topicShift,
+      topicSim,
       scopeKey,
       promptText,
       tools: result.tools.map((t) => t.name),
     });
     this.finalize(trace, start, result.tools.map((t) => t.name));
     return result;
+  }
+
+  /**
+   * Repone el pre-plan DAG en la ruta plana: cierra la selección sobre las
+   * pre-relaciones DECLARADAS por el catálogo (`ToolDefinition.prerequisites`),
+   * sin embeddings ni señales léxicas, y publica aristas PREREQUISITE + orden
+   * topológico para que el consumidor ejecute los antecedentes primero.
+   */
+  private withDeclaredPrerequisites(
+    base: RerankResult,
+    catalog: { get(name: string): ToolDefinition | undefined },
+    exclude?: string[],
+  ): GraphPredictionResult {
+    const excluded = new Set((exclude ?? []).map((n) => n.toLowerCase()));
+    const byName = new Map<string, ToolDefinition>();
+    const scoreByName = new Map<string, number>();
+    base.tools.forEach((t, i) => {
+      byName.set(t.name, t);
+      scoreByName.set(t.name, base.rankedScores[i] ?? 0);
+    });
+
+    const edges: GraphEdge[] = [];
+    const seenEdges = new Set<string>();
+    const ceiling = this.config.maxOutputTools;
+    const queue = base.tools.map((t) => t.name);
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (visited.has(name)) continue;
+      visited.add(name);
+      for (const raw of catalog.get(name)?.prerequisites ?? []) {
+        const pre = catalog.get(raw);
+        if (!pre || excluded.has(pre.name.toLowerCase()) || pre.name === name) continue;
+        const edge = `${pre.name}→${name}`;
+        if (!byName.has(pre.name)) {
+          if (byName.size >= ceiling) continue;
+          // Misma cota que la propagación del grafo (PREREQUISITE_WEIGHT): el
+          // antecedente entra dentro de la banda del top, no como relleno.
+          byName.set(pre.name, pre);
+          scoreByName.set(pre.name, PREREQUISITE_WEIGHT);
+          queue.push(pre.name);
+        }
+        if (!seenEdges.has(edge)) {
+          seenEdges.add(edge);
+          edges.push({ from: pre.name, to: name, type: "PREREQUISITE", weight: PREREQUISITE_WEIGHT });
+        }
+      }
+    }
+
+    const order = topologicalSort([...byName.keys()], edges, scoreByName);
+    const tools = order.map((n) => byName.get(n)!);
+    const rankedScores = order.map((n) => scoreByName.get(n) ?? 0);
+    if (edges.length > 0) {
+      log(`[pipeline] ruta plana pre-plan: antecedentes=${edges.length} salida=${tools.length}`);
+    }
+    return {
+      ...base,
+      tools,
+      rankedScores,
+      calibratedScores: CalibrationService.calibrateRankedScores(rankedScores),
+      graph: { nodes: order, edges, executionOrder: order },
+    };
   }
 
   /**
@@ -540,16 +638,17 @@ export class PredictionOrchestrator {
   }
 
   /**
-   * Señal implícita (§8.2): cuando un turno humano abre tema nuevo (topicShift)
-   * y las herramientas predichas en el turno anterior ya no reaparecen en la
-   * consulta, se penaliza débilmente la asociación término→herramienta que
-   * llevó a ellas ("el usuario reformuló porque no era eso"). Se apoya en el
-   * estado de sesión que ya existe: no requiere cambios en el consumidor.
+   * Señal implícita (§8.2): cuando un turno humano abre tema nuevo de verdad
+   * (coseno contra z_{t-1} por debajo de TOPIC_SHIFT_THRESHOLD) y las herramientas
+   * predichas en el turno anterior ya no reaparecen en la consulta, se penaliza
+   * débilmente la asociación término→herramienta que llevó a ellas ("el usuario
+   * reformuló porque no era eso"). Se apoya en el estado de sesión que ya existe:
+   * no requiere cambios en el consumidor.
    */
   private trackTurn(params: {
     input: PredictionInput;
     turn: TurnType;
-    topicShift: boolean;
+    topicSim?: number;
     scopeKey: string;
     promptText: string;
     tools: string[];
@@ -557,11 +656,16 @@ export class PredictionOrchestrator {
     const sessionId = params.input.sessionId;
     if (!sessionId) return;
     const prev = this.lastTurns.get(sessionId);
+    // `topicShift` también la dispara la puerta de coherencia (λ) para aislar el
+    // turno del historial, sin que el usuario haya cambiado de tema. Solo el
+    // cosine contra z_{t-1} es evidencia de reformulación: sin esa comprobación
+    // el turno siguiente del MISMO objetivo llegaba penalizado por canal.
+    const drifted = params.topicSim !== undefined && params.topicSim < TOPIC_SHIFT_THRESHOLD;
     if (
       prev &&
       params.input.source === "human" &&
       params.turn === TurnType.NewQuery &&
-      params.topicShift &&
+      drifted &&
       prev.tools.length > 0 &&
       !this.toolMentioned(prev.tools, params.promptText)
     ) {

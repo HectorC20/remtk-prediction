@@ -119,6 +119,22 @@ export class QdrantClient {
   }
 
   /**
+   * Borra los puntos del filtro indicado. Se usa para reindexar un ámbito sin
+   * dejar puntos huérfanos de esa misma etiqueta (`tenant`), que aparecerían
+   * duplicados en el recall.
+   */
+  async deletePointsByFilter(collection: string, filter: unknown): Promise<void> {
+    const { status, data } = await this.request(
+      "POST",
+      `/collections/${collection}/points/delete?wait=true`,
+      { filter },
+    );
+    if (status >= 300) {
+      throw new Error(`qdrant delete ${collection}: ${JSON.stringify(data)}`);
+    }
+  }
+
+  /**
    * Consulta BM25 sparse (vector "bm25_text"). Equivalente a
    * QdrantMemoryService.searchBm25 y al SearchBm25 del Go.
    */

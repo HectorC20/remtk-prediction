@@ -20,7 +20,7 @@ import { log } from "src/logger";
 import type { ChatMessage, GraphPredictionResult, ToolDefinition } from "src/shared/interfaces";
 import type { JuicioContext, JuicioPostDiag } from "src/shared/interfaces/juicio.interface";
 import { SessionStateCacheService } from "src/predict/services/session-state-cache.service";
-import { adaptiveThreshold } from "src/predict/services/rerank.service";
+import { adaptiveThreshold, topologicalSort } from "src/predict/services/rerank.service";
 import { CalibrationService } from "src/predict/services/calibration.service";
 import { AbstencionService } from "./services/abstencion.service";
 import { CrossEncoderService } from "./services/cross-encoder.service";
@@ -367,50 +367,73 @@ export class JuicioService {
         this.config.adaptiveGapThreshold,
       ),
     );
-    const filteredAdjusted = adjusted.filter((a) => selectedNames.has(a.tool.name));
-    const finalAdjusted = filteredAdjusted.length > 0 ? filteredAdjusted : adjusted;
-    const toolMap = new Map<string, ToolDefinition>();
-    for (const a of finalAdjusted) toolMap.set(a.tool.name, a.tool);
+    const survivors = selectedNames.size > 0
+      ? adjusted.filter((a) => selectedNames.has(a.tool.name))
+      : adjusted;
 
-    // Preservar herramientas antecedentes del pre-plan DAG (AGENT.md)
-    if (result.graph?.edges) {
-      for (const tName of [...toolMap.keys()]) {
-        for (const e of result.graph.edges) {
-          if (e.type === "PREREQUISITE" && e.to === tName) {
-            if (!toolMap.has(e.from) && toolMap.size < maxOutput) {
-              const preTool = result.tools.find((t) => t.name === e.from);
-              if (preTool) toolMap.set(e.from, preTool);
-            }
-          }
-        }
+    // Reserva de antecedentes (AGENT.md §2.C): el cierre transitivo de
+    // PREREQUISITE se resuelve ANTES de recortar a maxOutput y ocupa plaza
+    // preferente frente a quien no es pre-requisito de nadie. Al recortar después
+    // de podar, las anclas de sub-ventana llenaban las 5 salidas y la mutación
+    // sobrevivia sola — sin los listados que le dan los identificadores.
+    const byName = new Map<string, ToolDefinition>();
+    for (const t of result.tools) byName.set(t.name, t);
+    for (const a of adjusted) byName.set(a.tool.name, a.tool);
+    const edges = result.graph?.edges ?? [];
+    const excludedLower = new Set((params.exclude ?? []).map((e) => e.toLowerCase()));
+    const prereqsOf = (name: string): string[] => {
+      const declared = byName.get(name)?.prerequisites ?? [];
+      const fromGraph = edges
+        .filter((e) => e.type === "PREREQUISITE" && e.to === name)
+        .map((e) => e.from);
+      return [...new Set([...declared, ...fromGraph])].filter(
+        (p) => p !== name && byName.has(p) && !excludedLower.has(p.toLowerCase()),
+      );
+    };
+
+    const required = new Set<string>();
+    const queue = survivors.map((a) => a.tool.name);
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const name = queue.shift()!;
+      if (visited.has(name)) continue;
+      visited.add(name);
+      for (const p of prereqsOf(name)) {
+        if (required.has(p)) continue;
+        required.add(p);
+        queue.push(p);
       }
     }
 
-    // Ordenar respetando el orden topológico (Kahn) del grafo precomputado
-    const execOrder = result.graph?.executionOrder ?? [];
-    const tools = [...toolMap.values()]
-      .sort((a, b) => {
-        const idxA = execOrder.indexOf(a.name);
-        const idxB = execOrder.indexOf(b.name);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return 0;
-      })
-      .slice(0, maxOutput);
-
-    const order = tools.map((t) => t.name);
-    const rankedScores = tools.map((t) => {
-      const found = adjusted.find((a) => a.tool.name === t.name);
-      return found ? found.score : 0.85;
-    });
+    const scoreByName = new Map(adjusted.map((a) => [a.tool.name, a.score]));
+    const floorScore = survivors.length > 0
+      ? Math.min(...survivors.map((a) => a.score))
+      : 0;
+    const prereqNames = [...required].sort(
+      (a, b) => (scoreByName.get(b) ?? floorScore) - (scoreByName.get(a) ?? floorScore),
+    );
+    const finalNames = [...prereqNames];
+    for (const a of survivors) {
+      if (finalNames.length >= maxOutput) break;
+      if (!required.has(a.tool.name)) finalNames.push(a.tool.name);
+    }
+    const ordered = topologicalSort(finalNames.slice(0, maxOutput), edges, scoreByName);
+    const tools = ordered
+      .map((name) => byName.get(name))
+      .filter((t): t is ToolDefinition => t !== undefined);
+    const rankedScores = ordered.map((name) => scoreByName.get(name) ?? floorScore);
 
     const judged: GraphPredictionResult = {
       ...result,
       tools,
       rankedScores,
       calibratedScores: CalibrationService.calibrateRankedScores(rankedScores),
-      graph: { ...result.graph, nodes: order },
+      graph: {
+        ...result.graph,
+        nodes: ordered,
+        executionOrder: ordered,
+        edges: edges.filter((e) => ordered.includes(e.from) && ordered.includes(e.to)),
+      },
       context: result.context
         ? {
             ...result.context,

@@ -53,6 +53,7 @@ const CFG = {
   learnTermMinWeight: 0.05,
   learnMaxPostings: 200,
   learnPersist: false,
+  predictWarmupWaitMs: 0,
   ...juicioConfigDefaults,
 };
 

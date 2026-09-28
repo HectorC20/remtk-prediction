@@ -76,6 +76,19 @@ export const keywordTopKDefault = maxOutputToolsDefault;
 /** Tope de candidatas que se recuperan del recall BM25 por consulta. */
 export const recallLimitDefault = 50;
 
+/**
+ * Cota (ms) que espera `/predict` por el warm-up de un scope recién registrado.
+ *
+ * El grafo de pre-requisitos se construye en background tras `POST /tools`; sin
+ * esta espera el primer turno de un catálogo frío cae en la ruta plana y entrega
+ * la herramienta de mutación aislada, sin sus antecedentes de descubrimiento
+ * (AGENT.md §2.C). 0 desactiva la espera.
+ */
+export const predictWarmupWaitMsDefault = 15_000;
+
+/** Máximo permitido para `PREDICT_WARMUP_WAIT_MS`. */
+export const predictWarmupWaitMsCeiling = 60_000;
+
 export const TOPIC_SHIFT_THRESHOLD = 0.86;
 /** Máximo de mensajes previos incorporados al contexto de predicción. */
 export const MAX_HISTORY_MESSAGES = 4;

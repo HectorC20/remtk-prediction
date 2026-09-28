@@ -7,6 +7,7 @@
  * previo; en caso contrario resetea el estado (topicShift = true).
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
+import { log } from "src/logger";
 import {
   BLEND_NEW,
   BLEND_PREV,
@@ -37,6 +38,13 @@ export class SessionStateCacheService {
     const res = await this.engine.embedQuery(text, "small", { high: true });
     const zNew = res.embedding;
     const prev = this.states.get(sessionId);
+    const topicSim = prev ? EmbeddingEngineService.cosine(prev, zNew) : undefined;
+    if (topicSim !== undefined) {
+      log(
+        `[session] state session=${sessionId} sim=${topicSim.toFixed(3)} ` +
+          `umbral=${TOPIC_SHIFT_THRESHOLD} lambda=${gateLambda ?? "n/a"}`,
+      );
+    }
 
     if (!prev) {
       this.states.set(sessionId, zNew);
@@ -45,13 +53,12 @@ export class SessionStateCacheService {
 
     if (gateLambda !== undefined && gateLambda < gateTextMinDefault) {
       this.states.set(sessionId, zNew);
-      return { zt: zNew, topicShift: true, model: res.model };
+      return { zt: zNew, topicShift: true, topicSim, model: res.model };
     }
 
-    const cos = EmbeddingEngineService.cosine(prev, zNew);
-    if (cos < TOPIC_SHIFT_THRESHOLD) {
+    if (topicSim !== undefined && topicSim < TOPIC_SHIFT_THRESHOLD) {
       this.states.set(sessionId, zNew);
-      return { zt: zNew, topicShift: true, model: res.model };
+      return { zt: zNew, topicShift: true, topicSim, model: res.model };
     }
 
     const wPrev = gateLambda ?? BLEND_PREV;
@@ -62,6 +69,6 @@ export class SessionStateCacheService {
     }
     const zt = EmbeddingEngineService.normalizeL2(blended);
     this.states.set(sessionId, zt);
-    return { zt, topicShift: false, model: res.model };
+    return { zt, topicShift: false, topicSim, model: res.model };
   }
 }

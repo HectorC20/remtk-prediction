@@ -173,4 +173,6 @@ export interface Trace {
   juicioEnergy?: number;
   /** Señales de re-rank de juicio que intervinieron este turno. */
   juicioSignals?: { maxsim: boolean; reranker: boolean; specificity: boolean };
+  /** El warm-up del scope no concluyó dentro de `PREDICT_WARMUP_WAIT_MS`. */
+  warmupWaitTimeout?: boolean;
 }

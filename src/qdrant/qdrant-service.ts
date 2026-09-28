@@ -67,15 +67,19 @@ export class QdrantService {
   /**
    * Indexa las herramientas del scope en Qdrant (colecciones mcp_tools y
    * tool_keywords) con el mismo payload que ToolRetrievalService.syncTools.
-   * El payload guarda el scopeKey como 'tenant' (informativo).
+   * El payload guarda el scopeKey como 'tenant': es la etiqueta con la que
+   * `retrieveTools` filtra, no un dato informativo.
    */
   async indexTools(scopeKey: string, tools: ToolDefinition[]): Promise<void> {
     this.setCatalog(scopeKey, tools);
     if (!this.client.enabled) return;
 
-    // IDs determinísticos (mismo esquema que el monolith): uuidv5 DNS.
+    // IDs determinísticos POR ÁMBITO (uuidv5 DNS). El scopeKey entra en la clave
+    // porque el recall filtra por `tenant`: si dos canales registran la misma
+    // herramienta sobre un id compartido, el último writer se queda con el
+    // payload y el otro canal pierde esa herramienta del recall.
     const toolPoints = tools.map((t) => ({
-      id: uuidv5(`mcp-tool:${t.group || "general"}:${t.name}`),
+      id: uuidv5(`mcp-tool:${scopeKey}:${t.group || "general"}:${t.name}`),
       payload: {
         tenant: scopeKey,
         toolName: t.name,
@@ -99,12 +103,22 @@ export class QdrantService {
       const keywords = extractToolKeywords(t);
       if (keywords.length === 0) continue;
       kwPoints.push({
-        id: uuidv5(`tool-kw:${t.group || "general"}:${t.name}`),
+        id: uuidv5(`tool-kw:${scopeKey}:${t.group || "general"}:${t.name}`),
         payload: { tenant: scopeKey, toolName: t.name, keywords },
         vector: {
           bm25_text: this.client.textToSparseVector(keywords.join(" ")),
         },
       });
+    }
+
+    try {
+      if (scopeKey !== "") {
+        const ownScope = { must: [{ key: "tenant", match: { value: scopeKey } }] };
+        await this.client.deletePointsByFilter(this.config.toolsCollection, ownScope);
+        await this.client.deletePointsByFilter(this.config.keywordsCollection, ownScope);
+      }
+    } catch (err) {
+      warn(`[qdrant] limpieza scope=${scopeKey} falló: ${String((err as Error)?.message ?? err)}`);
     }
 
     try {
@@ -136,12 +150,17 @@ export class QdrantService {
 
     log(`[recall] query=${JSON.stringify(raw)} expanded=${JSON.stringify(expanded)} keywords=${JSON.stringify(keywords)}`);
 
-    // 3. BM25 en paralelo (mcp_tools + tool_keywords).
+    // 3. BM25 en paralelo (mcp_tools + tool_keywords), filtrados por el ámbito
+    //    del canal. Sin el filtro, los hits de otros scopes desplazan a los
+    //    propios en el top-k y el cruce posterior con el catálogo los descarta
+    //    todos: `candidates=0` → el rerank pierde la señal léxica y decide por
+    //    empate, que es lo que hacía impredecible la predicción entre corridas.
+    const toolsFilter = scopeFilter(scopeKey);
     const promptMatches = await this.search(
       this.config.toolsCollection,
       expanded,
       Math.min(Math.max(limit * 3, 10), MAX_SEARCH_LIMIT),
-      undefined,
+      toolsFilter,
       ["toolName"],
     );
     const keywordMatches =
@@ -150,7 +169,7 @@ export class QdrantService {
             this.config.keywordsCollection,
             keywords.join(" "),
             Math.min(Math.max(limit * 2, 10), MAX_SEARCH_LIMIT),
-            undefined,
+            toolsFilter,
             ["toolName"],
           )
         : [];
@@ -306,7 +325,7 @@ export class QdrantService {
         this.config.synonymsCollection,
         token,
         3,
-        synonymsFilter(scopeKey),
+        scopeFilter(scopeKey),
         ["synonyms"],
       );
       const seen = new Set<string>();
@@ -356,14 +375,15 @@ function payloadString(r: SearchResult, key: string): string {
 }
 
 /**
- * Filtro de aislamiento para query_synonyms (F0).
+ * Filtro de aislamiento de las colecciones particionadas por ámbito
+ * (`query_synonyms`, `mcp_tools`, `tool_keywords`).
  *
- * Acepta los sinónimos etiquetados con el `tenant` (scopeKey) del canal y,
+ * Acepta los puntos etiquetados con el `tenant` (scopeKey) del canal y,
  * además, los puntos legacy sin `tenant` (poblados por fuera de este servicio),
  * para no romper el comportamiento actual. Un punto etiquetado con OTRO canal
  * queda excluido: ahí está la garantía de no contaminación cruzada (§9.2).
  */
-function synonymsFilter(scopeKey: string): unknown {
+function scopeFilter(scopeKey: string): unknown {
   const should: Record<string, unknown>[] = [{ is_empty: { key: "tenant" } }];
   if (scopeKey !== "") should.push({ key: "tenant", match: { value: scopeKey } });
   return { should };
