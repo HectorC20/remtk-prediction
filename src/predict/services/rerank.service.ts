@@ -65,6 +65,33 @@ export function activePluginFamilies(
   return out;
 }
 
+/**
+ * Dominio de la tanda: señal estructural del reparto por rol del DAG, no del
+ * texto. `categories` = grupos distintos en orden de ejecución; `category` =
+ * el grupo mayoritario (pluralidad), y en empate manda el dominio con el que
+ * arranca la tanda.
+ */
+export function intentDeTanda(tools: ToolDefinition[]): { category?: string; categories: string[] } {
+  const categories: string[] = [];
+  const counts = new Map<string, number>();
+  for (const t of tools) {
+    const g = t.group;
+    if (!g) continue;
+    if (!counts.has(g)) categories.push(g);
+    counts.set(g, (counts.get(g) ?? 0) + 1);
+  }
+  let best: string | undefined;
+  let bestCount = -1;
+  for (const g of categories) {
+    const c = counts.get(g) ?? 0;
+    if (c > bestCount) {
+      best = g;
+      bestCount = c;
+    }
+  }
+  return { category: best, categories };
+}
+
 export class RerankService {
   constructor(private readonly config: AppConfig) {}
 
@@ -196,6 +223,7 @@ export class RerankService {
             primaryAction: forced[0]?.category ?? "execute",
             confidence: CalibrationService.calibrateProbability(relevance),
             summary: "Herramientas forzadas explícitas",
+            ...intentDeTanda(forced),
           },
           constraints: {
             negations: [],
@@ -245,11 +273,13 @@ export class RerankService {
 
     const calibratedScores = CalibrationService.calibrateRankedScores(scores);
     const topTool = tools[0];
+    const tanda = intentDeTanda(tools);
     const context: PredictedContext = {
       intent: {
         primaryAction: topTool?.category ?? "execute",
         confidence: calibratedScores[0] ?? 0.5,
-        category: topTool?.group,
+        category: tanda.category,
+        categories: tanda.categories,
         summary: tools.length > 0 ? `Seleccionadas ${tools.length} herramientas` : "Sin herramientas seleccionadas",
       },
       constraints: {
@@ -578,11 +608,13 @@ export class RerankService {
     const topTool = tools[0];
     const isConfirm = Boolean(opts.turnType && opts.turnType.includes("confirm"));
     const primaryAction = topTool?.category ?? "execute";
+    const tanda = intentDeTanda(tools);
     const context: PredictedContext = {
       intent: {
         primaryAction,
         confidence: calibratedScores[0] ?? 0.5,
-        category: topTool?.group,
+        category: tanda.category,
+        categories: tanda.categories,
         summary: tools.length > 0
           ? `Ejecución topológica de ${tools.length} herramientas (${executionOrder.join(" -> ")})`
           : "Sin herramientas seleccionadas",

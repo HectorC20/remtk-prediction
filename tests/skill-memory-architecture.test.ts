@@ -88,17 +88,21 @@ describe("Nueva Arquitectura: Memoria de Habilidades y Grafo de Entidades", () =
 
   test("2. Reproducción del Caso del Log: resolución de 'actualiza la imagen de ese item'", async () => {
     // Paso A: Simular que en el turno anterior se creó "La Pichanga Gastrobar"
-    await skillService.trackEntity(SESSION_ID, {
-      id: "3265a5e6-86a2-4156-a23f-39cfd7ff1171",
-      type: "item",
-      name: "La Pichanga Gastrobar",
-      slug: "la-pichanga-gastrobar",
-      state: {
-        lifecycle: "created",
-        pendingAction: "image_upload",
-        missingFields: ["image"],
+    await skillService.trackEntity(
+      SESSION_ID,
+      {
+        id: "3265a5e6-86a2-4156-a23f-39cfd7ff1171",
+        type: "item",
+        name: "La Pichanga Gastrobar",
+        slug: "la-pichanga-gastrobar",
+        state: {
+          lifecycle: "created",
+          pendingAction: "image_upload",
+          missingFields: ["image"],
+        },
       },
-    });
+      TENANT_ID,
+    );
 
     // Paso B: El usuario envía exactamente la consulta y el adjunto del log
     const attachedUrl =

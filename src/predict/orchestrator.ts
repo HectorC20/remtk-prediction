@@ -31,7 +31,7 @@ import { ToolGraphCacheService } from "./services/graph-cache.service";
 import { KeywordService } from "./services/keyword.service";
 import { LexicalProfileService } from "./services/lexical-profile.service";
 import { CalibrationService } from "./services/calibration.service";
-import { RerankService, topologicalSort, type RerankResult } from "./services/rerank.service";
+import { RerankService, topologicalSort, intentDeTanda, type RerankResult } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
 import { TurnClassifier} from "./turn-classifier";
 import { JuicioService } from "../juicio/juicio.service";
@@ -316,7 +316,7 @@ export class PredictionOrchestrator {
               intent: {
                 primaryAction: "meta",
                 confidence: 0.98,
-                category: familyTools[0]?.group,
+                ...intentDeTanda(familyTools),
                 summary: `Herramientas de la familia ${[...families].join(", ")}`,
               },
               constraints: { negations: [], isConfirmation: false, isExploratory: true },

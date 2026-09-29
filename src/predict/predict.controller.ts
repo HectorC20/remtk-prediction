@@ -472,6 +472,25 @@ export class PredictV1Controller {
   }
 
   /**
+   * GET /entities/session?sessionId=&tenant=&agentId=
+   * Obtiene la lista de entidades activas de la sesión.
+   * Headers: key-remtk / x-remtk-key
+   */
+  @Get("entities/session")
+  getSessionEntities(
+    @Query("sessionId") sessionId?: string,
+    @Query("tenant") tenant?: string,
+    @Query("agentId") agentId?: string,
+    @Headers("key-remtk") keyRemtkHeader?: string,
+    @Headers("x-remtk-key") xRemtkKeyHeader?: string,
+  ): unknown {
+    const parsed = parseKeyRemtk(keyRemtkHeader ?? xRemtkKeyHeader, tenant, agentId);
+    if (!sessionId) throw new BadRequestException({ error: "sessionId es requerido" });
+    const skillService = this.ctx.skillMemory ?? new SkillMemoryService(this.ctx.engine);
+    return skillService.getSessionEntities(sessionId, parsed.scopeKey, parsed.agentId);
+  }
+
+  /**
    * POST /entities/clear
    * Limpia el grafo de entidades de una sesión específica.
    * Headers: key-remtk / x-remtk-key

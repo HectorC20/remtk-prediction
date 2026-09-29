@@ -25,6 +25,7 @@ import {
   adaptiveThreshold,
   topologicalSort,
   activePluginFamilies,
+  intentDeTanda,
   isForeignFamily,
 } from "src/predict/services/rerank.service";
 import { matchTokenSet, nameAffinity } from "src/predict/keywords";
@@ -457,6 +458,7 @@ export class JuicioService {
     const rankedScores = ordered.map((name) => scoreByName.get(name) ?? floorScore);
     const activeEdges = edges.filter((e) => ordered.includes(e.from) && ordered.includes(e.to));
 
+    const tanda = intentDeTanda(tools);
     const judged: GraphPredictionResult = {
       ...result,
       tools,
@@ -474,7 +476,8 @@ export class JuicioService {
             intent: {
               ...result.context.intent,
               primaryAction: tools[0]?.category ?? "unknown",
-              category: tools[0]?.group ?? result.context.intent?.category,
+              category: tanda.category ?? tools[0]?.group ?? result.context.intent?.category,
+              categories: tanda.categories,
               confidence: Math.max(result.context?.intent?.confidence ?? 0.85, CalibrationService.calibrateProbability(rankedScores[0] ?? 0.85)),
             },
           }

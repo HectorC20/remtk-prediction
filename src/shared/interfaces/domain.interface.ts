@@ -62,6 +62,8 @@ export interface PredictedContext {
     primaryAction: ActionType | string;
     confidence: number;
     category?: string;
+    /** Grupos distintos presentes en la tanda, en orden de ejecución. */
+    categories?: string[];
     summary: string;
   };
   constraints: {

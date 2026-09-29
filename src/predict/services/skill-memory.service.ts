@@ -31,6 +31,24 @@ export class SkillMemoryService {
   /** Cache de embeddings de acciones de ciclo de vida para evitar re-computación */
   private readonly actionEmbeddingCache = new Map<string, Float32Array>();
 
+  /** Piso de similitud para que una ancla describa a la consulta. No decide solo: ver ANCLA_MARGEN. */
+  private static readonly ANCLA_MINIMA = 0.82;
+
+  /**
+   * Distancia mínima entre la mejor ancla y la siguiente de OTRO identificador.
+   * Un ancla es un valor que otra consulta usó en el pasado, no una verdad del
+   * turno actual; en este espacio vectorial dos nombres de negocio cualesquiera
+   * cosenean ~0.85, por encima del piso, así que sin margen el turno nuevo
+   * heredaba el id de otro negocio. Sin rival claro se abstiene y el
+   * mini-agente resuelve el identificador listando.
+   *
+   * 0.015 separa lo que miden las dos baterías: las anclas que NO describen a la
+   * entidad nombrada en el turno dejan márgenes de 0.000-0.010, y las
+   * resoluciones correctas 0.018 o más. Más arriba de esto se empieza a
+   * descartar lo correcto ("un hotel en Punta Sal" -> Hoteles gana por 0.018).
+   */
+  private static readonly ANCLA_MARGEN = 0.015;
+
   constructor(private readonly engine: EmbeddingEngineService) {}
 
   /** Clave compuesta para aislar entidades por scopeKey y sessionId */
@@ -51,6 +69,9 @@ export class SkillMemoryService {
   /**
    * Registra o actualiza el estado de una entidad en la sesión activa bajo un scope/key-remtk.
    * Por ejemplo, tras crear un ítem: lifecycle="created", pendingAction="image_upload".
+   *
+   * El scope es obligatorio: la partición es `${scopeKey}::${sessionId}` y predictSkill solo
+   * lee la del turno, así que un scope por defecto escribiría entidades invisibles.
    */
   async trackEntity(
     sessionId: string,
@@ -62,7 +83,7 @@ export class SkillMemoryService {
       state?: Partial<SessionEntityState["state"]>;
       attributes?: Record<string, unknown>;
     },
-    tenantOrKeyRemtk: string = "default",
+    tenantOrKeyRemtk: string,
     agentId?: string,
   ): Promise<SessionEntityState> {
     const { scopeKey } = parseKeyRemtk(tenantOrKeyRemtk, tenantOrKeyRemtk, agentId);
@@ -105,7 +126,7 @@ export class SkillMemoryService {
   /**
    * Obtiene la lista de entidades registradas para una sesión y scope.
    */
-  getSessionEntities(sessionId: string, tenantOrKeyRemtk: string = "default", agentId?: string): SessionEntityState[] {
+  getSessionEntities(sessionId: string, tenantOrKeyRemtk: string, agentId?: string): SessionEntityState[] {
     const { scopeKey } = parseKeyRemtk(tenantOrKeyRemtk, tenantOrKeyRemtk, agentId);
     const pKey = this.partitionKey(scopeKey, sessionId);
     const sessionMap = this.entitiesByPartition.get(pKey);
@@ -231,31 +252,49 @@ export class SkillMemoryService {
       }
     }
 
-    // 2. Resolver parámetros grounded
+    // 2. Resolver parámetros grounded por competencia, no por piso absoluto: la
+    //    ancla más parecida a la consulta tiene que dejar atrás, por un margen, a
+    //    cualquier ancla de OTRO identificador del scope. Ver ANCLA_MARGEN.
     const groundedMatches: GroundedParameterMatch[] = [];
     const preResolvedArgs: Record<string, unknown> = {};
 
-    if (bestSkill && bestSkill.parameterGrounding) {
-      for (const [paramKey, anchors] of Object.entries(bestSkill.parameterGrounding)) {
-        let bestAnchor: ParameterAnchor | undefined;
-        let bestAnchorScore = 0.82; // Umbral mínimo de match
-
-        for (const a of anchors) {
-          const aSim = EmbeddingEngineService.cosine(queryEmb.embedding, a.embedding);
-          if (aSim > bestAnchorScore) {
-            bestAnchorScore = aSim;
-            bestAnchor = a;
+    if (bestSkill?.parameterGrounding) {
+      const demas = [...(scopeSkills?.values() ?? [])].filter((s) => s.id !== bestSkill.id);
+      for (const paramKey of Object.keys(bestSkill.parameterGrounding)) {
+        const mejorPorId = new Map<string, { ancla: ParameterAnchor; sim: number }>();
+        const considerar = (lista: ParameterAnchor[] | undefined) => {
+          for (const a of lista ?? []) {
+            const sim = EmbeddingEngineService.cosine(queryEmb.embedding, a.embedding);
+            const previo = mejorPorId.get(a.id);
+            if (!previo || sim > previo.sim) mejorPorId.set(a.id, { ancla: a, sim });
           }
-        }
+        };
+        considerar(bestSkill.parameterGrounding[paramKey]);
+        // La misma ancla repetida en otra habilidad no compite: corrobora, y por
+        // eso se indexa por id y no por ocurrencia.
+        for (const otra of demas) considerar(otra.parameterGrounding?.[paramKey]);
 
-        if (bestAnchor) {
+        const ranking = [...mejorPorId.values()].sort((x, y) => y.sim - x.sim);
+        const ganadora = ranking[0];
+        const rival = ranking[1];
+        if (!ganadora) continue;
+        const margen = rival ? ganadora.sim - rival.sim : Number.POSITIVE_INFINITY;
+        if (ganadora.sim >= SkillMemoryService.ANCLA_MINIMA && margen >= SkillMemoryService.ANCLA_MARGEN) {
           groundedMatches.push({
             key: paramKey,
-            matchedId: bestAnchor.id,
-            matchedName: bestAnchor.name,
-            confidence: bestAnchorScore,
+            matchedId: ganadora.ancla.id,
+            matchedName: ganadora.ancla.name,
+            confidence: ganadora.sim,
           });
-          preResolvedArgs[paramKey] = bestAnchor.id;
+          preResolvedArgs[paramKey] = ganadora.ancla.id;
+        } else {
+          log(
+            `[skill-memory] ancla ambigua clave=${paramKey} se abstiene ` +
+              `(id=${ganadora.ancla.id} sim=${ganadora.sim.toFixed(3)} ` +
+              `rival=${rival ? `${rival.ancla.id}:${rival.sim.toFixed(3)}` : "ninguno"} margen=${
+                Number.isFinite(margen) ? margen.toFixed(3) : "-"
+              })`,
+          );
         }
       }
     }
@@ -316,7 +355,9 @@ export class SkillMemoryService {
             name: matchedEntity.name,
             type: matchedEntity.type,
             matchedPendingAction: matchedEntity.state.pendingAction,
-            confidence: bestEntitySim,
+            // `bestEntitySim` combina similitud y activityScore (que crece sin
+            // tope por turno); como confianza se reporta recortada a [0,1].
+            confidence: Math.min(1, bestEntitySim),
           }
         : undefined,
       groundedParameters: groundedMatches,
@@ -327,7 +368,7 @@ export class SkillMemoryService {
   }
 
   /** Limpia el estado de una sesión (cleanup) */
-  clearSession(sessionId: string, tenantOrKeyRemtk: string = "default", agentId?: string): void {
+  clearSession(sessionId: string, tenantOrKeyRemtk: string, agentId?: string): void {
     const { scopeKey } = parseKeyRemtk(tenantOrKeyRemtk, tenantOrKeyRemtk, agentId);
     const pKey = this.partitionKey(scopeKey, sessionId);
     this.entitiesByPartition.delete(pKey);
