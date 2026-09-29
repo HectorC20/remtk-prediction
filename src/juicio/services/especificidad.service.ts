@@ -68,7 +68,7 @@ export class EspecificidadService {
     tool: ToolDefinition,
     uText: Float32Array | undefined,
   ): Promise<number> {
-    if (!tool.problemSpace || !uText || !this.engine.isReady("small")) return 0;
+    if (!tool.problemSpace || !uText || !this.engine.isReady(this.engine.defaultSize)) return 0;
     let scope = this.problemEmbs.get(scopeKey);
     if (!scope) {
       scope = new Map();
@@ -76,7 +76,7 @@ export class EspecificidadService {
     }
     let emb = scope.get(tool.name);
     if (!emb) {
-      const res = await this.engine.embedPassage(tool.problemSpace, "small", { high: true });
+      const res = await this.engine.embedPassage(tool.problemSpace, this.engine.defaultSize, { high: true });
       if (res.model === "hash") return 0;
       emb = res.embedding;
       scope.set(tool.name, emb);
@@ -104,7 +104,7 @@ export class EspecificidadService {
       }
     | undefined
   > {
-    if (!vec || !this.engine.isReady("small")) return undefined;
+    if (!vec || !this.engine.isReady(this.engine.defaultSize)) return undefined;
     const graph = this.graphCache.get(scopeKey);
     if (!graph || graph.nodes.size < 2) return undefined;
 
@@ -150,7 +150,7 @@ export class EspecificidadService {
     text: string,
   ): Promise<Map<string, { tool: ToolDefinition; score: number; windowIdx: number }>> {
     const out = new Map<string, { tool: ToolDefinition; score: number; windowIdx: number }>();
-    if (!this.engine.isReady("small")) return out;
+    if (!this.engine.isReady(this.engine.defaultSize)) return out;
     const graph = this.graphCache.get(scopeKey);
     if (!graph || graph.nodes.size < 2) return out;
 
@@ -197,7 +197,7 @@ export class EspecificidadService {
     const toolSum = new Map<string, number>();
 
     for (let r = 0; r < windows.length; r++) {
-      const emb = await this.engine.embedQuery(windows[r], "small", { high: true });
+      const emb = await this.engine.embedQuery(windows[r], this.engine.defaultSize, { high: true });
       if (emb.model === "hash") continue;
       const proj = await this.projectManifold(scopeKey, emb.embedding);
       if (!proj) continue;

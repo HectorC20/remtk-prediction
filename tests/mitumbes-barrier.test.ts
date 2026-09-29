@@ -543,12 +543,16 @@ before(async () => {
   // Hermético: los módulos leen `loadConfig()` del entorno al arrancar.
   process.env.ONNX_ENABLED = "1";
   process.env.ONNX_MODELS_PATH = "./models";
+  // Este bloque §2 valida el comportamiento afinado con e5-small: se fija
+  // explícito aunque el pipeline use e5-large por defecto (ONNX_MODEL_SIZE).
+  process.env.ONNX_MODEL_SIZE = "small";
   process.env.QDRANT_ENABLED = "0";
   process.env.ONNX_ADAPTIVE_MIN_SCORE = String(MIN_SCORE);
   process.env.LEARN_ENABLED = "1";
   const server = await startPredictServer(0);
   delete process.env.ONNX_ENABLED;
   delete process.env.ONNX_MODELS_PATH;
+  delete process.env.ONNX_MODEL_SIZE;
   delete process.env.QDRANT_ENABLED;
   delete process.env.ONNX_ADAPTIVE_MIN_SCORE;
   delete process.env.LEARN_ENABLED;

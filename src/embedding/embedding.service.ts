@@ -17,8 +17,10 @@ import type { ModelSize } from "../shared/constants/predict/version.constants";
 import {
   onnxEmbedDim,
   onnxMaxTokens,
-  onnxModelDirName,
-  onnxWeightsFile,
+  onnxModelDir,
+  onnxPooling,
+  onnxTextPrefix,
+  onnxWeightsFileBySize,
 } from "../shared/constants/predict/embedding.constants";
 import { EmbedResult, OnnxModuleLike, OnnxSessionLike, OnnxTensorLike, TokenizerLike, TokenizerModuleLike } from 'src/shared/interfaces/index';
 
@@ -90,7 +92,7 @@ export class EmbeddingEngineService {
     return {
       model: ready ? size : "hash",
       dim: onnxEmbedDim[size],
-      modelPath: ready ? join(this.config.onnxModelsPath, onnxModelDirName(size)) : "",
+      modelPath: ready ? join(this.config.onnxModelsPath, onnxModelDir[size]) : "",
     };
   }
 
@@ -114,7 +116,7 @@ export class EmbeddingEngineService {
                 embedding,
                 model: s,
                 dim: onnxEmbedDim[s],
-                modelPath: join(this.config.onnxModelsPath, onnxModelDirName(s)),
+                modelPath: join(this.config.onnxModelsPath, onnxModelDir[s]),
               }),
             )
             .catch((err) => {
@@ -146,12 +148,14 @@ export class EmbeddingEngineService {
 
   /** Embedding con prefijo query: (para prompts de predicción). */
   async embedQuery(text: string, size?: ModelSize, opts?: { high?: boolean }): Promise<EmbedResult> {
-    return this.embed(`query: ${text}`, size, opts);
+    const s = size ?? this.defaultSize;
+    return this.embed(`${onnxTextPrefix[s].query}${text}`, size, opts);
   }
 
   /** Embedding con prefijo passage: (para contenido de tools/memorias). */
   async embedPassage(text: string, size?: ModelSize, opts?: { high?: boolean }): Promise<EmbedResult> {
-    return this.embed(`passage: ${text}`, size, opts);
+    const s = size ?? this.defaultSize;
+    return this.embed(`${onnxTextPrefix[s].passage}${text}`, size, opts);
   }
 
   /**
@@ -219,7 +223,8 @@ export class EmbeddingEngineService {
   }
 
   private async doLoad(size: ModelSize): Promise<boolean> {
-    const modelPath = join(this.config.onnxModelsPath, onnxModelDirName(size), onnxWeightsFile);
+    const dir = join(this.config.onnxModelsPath, onnxModelDir[size]);
+    const modelPath = join(dir, onnxWeightsFileBySize[size]);
     if (!existsSync(modelPath)) {
       warn(`[embed] modelo no encontrado: ${modelPath}`);
       return false;
@@ -228,7 +233,6 @@ export class EmbeddingEngineService {
     this.onnx ??= nodeRequire("onnxruntime-node") as OnnxModuleLike;
     this.tokenizerModule ??= nodeRequire("@huggingface/tokenizers") as TokenizerModuleLike;
 
-    const dir = join(this.config.onnxModelsPath, onnxModelDirName(size));
     const tokenizerJson = JSON.parse(
       readFileSync(join(dir, "tokenizer.json"), "utf8"),
     ) as Record<string, unknown>;
@@ -250,9 +254,13 @@ export class EmbeddingEngineService {
   private async runModel(size: ModelSize, text: string): Promise<Float32Array> {
     const { data, dims, mask } = await this.runRaw(size, text);
 
-    // [1, seq, dim] → mean-pooling por máscara; [1, dim] → directo.
+    // [1, seq, dim] → pooling (CLS para gte, mean por máscara para e5); [1, dim] → directo.
     const vec =
-      dims.length === 3 ? EmbeddingEngineService.meanPool(data, dims[1], dims[2], mask) : data;
+      dims.length === 3
+        ? onnxPooling[size] === "cls"
+          ? data.slice(0, dims[2])
+          : EmbeddingEngineService.meanPool(data, dims[1], dims[2], mask)
+        : data;
     return EmbeddingEngineService.normalizeL2(vec);
   }
 
@@ -303,11 +311,17 @@ export class EmbeddingEngineService {
       tokenTypeIds[i] = 0n;
     }
 
-    const feeds: Record<string, unknown> = {
-      input_ids: new this.onnx!.Tensor("int64", inputIds, [1, len]),
-      attention_mask: new this.onnx!.Tensor("int64", attentionMask, [1, len]),
-      token_type_ids: new this.onnx!.Tensor("int64", tokenTypeIds, [1, len]),
-    };
+    const feeds: Record<string, unknown> = {};
+    const inputNames = session.inputNames ?? ["input_ids", "attention_mask", "token_type_ids"];
+    if (inputNames.includes("input_ids")) {
+      feeds.input_ids = new this.onnx!.Tensor("int64", inputIds, [1, len]);
+    }
+    if (inputNames.includes("attention_mask")) {
+      feeds.attention_mask = new this.onnx!.Tensor("int64", attentionMask, [1, len]);
+    }
+    if (inputNames.includes("token_type_ids")) {
+      feeds.token_type_ids = new this.onnx!.Tensor("int64", tokenTypeIds, [1, len]);
+    }
     const outputs = await session.run(feeds);
 
     const result = outputs["sentence_embedding"] ?? outputs["last_hidden_state"];

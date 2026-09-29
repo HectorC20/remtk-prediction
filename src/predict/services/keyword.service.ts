@@ -50,7 +50,7 @@ export class KeywordService {
         cached++;
         continue;
       }
-      const res = await this.engine.embedPassage(doc || tool.name, "small", { high: false });
+      const res = await this.engine.embedPassage(doc || tool.name, this.engine.defaultSize, { high: false });
       map.set(tool.name, { embedding: res.embedding, hash });
       recomputed++;
     }
@@ -67,7 +67,7 @@ export class KeywordService {
     const prev = map.get(tool.name);
     if (prev && prev.hash === hash) return { embedding: prev.embedding, recomputed: false };
     // En plena predicción: prioridad alta.
-    const res = await this.engine.embedPassage(doc || tool.name, "small", { high: true });
+    const res = await this.engine.embedPassage(doc || tool.name, this.engine.defaultSize, { high: true });
     map.set(tool.name, { embedding: res.embedding, hash });
     return { embedding: res.embedding, recomputed: true };
   }
@@ -80,7 +80,7 @@ export class KeywordService {
   ): Promise<KeywordReduceResult> {
     const kws = extractQueryKeywords(prompt);
     const qText = kws.join(" ") || prompt;
-    const q = await this.engine.embedQuery(qText, "small", { high: true });
+    const q = await this.engine.embedQuery(qText, this.engine.defaultSize, { high: true });
 
     let recomputed = 0;
     let cached = 0;

@@ -209,14 +209,14 @@ export class SpatialPredictService {
     // 7. Fallback: Búsqueda Semántica con Embeddings si engine está disponible
     if (this.engine) {
       try {
-        const queryEmb = await this.engine.embedQuery(query, "small", { high: false });
+        const queryEmb = await this.engine.embedQuery(query, this.engine.defaultSize, { high: false });
         let bestTool: VisualToolType = "CREATE_SHAPE";
         let bestScore = -1;
 
         for (const tool of VISUAL_TOOLS_CATALOG) {
           const toolEmb = await this.engine.embedPassage(
             `${tool.intentSummary} ${tool.description} ${tool.tags.join(" ")}`,
-            "small",
+            this.engine.defaultSize,
             { high: false },
           );
           const score = EmbeddingEngineService.cosine(queryEmb.embedding, toolEmb.embedding);

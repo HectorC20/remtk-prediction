@@ -31,18 +31,21 @@ services:
     restart: unless-stopped
     ports:
       - "6776:6776" # API de predicción
-      - "6777:6777" # API de modelos (e5-small)
+      - "6777:6777" # API de modelos (e5-large)
       - "6775:6775" # API Qdrant del servicio
     environment:
       NODE_ENV: production
       PORT_PREDICT: 6776
       PORT_EMBED: 6777
       PORT_QDRANT: 6775
+      # Modelo del pipeline: e5-large (1024 dims). Es el default del código;
+      # se fija explícito para producción (ONNX_MODEL_SIZE=small para el liviano).
+      ONNX_MODEL_SIZE: "large"
       # Dentro de compose, Qdrant se alcanza por el nombre del servicio.
       QDRANT_ENABLED: "true"
       QDRANT_URL: http://qdrant:6333
     volumes:
-      # Modelos ONNX (e5-small): bind mount para no incluirlos en la imagen.
+      # Modelos ONNX (e5-large + e5-small): bind mount para no incluirlos en la imagen.
       - ./models:/app/models
     depends_on:
       qdrant:

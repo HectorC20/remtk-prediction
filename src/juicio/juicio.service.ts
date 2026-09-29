@@ -68,7 +68,7 @@ export class JuicioService {
 
   /** true si la capa puede operar este turno (flag + modelo real disponible). */
   private get operative(): boolean {
-    return this.config.juicioEnabled && this.engine.isReady("small");
+    return this.config.juicioEnabled && this.engine.isReady(this.engine.defaultSize);
   }
 
   /**
@@ -83,7 +83,7 @@ export class JuicioService {
     };
     if (!this.operative) return ctx;
 
-    const res = await this.engine.embedQuery(input.text, "small", { high: true });
+    const res = await this.engine.embedQuery(input.text, this.engine.defaultSize, { high: true });
     if (res.model === "hash") return ctx;
     ctx.uText = res.embedding;
 
@@ -188,7 +188,7 @@ export class JuicioService {
 
     const evalByKey = new Map<string, SpanEval>();
     for (const [k, spanText] of uniqueTextByKey.entries()) {
-      const embRes = await this.engine.embedQuery(spanText, "small", { high: true });
+      const embRes = await this.engine.embedQuery(spanText, this.engine.defaultSize, { high: true });
       if (embRes.model === "hash") return;
       const proj = await this.especificidad.projectManifold(scopeKey, embRes.embedding);
       if (!proj) return;
@@ -232,7 +232,7 @@ export class JuicioService {
       if (kept.length === 1) {
         ctx.uText = kept[0].emb;
       } else {
-        const focusedEmb = await this.engine.embedQuery(ctx.focusedText, "small", { high: true });
+        const focusedEmb = await this.engine.embedQuery(ctx.focusedText, this.engine.defaultSize, { high: true });
         if (focusedEmb.model !== "hash") ctx.uText = focusedEmb.embedding;
       }
       log(

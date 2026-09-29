@@ -122,14 +122,14 @@ export class TurnClassifier {
   }
 
   private async matchesMetaPool(segment: string): Promise<boolean> {
-    const input = await this.engine.embedQuery(segment, "small", { high: true });
+    const input = await this.engine.embedQuery(segment, this.engine.defaultSize, { high: true });
     const s = EmbeddingEngineService.cosine(input.embedding, this.metaEmb!);
     return s >= META_QUESTION_THRESHOLD;
   }
 
   private async ensureMetaEmb(): Promise<void> {
     if (this.metaEmb) return;
-    const res = await this.engine.embedQuery(META_QUESTION_PROBE, "small");
+    const res = await this.engine.embedQuery(META_QUESTION_PROBE, this.engine.defaultSize);
     this.metaEmb = res.embedding;
   }
 
@@ -151,10 +151,10 @@ export class TurnClassifier {
       return sCat > 0.5 && sCat > sSpec;
     }
     if (!this.catalogEmb) {
-      const res = await this.engine.embedQuery(CATALOG_INQUIRY_PROBE, "small");
+      const res = await this.engine.embedQuery(CATALOG_INQUIRY_PROBE, this.engine.defaultSize);
       this.catalogEmb = res.embedding;
     }
-    const input = await this.engine.embedQuery(text, "small", { high: true });
+    const input = await this.engine.embedQuery(text, this.engine.defaultSize, { high: true });
     const s = EmbeddingEngineService.cosine(input.embedding, this.catalogEmb);
     return s >= 0.92;
   }

@@ -309,7 +309,7 @@ export class PredictionOrchestrator {
           return {
             tools: familyTools,
             complexity: "simple",
-            modelSize: "small",
+            modelSize: this.engine.defaultSize,
             rankedScores: familyTools.map(() => 1.0),
             calibratedScores: familyTools.map(() => 0.98),
             graph: { nodes: familyTools.map((t) => t.name), edges: [], executionOrder: familyTools.map((t) => t.name) },
@@ -864,7 +864,7 @@ export class PredictionOrchestrator {
       return { interestScore: 0, topic: null, topicScore: 0, intentScore: 0, matches: [], method: "empty" };
     }
 
-    const promptEmb = await this.engine.embedQuery(text, "small", { high: true });
+    const promptEmb = await this.engine.embedQuery(text, this.engine.defaultSize, { high: true });
     const intentScore = await this.intentScore(promptEmb.embedding);
     const matches = await this.topicMatches(promptEmb.embedding, anchors);
     const topicScore = matches.length ? matches[0].score : 0;
@@ -905,7 +905,7 @@ export class PredictionOrchestrator {
 
   private async ensureIntentEmbs(): Promise<Float32Array[]> {
     if (this.intentEmbs) return this.intentEmbs;
-    const res = await this.engine.embedQuery(CANONICAL_INTEREST_PROBE, "small");
+    const res = await this.engine.embedQuery(CANONICAL_INTEREST_PROBE, this.engine.defaultSize);
     this.intentEmbs = [res.embedding];
     return this.intentEmbs;
   }
@@ -916,7 +916,7 @@ export class PredictionOrchestrator {
     if (this.denialEmbs) return this.denialEmbs;
     const embs: Float32Array[] = [];
     for (const p of CANONICAL_DENIAL_PROBES) {
-      const res = await this.engine.embedQuery(p, "small");
+      const res = await this.engine.embedQuery(p, this.engine.defaultSize);
       embs.push(res.embedding);
     }
     this.denialEmbs = embs;
@@ -943,7 +943,7 @@ export class PredictionOrchestrator {
     }
 
     const embs = await this.ensureDenialEmbs();
-    const promptEmb = await this.engine.embedQuery(trimmed, "small", { high: true });
+    const promptEmb = await this.engine.embedQuery(trimmed, this.engine.defaultSize, { high: true });
     let max = 0;
     for (const emb of embs) {
       const s = EmbeddingEngineService.cosine(promptEmb.embedding, emb);
@@ -971,7 +971,7 @@ export class PredictionOrchestrator {
     if (key === "") return undefined;
     const cached = this.anchorCache.get(key);
     if (cached) return cached;
-    const res = await this.engine.embedPassage(anchor, "small", { high: true });
+    const res = await this.engine.embedPassage(anchor, this.engine.defaultSize, { high: true });
     this.anchorCache.set(key, res.embedding);
     return res.embedding;
   }

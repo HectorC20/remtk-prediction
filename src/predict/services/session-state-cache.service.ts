@@ -35,7 +35,7 @@ export class SessionStateCacheService {
    * (λ < gateTextMin), resetea el estado latente al nuevo vector (topicShift = true).
    */
   async resolve(sessionId: string, text: string, gateLambda?: number): Promise<SessionStateResult> {
-    const res = await this.engine.embedQuery(text, "small", { high: true });
+    const res = await this.engine.embedQuery(text, this.engine.defaultSize, { high: true });
     const zNew = res.embedding;
     const prev = this.states.get(sessionId);
     const topicSim = prev ? EmbeddingEngineService.cosine(prev, zNew) : undefined;

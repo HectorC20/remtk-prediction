@@ -18,6 +18,7 @@
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import type { AppConfig } from "src/config";
 import type { ToolDefinition } from "src/shared/interfaces/domain.interface";
+import { onnxTextPrefix } from "src/shared/constants/predict/embedding.constants";
 
 export class MaxSimService {
   /** scopeKey → toolName → vectores por token de la firma de la herramienta. */
@@ -38,7 +39,11 @@ export class MaxSimService {
     if (this.lastQuery && this.lastQuery.text === text) {
       return this.lastQuery.tokens;
     }
-    const tokens = await this.engine.embedTokens(`query: ${text}`, "small", { high: true });
+    const tokens = await this.engine.embedTokens(
+      `${onnxTextPrefix[this.engine.defaultSize].query}${text}`,
+      this.engine.defaultSize,
+      { high: true },
+    );
     if (tokens.length > 0) {
       this.lastQuery = { text, tokens };
     }
@@ -58,7 +63,11 @@ export class MaxSimService {
       let vecs = scope.get(tool.name);
       if (!vecs) {
         vecs = (
-          await this.engine.embedTokens(`passage: ${signature(tool)}`, "small", { high: true })
+          await this.engine.embedTokens(
+            `${onnxTextPrefix[this.engine.defaultSize].passage}${signature(tool)}`,
+            this.engine.defaultSize,
+            { high: true },
+          )
         ).slice(0, this.config.juicioMaxsimMaxTokens);
         scope.set(tool.name, vecs);
       }
@@ -76,7 +85,7 @@ export class MaxSimService {
     tools: ToolDefinition[],
   ): Promise<Map<string, number>> {
     const out = new Map<string, number>();
-    if (tools.length === 0 || !this.engine.isReady("small")) return out;
+    if (tools.length === 0 || !this.engine.isReady(this.engine.defaultSize)) return out;
 
     const queryTokens = await this.getQueryTokens(text);
     if (queryTokens.length === 0) return out;
@@ -101,7 +110,7 @@ export class MaxSimService {
     tools: ToolDefinition[],
   ): Promise<Map<string, { tool: ToolDefinition; score: number; tokenIdx: number }>> {
     const out = new Map<string, { tool: ToolDefinition; score: number; tokenIdx: number }>();
-    if (tools.length < 2 || !this.engine.isReady("small")) return out;
+    if (tools.length < 2 || !this.engine.isReady(this.engine.defaultSize)) return out;
 
     const queryTokens = await this.getQueryTokens(text);
     if (queryTokens.length < 4) return out;

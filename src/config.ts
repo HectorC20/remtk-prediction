@@ -10,7 +10,12 @@
  *   - qdrant/   → URL del motor Qdrant y nombres de colecciones
  */
 
-import { ONNXMODELSIZESMALL } from "./shared/constants/predict/version.constants";
+import {
+  ONNXMODELSIZEGTE,
+  ONNXMODELSIZELARGE,
+  ONNXMODELSIZESMALL,
+  type ModelSize,
+} from "./shared/constants/predict/version.constants";
 import {
   STRICTPORTEMBEDDING,
   STRICTPORTPREDICT,
@@ -78,8 +83,8 @@ export interface AppConfig {
 
   onnxEnabled: boolean;
   onnxModelsPath: string;
-  /** Modelo del pipeline: solo e5-small (migrado de large por rendimiento). */
-  onnxModelSize: typeof ONNXMODELSIZESMALL;
+  /** Modelo del pipeline (env `ONNX_MODEL_SIZE`): e5-large por defecto, e5-small opcional. */
+  onnxModelSize: ModelSize;
 
   adaptiveMinTools: number;
   adaptiveMaxTools: number;
@@ -206,6 +211,12 @@ function str(v: string | undefined, d: string): string {
   return s === "" ? d : s;
 }
 
+/** Tamaño de modelo del pipeline: acepta "small"/"large"/"gte"; cualquier otro → default. */
+function modelSize(v: string | undefined, d: ModelSize): ModelSize {
+  const s = (v ?? "").trim().toLowerCase();
+  return s === ONNXMODELSIZELARGE || s === ONNXMODELSIZESMALL || s === ONNXMODELSIZEGTE ? s : d;
+}
+
 /** Resuelve la carpeta de modelos: env explícito → rutas del paquete → CWD. */
 function resolveModelsPath(env: NodeJS.ProcessEnv): string {
   const explicit = (env.ONNX_MODELS_PATH ?? "").trim();
@@ -269,8 +280,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // ── Modelos ONNX ────────────────────────────────────────────────────
     onnxEnabled: bool(env.ONNX_ENABLED, true),
     onnxModelsPath: resolveModelsPath(env),
-    // Pipeline sobre e5-small (único tamaño activo).
-    onnxModelSize: ONNXMODELSIZESMALL,
+    // Pipeline sobre gte-multilingual-base por defecto (ONNX_MODEL_SIZE=small/large para otras variantes).
+    onnxModelSize: modelSize(env.ONNX_MODEL_SIZE, ONNXMODELSIZEGTE),
 
     // ── Umbral adaptativo y keywords (capas 2-3 del pipeline) ───────────
     adaptiveMinTools: int(env.ONNX_ADAPTIVE_MIN_TOOLS, minToolsDefault),

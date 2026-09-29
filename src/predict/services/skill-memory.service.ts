@@ -61,7 +61,7 @@ export class SkillMemoryService {
     const cached = this.actionEmbeddingCache.get(action);
     if (cached) return cached;
     const readableAction = action.replace(/[_-]+/g, " ").trim();
-    const embRes = await this.engine.embedPassage(readableAction, "small", { high: false });
+    const embRes = await this.engine.embedPassage(readableAction, this.engine.defaultSize, { high: false });
     this.actionEmbeddingCache.set(action, embRes.embedding);
     return embRes.embedding;
   }
@@ -97,7 +97,7 @@ export class SkillMemoryService {
 
     const existing = sessionMap.get(entity.id);
     const textToEmbed = `${entity.type} ${entity.name} ${entity.slug ?? ""}`.trim();
-    const embRes = await this.engine.embedPassage(textToEmbed, "small", { high: false });
+    const embRes = await this.engine.embedPassage(textToEmbed, this.engine.defaultSize, { high: false });
 
     const updated: SessionEntityState = {
       id: entity.id,
@@ -157,7 +157,7 @@ export class SkillMemoryService {
 
     const embRes = await this.engine.embedPassage(
       `${skill.name}: ${skill.intentSummary} ${skill.description}`,
-      "small",
+      this.engine.defaultSize,
       { high: false },
     );
 
@@ -167,7 +167,7 @@ export class SkillMemoryService {
       for (const [key, anchors] of Object.entries(skill.parameterGrounding)) {
         groundedMap[key] = [];
         for (const a of anchors) {
-          const aEmb = await this.engine.embedPassage(`${key}: ${a.name}`, "small", { high: false });
+          const aEmb = await this.engine.embedPassage(`${key}: ${a.name}`, this.engine.defaultSize, { high: false });
           groundedMap[key].push({
             id: a.id,
             name: a.name,
@@ -206,7 +206,7 @@ export class SkillMemoryService {
     const pKey = this.partitionKey(scopeKey, input.sessionId);
 
     const queryText = (input.text ?? "").trim();
-    const queryEmb = await this.engine.embedQuery(queryText, "small", { high: true });
+    const queryEmb = await this.engine.embedQuery(queryText, this.engine.defaultSize, { high: true });
 
     const scopeSkills = this.skillsByScope.get(scopeKey);
     const sessionEntities = this.entitiesByPartition.get(pKey);

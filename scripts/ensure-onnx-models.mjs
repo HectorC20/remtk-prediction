@@ -5,8 +5,9 @@
  * Descarga los modelos ONNX de embeddings que usa remtk-prediction desde
  * Hugging Face al directorio de modelos, solo si faltan (idempotente).
  *
- * El servidor usa e5-small (default) y e5-large (bajo demanda); bge-m3-int8
- * solo se usa en tests (embed-bge.test.ts) y se descarga como extra.
+ * El servidor usa e5-large (default del pipeline) y e5-small (opcional / liviano,
+ * ONNX_MODEL_SIZE=small); bge-m3-int8 solo se usa en tests (embed-bge.test.ts) y
+ * se descarga como extra.
  *
  * Los pesos NO se incrustan en la imagen Docker: viven en el volumen ./models
  * (bind mount) y se pueblan aquí en el primer arranque. No bloquea el boot:
@@ -37,16 +38,28 @@ const HF = "https://huggingface.co";
  */
 const MODELS = [
   {
-    name: "e5-small (default)",
+    name: "e5-large (default del pipeline)",
+    dir: "multilingual-e5-large-onnx",
+    base: `${HF}/intfloat/multilingual-e5-large/resolve/main/onnx`,
+    files: ["model.onnx", "model.onnx_data", "tokenizer.json", "tokenizer_config.json"],
+  },
+  {
+    name: "e5-small (opcional / liviano)",
     dir: "multilingual-e5-small-onnx",
     base: `${HF}/intfloat/multilingual-e5-small/resolve/main/onnx`,
     files: ["model.onnx", "tokenizer.json", "tokenizer_config.json"],
   },
   {
-    name: "e5-large (bajo demanda)",
-    dir: "multilingual-e5-large-onnx",
-    base: `${HF}/intfloat/multilingual-e5-large/resolve/main/onnx`,
-    files: ["model.onnx", "model.onnx_data", "tokenizer.json", "tokenizer_config.json"],
+    // Bi-encoder de intención alternativo a e5 (ONNX_MODEL_SIZE=gte): 768 dims,
+    // pooling CLS y sin prefijos query:/passage:. ONNX int8 auto-contenido, con
+    // el tokenizer en la RAÍZ del repo y los pesos en /onnx/ (model_int8.onnx).
+    name: "gte-multilingual-base (ONNX_MODEL_SIZE=gte)",
+    dir: "gte-multilingual-base-onnx",
+    files: [
+      { src: `${HF}/onnx-community/gte-multilingual-base/resolve/main/onnx/model_int8.onnx`, dest: "model_int8.onnx" },
+      { src: `${HF}/onnx-community/gte-multilingual-base/resolve/main/tokenizer.json`, dest: "tokenizer.json" },
+      { src: `${HF}/onnx-community/gte-multilingual-base/resolve/main/tokenizer_config.json`, dest: "tokenizer_config.json" },
+    ],
   },
   {
     name: "bge-m3-int8 (solo tests)",
@@ -65,6 +78,19 @@ const MODELS = [
       { src: `${HF}/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/onnx/model_quantized.onnx`, dest: "model.onnx" },
       { src: `${HF}/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/tokenizer.json`, dest: "tokenizer.json" },
       { src: `${HF}/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/tokenizer_config.json`, dest: "tokenizer_config.json" },
+    ],
+  },
+  {
+    // Candidato a sustituir a e5-large como bi-encoder de intención (solo
+    // tests, ver tests/embed-qwen3.test.ts). ONNX int8 auto-contenido (614 MB);
+    // tokenizer en la RAÍZ del repo y pesos en /onnx/ (int8 = model_quantized.onnx).
+    // Requiere last-token pooling + formato de instrucción (no mean-pooling).
+    name: "qwen3-embedding-0.6b (candidato, solo tests)",
+    dir: "qwen3-embedding-0.6b-onnx",
+    files: [
+      { src: `${HF}/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/onnx/model_quantized.onnx`, dest: "model.onnx" },
+      { src: `${HF}/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/tokenizer.json`, dest: "tokenizer.json" },
+      { src: `${HF}/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/tokenizer_config.json`, dest: "tokenizer_config.json" },
     ],
   },
   {

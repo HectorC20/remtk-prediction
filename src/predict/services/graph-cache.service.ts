@@ -47,7 +47,7 @@ export class ToolGraphCacheService {
     // es recompute masivo de registro, no de predicción).
     const nodes = new Map<string, ToolGraphNode>();
     for (const tool of tools) {
-      const res = await this.engine.embedPassage(toolSignature(tool), "small", { high: false });
+      const res = await this.engine.embedPassage(toolSignature(tool), this.engine.defaultSize, { high: false });
       nodes.set(tool.name, {
         id: tool.id,
         name: tool.name,
@@ -94,7 +94,7 @@ export class ToolGraphCacheService {
     // Pre-embeber el propósito / resumen de intención de cada herramienta
     for (const t of tools) {
       const sig = `${t.name}: ${t.intentSummary || t.name}`;
-      const res = await this.engine.embedPassage(sig, "small", { high: false });
+      const res = await this.engine.embedPassage(sig, this.engine.defaultSize, { high: false });
       intentEmbCache.set(t.name, res.embedding);
     }
 
@@ -125,7 +125,7 @@ export class ToolGraphCacheService {
 
         let pEmb = paramEmbCache.get(probe);
         if (!pEmb) {
-          const res = await this.engine.embedQuery(probe, "small", { high: false });
+          const res = await this.engine.embedQuery(probe, this.engine.defaultSize, { high: false });
           pEmb = res.embedding;
           paramEmbCache.set(probe, pEmb);
         }
@@ -213,19 +213,35 @@ export class ToolGraphCacheService {
   }
 }
 
-/** Firma canónica de la herramienta (la proyección de nodo del espacio latente). */
+/**
+ * Firma canónica de la herramienta (la proyección de nodo del espacio latente).
+ * Excluye el `inputSchema` y recorta los ejemplos JSON/metadatos de
+ * `description`/`intentSummary`: ambos diluían la señal semántica del nodo
+ * (p. ej. `hero_configurar`, con un esquema `slides` enorme, quedaba por debajo
+ * de `hero_obtener`, de firma limpia).
+ */
 function toolSignature(tool: ToolDefinition): string {
   return [
     tool.name,
     tool.group,
     tool.category,
-    tool.description,
+    shortText(tool.description),
     (tool.tags ?? []).join(" "),
-    tool.intentSummary,
-    JSON.stringify(tool.inputSchema ?? {}),
+    shortText(tool.intentSummary),
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * Primer párrafo de un texto libre, descartando ejemplos JSON y metadatos
+ * (permisos, "Complemento…") que no describen la intención de la herramienta.
+ */
+function shortText(text: string | undefined, maxLen = 320): string {
+  if (!text) return "";
+  const cut = text.search(/\n|[{\[]/);
+  const head = cut >= 0 ? text.slice(0, cut) : text;
+  return head.replace(/\s+/g, " ").trim().slice(0, maxLen);
 }
 
 function computeVersionHash(tools: ToolDefinition[]): string {

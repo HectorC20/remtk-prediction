@@ -144,25 +144,26 @@ test("POST /memory/predict devuelve memorias, topicShift y scores", async () => 
   assert.ok(Array.isArray(result.rankedScores));
 });
 
-test("POST /embed (6777) responde embedding con dim de small", async () => {
+test("POST /embed (6777) responde embedding con la dim del modelo por defecto (large)", async () => {
   const res = await post(embedUrl, "/embed", { text: "hola mundo" });
   assert.equal(res.status, 200);
   const data = res.data as { embedding: number[]; model: string; dim: number; modelPath: string };
   assert.equal(data.model, "hash");
-  assert.equal(data.dim, 384);
-  assert.equal(data.embedding.length, 384);
+  assert.equal(data.dim, 1024);
+  assert.equal(data.embedding.length, 1024);
 
+  // `size` explícito se respeta (remtk-memory indexa en 384 dims con "small").
   const small = await post(embedUrl, "/embed", { text: "hola", size: "small" });
   const smallData = small.data as { dim: number };
   assert.equal(smallData.dim, 384);
 });
 
-test("GET /models (6777) expone el modelo small", async () => {
+test("GET /models (6777) expone el modelo por defecto (large)", async () => {
   const res = await fetch(`${embedUrl}/models`);
   assert.equal(res.status, 200);
-  const data = (await res.json()) as { small?: { dim?: number } };
+  const data = (await res.json()) as { large?: { dim?: number } };
   assert.ok(data && typeof data === "object");
-  assert.equal(data.small?.dim, 384);
+  assert.equal(data.large?.dim, 1024);
 });
 
 test("API Qdrant (6775) responde status y recall de tools", async () => {

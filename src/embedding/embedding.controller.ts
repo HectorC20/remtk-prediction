@@ -1,5 +1,5 @@
 /**
- * API de Modelos (puerto 6777): POST /embed (e5-small) + GET /models + GET /health.
+ * API de Modelos (puerto 6777): POST /embed + GET /models + GET /health.
  *
  * Controlador Nest registrado por EmbeddingAppModule (embedding.module.ts); el motor
  * se inyecta con `useValue` vía forRoot. Sin prefijo global: mismos paths raíz que el
@@ -17,7 +17,12 @@ import {
   Post,
 } from "@nestjs/common";
 import { EmbeddingEngineService } from "./embedding.service";
-import type { ModelSize } from "../shared/constants/predict/version.constants";
+import {
+  ONNXMODELSIZEGTE,
+  ONNXMODELSIZELARGE,
+  ONNXMODELSIZESMALL,
+  type ModelSize,
+} from "../shared/constants/predict/version.constants";
 
 @Controller()
 export class EmbeddingV1Controller {
@@ -31,17 +36,20 @@ export class EmbeddingV1Controller {
     return { status: "ok" };
   }
 
-  /** GET /models → estado del modelo small (único servido en este proceso). */
+  /** GET /models → estado del modelo por defecto del pipeline (env `ONNX_MODEL_SIZE`). */
   @Get("models")
-  async models(): Promise<{ small: { model: string; dim: number; modelPath: string } }> {
-    const small = await this.engine.getInfo("small");
-    return { small };
+  async models(): Promise<Record<string, { model: string; dim: number; modelPath: string }>> {
+    const size = this.engine.defaultSize;
+    return { [size]: await this.engine.getInfo(size) };
   }
 
   /**
    * POST /embed
    * Body: { text: string, size?: "large" | "small" } (sin prefijo; el caller aplica query:/passage:)
    * Respuesta: { embedding: number[], model: "large"|"small"|"hash", dim, modelPath }
+   *
+   * `size` explícito se respeta (p. ej. remtk-memory indexa en 384 dims con "small");
+   * sin `size` se usa el modelo por defecto del pipeline.
    */
   @Post("embed")
   @HttpCode(200)
@@ -55,7 +63,7 @@ export class EmbeddingV1Controller {
     if (typeof text !== "string" || text.trim() === "") {
       throw new BadRequestException({ error: "text requerido" });
     }
-    const size: ModelSize | undefined = "small";
+    const size = this.resolveSize(body?.size);
     try {
       const r = await this.engine.embed(text, size);
       return {
@@ -69,5 +77,14 @@ export class EmbeddingV1Controller {
         error: String((err as Error)?.message ?? err),
       });
     }
+  }
+
+  /** `size` explícito válido ("small"/"large"/"gte") o el default del pipeline. */
+  private resolveSize(raw: unknown): ModelSize {
+    return raw === ONNXMODELSIZESMALL ||
+      raw === ONNXMODELSIZELARGE ||
+      raw === ONNXMODELSIZEGTE
+      ? (raw as ModelSize)
+      : this.engine.defaultSize;
   }
 }
