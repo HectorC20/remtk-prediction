@@ -53,7 +53,7 @@ import {
 } from "src/shared/constants/predict";
 import { DEFAULT_MEMORY_PREDICTION_LIMIT } from "src/shared/constants/qdrant";
 import { TurnType } from "../shared/interfaces";
-import { resolveScopeKey } from "src/shared/scope";
+import { parseKeyRemtk, resolveScopeKey } from "src/shared/scope";
 
 const CANONICAL_INTEREST_PROBE =
   "interés comercial en adquirir, comprar, cotizar o contratar un producto o servicio";
@@ -806,14 +806,16 @@ export class PredictionOrchestrator {
     }
     this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
 
+    const { tenant, agentId } = parseKeyRemtk(input.keyRemtk, input.tenant, input.agentId);
+
     // Recall BM25 directo en Qdrant (degradación suave si no responde).
     let candidates: { memory: MemoryDefinition; retrievalScore: number }[] = [];
     try {
       candidates = await this.qdrant.searchMemories(
-        input.tenant,
+        tenant,
         text,
         input.limit || DEFAULT_MEMORY_PREDICTION_LIMIT,
-        input.agentId,
+        agentId,
       );
     } catch (err) {
       log(`[memory] recall degradado (Qdrant no disponible): ${String((err as Error)?.message ?? err)}`);
