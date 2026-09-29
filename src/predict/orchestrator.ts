@@ -25,6 +25,7 @@ import {
   matchTokenSet,
   namedFamilies,
   toolFamily,
+  toolNamesInText,
 } from "./keywords";
 import { Debugger } from "./helper/debugger.helper";
 import { ToolGraphCacheService } from "./services/graph-cache.service";
@@ -403,17 +404,21 @@ export class PredictionOrchestrator {
     // herramienta, lo único que distingue familias dentro de un complemento.
     queryTokens = matchTokenSet(promptText);
 
-    // Herramientas nombradas EXPLÍCITAMENTE en las palabras clave delegadas: una
-    // keyword que coincide con el NOMBRE de una herramienta del catálogo es una
-    // orden directa de uso, así que el rerank la fija al frente de la salida. Sin
+    // Herramientas nombradas EXPLÍCITAMENTE: en las palabras clave delegadas
+    // (orden del planificador) o LITERALMENTE en el propio turno. En ambos casos
+    // el rerank las fija al frente de la salida y garantiza su presencia. Sin
     // este ancla el score por embeddings no distingue el verbo del nombre
-    // (`mitumbes_item_crear` y `mitumbes_item_actualizar` comparten identidad).
-    const pinnedNames = explicitToolNames(
-      input.keywords,
-      catalog.all().map((t) => t.name),
-    );
+    // (`mitumbes_item_crear` y `mitumbes_item_actualizar` comparten identidad) y,
+    // cuando la descripción de una hermana menciona a la otra, la pedida queda
+    // fuera de la banda: `mitumbes_item_imagen_actualizar` nombra a
+    // `..._imagen_adjuntar` en su descripción y el re-rank la adelanta.
+    const catalogNames = catalog.all().map((t) => t.name);
+    const pinnedNames = [
+      ...explicitToolNames(input.keywords, catalogNames),
+      ...toolNamesInText(text, catalogNames),
+    ];
     if (pinnedNames.length > 0) {
-      log(`[pipeline] keywords explícitas=${pinnedNames.join(",")}`);
+      log(`[pipeline] tools explícitas=${pinnedNames.join(",")}`);
     }
 
     // Estado latente de sesión (z_t): proyección suavizada del prompt entrante.

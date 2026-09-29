@@ -37,6 +37,7 @@
     "test:graph": "tsx --test tests/graph.test.ts",
     "test:learn": "tsx --test tests/learn-barrier.test.ts",
     "test:mitumbes": "tsx --test tests/mitumbes-barrier.test.ts",
+    "test:adjuntar": "tsx --test tests/mitumbes-adjuntar-noise-reproduction.test.ts",
     "test:model": "tsx --test tests/embed-model.test.ts",
     "test:compare": "tsx --test tests/embed-compare.test.ts",
     "test:bge": "tsx --test tests/embed-bge.test.ts",

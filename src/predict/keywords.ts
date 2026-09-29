@@ -179,6 +179,45 @@ export function explicitToolNames(keywords: string[] | undefined, names: string[
 }
 
 /**
+ * Herramientas nombradas LITERALMENTE en un texto libre: su NOMBRE COMPLETO
+ * aparece como palabra suelta (con límites a ambos lados) en el texto, sin
+ * distinguir mayúsculas.
+ *
+ * Es la misma orden directa que `explicitToolNames` reconoce en las palabras
+ * clave delegadas, pero leída del propio turno: cuando el usuario o el
+ * planificador escribe `mitumbes_item_imagen_adjuntar` no pide "algo parecido",
+ * nombra LA herramienta. Los límites evitan el match parcial entre nombres
+ * anidados del catálogo (`..._adjuntar` dentro de `..._adjuntar_varios`,
+ * `mitumbes_hero_obtener` dentro de `mitumbes_evento_hero_obtener`).
+ */
+export function toolNamesInText(text: string | undefined, names: string[]): string[] {
+  const lowered = String(text ?? "").toLowerCase();
+  if (lowered === "") return [];
+  const out: string[] = [];
+  for (const raw of names) {
+    const name = String(raw ?? "").trim();
+    if (name === "") continue;
+    const needle = name.toLowerCase();
+    let from = lowered.indexOf(needle);
+    while (from !== -1) {
+      const before = from === 0 ? "" : lowered[from - 1];
+      const after = lowered[from + needle.length] ?? "";
+      if (!isNameChar(before) && !isNameChar(after)) {
+        out.push(name);
+        break;
+      }
+      from = lowered.indexOf(needle, from + 1);
+    }
+  }
+  return out;
+}
+
+/** True si el caracter forma parte de un identificador de herramienta. */
+function isNameChar(ch: string): boolean {
+  return ch !== "" && /[a-z0-9_]/.test(ch);
+}
+
+/**
  * Extrae keywords salientes del prompt: descarta stopwords y tokens cortos,
  * ordena por frecuencia (palabras repetidas primero) y luego por longitud.
  */
