@@ -38,9 +38,9 @@ services:
       PORT_PREDICT: 6776
       PORT_EMBED: 6777
       PORT_QDRANT: 6775
-      # Modelo del pipeline: e5-large (1024 dims). Es el default del código;
-      # se fija explícito para producción (ONNX_MODEL_SIZE=small para el liviano).
-      ONNX_MODEL_SIZE: "large"
+      # Modelo del pipeline: gte-multilingual-base (768 dims). Es el default del
+      # código; se fija explícito para producción (ONNX_MODEL_SIZE=small/large para otras variantes).
+      ONNX_MODEL_SIZE: "gte"
       # Dentro de compose, Qdrant se alcanza por el nombre del servicio.
       QDRANT_ENABLED: "true"
       QDRANT_URL: http://qdrant:6333
