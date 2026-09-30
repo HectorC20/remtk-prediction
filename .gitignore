@@ -27,3 +27,7 @@ runtime
 /docs/
 # Benchmark results
 bench/results/
+
+# Pruebas/scripts que exponen API keys reales hardcodeadas (no subir credenciales)
+scratch/test-real-environment.ts
+scratch/test-real-keyremtk-e2e.ts
