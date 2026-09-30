@@ -77,6 +77,7 @@ const CFG = {
   learnMaxPostings: 200,
   learnPersist: false,
   predictWarmupWaitMs: 0,
+  varianteCEnabled: true,
   ...juicioConfigDefaults,
 };
 

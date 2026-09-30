@@ -33,7 +33,7 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 
-// Modelo del pipeline para esta prueba (A/B): por defecto gte (default del
+// Modelo del pipeline para esta prueba (A/B): por defecto gte (modelo del
 // pipeline); se puede correr con `ONNX_MODEL_SIZE=small` (fallo original) o
 // `ONNX_MODEL_SIZE=large`.
 const MODEL_SIZE = (process.env.ONNX_MODEL_SIZE ?? "gte") as "small" | "large" | "gte";

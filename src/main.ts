@@ -35,6 +35,7 @@ import { EspecificidadService } from "./juicio/services/especificidad.service";
 import { EstadoNliService } from "./juicio/services/estado-nli.service";
 import { MaxSimService } from "./juicio/services/maxsim.service";
 import { PuertaContextoService } from "./juicio/services/puerta-contexto.service";
+import { VarianteCService } from "./predict/services/variante-c.service";
 
 // Contrato público del sistema: reexportado para `index.ts` y consumidores
 // externos (p. ej. tests) que importan `{ createSystem, type System }`.
@@ -59,6 +60,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
   const debugger_ = new Debugger();
   const rerank = new RerankService(cfg);
   const lexical = new LexicalProfileService(cfg);
+  const varianteC = new VarianteCService(engine);
 
   // Capa de juicio (docs/juicio.md): NLI de estado + abstención + puerta de
   // coherencia + MaxSim + especificidad + cross-encoder opcional.
@@ -87,6 +89,7 @@ export async function createSystem(cfg: AppConfig): Promise<System> {
     cfg,
     lexical,
     juicio,
+    varianteC,
   });
 
   const skillMemory = new SkillMemoryService(engine);

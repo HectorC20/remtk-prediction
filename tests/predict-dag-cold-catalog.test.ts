@@ -101,6 +101,7 @@ function config(overrides: Partial<AppConfig>): AppConfig {
     learnMaxPostings: 200,
     learnPersist: false,
     predictWarmupWaitMs: 0,
+    varianteCEnabled: true,
     ...juicioConfigDefaults,
     ...overrides,
   } as AppConfig;

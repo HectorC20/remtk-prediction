@@ -29,6 +29,7 @@ import {
   isForeignFamily,
 } from "src/predict/services/rerank.service";
 import { matchTokenSet, nameAffinity } from "src/predict/keywords";
+import { pivotThresholdsByModel } from "src/shared/constants/predict/embedding.constants";
 import { CalibrationService } from "src/predict/services/calibration.service";
 import { AbstencionService } from "./services/abstencion.service";
 import { CrossEncoderService } from "./services/cross-encoder.service";
@@ -133,9 +134,16 @@ export class JuicioService {
       if (currProj && prevProj && currProj.topTool !== prevProj.topTool) {
         const scoreCurrOnPrev = currProj.scores.get(prevProj.topTool) ?? 0;
         const shiftMargin = currProj.topScore - scoreCurrOnPrev;
+        // Umbrales por modelo: la escala del coseno depende del embedding, así que
+        // un pivote exige un `topScore` claro para el modelo activo.
+        const pivot = pivotThresholdsByModel[this.engine.defaultSize];
         const isFunctionalPivot =
-          (shiftMargin >= 0.040 && currProj.topScore >= 0.85) ||
-          (shiftMargin >= 0.050 && currProj.prominence >= 0.035);
+          currProj.topScore >= pivot.topScore &&
+          (shiftMargin >= pivot.shiftHigh ||
+            (shiftMargin >= pivot.shiftLow && currProj.prominence >= pivot.prominence));
+        log(
+          `[juicio:pivot] curr=${currProj.topTool}(${currProj.topScore.toFixed(3)}) prev=${prevProj.topTool} onPrev=${scoreCurrOnPrev.toFixed(3)} shift=${shiftMargin.toFixed(3)} prom=${currProj.prominence.toFixed(3)} min=${pivot.topScore} → pivot=${isFunctionalPivot}`,
+        );
         if (isFunctionalPivot) {
           ctx.gateLambda = 0.05;
           ctx.isAutonomousPivot = true;
@@ -253,7 +261,7 @@ export class JuicioService {
     exclude?: string[];
     source?: "human" | "agent";
   }): Promise<{ result: GraphPredictionResult; diag: JuicioPostDiag }> {
-    const { scopeKey, text, ctx, result, source } = params;
+    const { scopeKey, text, ctx, source } = params;
     const diag: JuicioPostDiag = {
       abstained: false,
       noopScore: 0,
@@ -262,7 +270,20 @@ export class JuicioService {
       rerankerApplied: false,
       specificityApplied: false,
     };
-    if (!this.operative || result.tools.length === 0) return { result, diag };
+    if (!this.operative) return { result: params.result, diag };
+
+    // El juicio no delega la legitimidad en la predicción: cuando el rerank no
+    // supera su piso y entrega ∅, el juicio vuelve a juzgar sobre el CATÁLOGO
+    // con sus propias señales. Si nada se sostiene —o el discurso entero es
+    // __NOOP__— se abstiene (∅) devolviendo el resultado vacío tal cual.
+    let result = params.result;
+    if (result.tools.length === 0) {
+      const sustained = ctx.allSpansNoop
+        ? undefined
+        : await this.reseedFromCatalog(scopeKey, text, ctx, params.result, params.exclude);
+      if (!sustained) return { result: params.result, diag };
+      result = sustained;
+    }
 
     // (2) Abstención: prototipo __NOOP__, energía o ausencia de pico funcional en discurso multi-tramo.
     const verdict = await this.abstencion.shouldAbstain(ctx.uText, result.rankedScores);
@@ -490,6 +511,62 @@ export class JuicioService {
         .join(",")}`,
     );
     return { result: judged, diag };
+  }
+
+  /**
+   * (7) Decisión del juicio sobre el catálogo. Cuando el rerank no supera su
+   * piso de relevancia, la legitimidad no la decide la predicción: el juicio
+   * re-siembra candidatos del catálogo completo y los sostiene con las señales
+   * que ya gobiernan su re-rank.
+   *
+   * El ancla es SIMBÓLICA —el nombre de la herramienta con un token de
+   * identidad presente en el turno—: lo que el turno nombra es una orden, no
+   * una hipótesis, y por eso su afinidad sube el score. La proyección sobre la
+   * variedad (coseno × penalización por difusión) ordena dentro de lo sostenido
+   * y el cross-encoder y la poda adaptativa del re-rank terminan de decidir.
+   *
+   * Devuelve `undefined` —abstención de juicio— si ninguna herramienta queda
+   * sostenida por el ancla.
+   */
+  private async reseedFromCatalog(
+    scopeKey: string | undefined,
+    text: string,
+    ctx: JuicioContext,
+    base: GraphPredictionResult,
+    exclude?: string[],
+  ): Promise<GraphPredictionResult | undefined> {
+    if (!scopeKey) return undefined;
+    const catalogTools = this.especificidad.catalogTools(scopeKey);
+    if (catalogTools.length === 0) return undefined;
+
+    const effectiveText = ctx.focusedText ?? text;
+    const queryTokens = matchTokenSet(effectiveText);
+    const proj = await this.especificidad.projectManifold(scopeKey, ctx.uText);
+    const excludedLower = new Set((exclude ?? []).map((e) => e.toLowerCase()));
+
+    const sustained: { tool: ToolDefinition; score: number }[] = [];
+    for (const tool of catalogTools) {
+      if (excludedLower.has(tool.name.toLowerCase())) continue;
+      const affinity = nameAffinity(queryTokens, tool.name);
+      if (affinity <= 0) continue;
+      const cosine = proj?.scores.get(tool.name) ?? 0;
+      sustained.push({ tool, score: cosine + this.config.nameAffinityBoost * affinity });
+    }
+    if (sustained.length === 0) return undefined;
+
+    sustained.sort((a, b) => b.score - a.score);
+    const names = sustained.map((s) => s.tool.name);
+    log(
+      `[juicio] rerank ∅ → decide sobre catálogo: sostenidas por ancla=${sustained.length} ` +
+        `top=${sustained[0].tool.name}(${sustained[0].score.toFixed(3)})`,
+    );
+    return {
+      ...base,
+      tools: sustained.map((s) => s.tool),
+      rankedScores: sustained.map((s) => s.score),
+      calibratedScores: CalibrationService.calibrateRankedScores(sustained.map((s) => s.score)),
+      graph: { nodes: names, edges: [], executionOrder: names },
+    };
   }
 
   /**

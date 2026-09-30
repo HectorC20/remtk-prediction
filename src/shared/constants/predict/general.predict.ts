@@ -157,6 +157,62 @@ export const INTEREST_MAX_ANCHORS = 32;
 /** Tope de matches de ancla devueltos (ordenados desc). */
 export const INTEREST_TOP_MATCHES = 5;
 
+// ── Variante C · núcleo de 3 discriminadores (ruta conmutable) ───────
+/**
+ * Interruptor de la ruta Variante C (env `VARIANTE_C_ENABLED`). Default ON:
+ * `predict()` enruta por el núcleo de 3 discriminadores (12/12 y 6/6 en los
+ * arneses), que sustituye al ranking del pipeline por ser el ganador medido.
+ * El pipeline previo queda como respaldo y sigue disponible apagando el flag
+ * (env `VARIANTE_C_ENABLED=false`), con lo que el rollback es trivial.
+ */
+export const varianteCEnabledDefault = true;
+/** Tope de candidatas del recall por unión (turno ∪ contexto). */
+export const C_RECALL_K = 8;
+/** Margen (max−media del coseno del turno) que marca un turno AUTÓNOMO. */
+export const C_MARGIN = 0.13;
+/**
+ * Compuerta anafórica: si el turno se parece a un arquetipo de apoyo por encima
+ * de este coseno, es DEPENDIENTE aunque tenga margen (debe resolver con el
+ * contexto). Medido: autónomos ≤ 0.584; turno anafórico = 0.787.
+ */
+export const C_ANAF_TAU = 0.7;
+/** Fusión AUTÓNOMA: D2 (MaxSim por cláusula) manda; D1 (coseno) desempata. */
+export const C_W1_AUTO = 0.25;
+export const C_W2_AUTO = 0.7;
+/** Fusión DEPENDIENTE: D1 sobre el CONTEXTO manda; D2 desempata. */
+export const C_W1_DEP = 0.85;
+export const C_W2_DEP = 0.1;
+/** Peso del estado (D3) en la fusión. */
+export const C_W3 = 0.05;
+/** Umbrales del detector de estado (D3) por coseno contra arquetipos. */
+export const C_REJ_TAU = 0.6;
+export const C_CONF_TAU = 0.6;
+/** Umbral de abstención: si el mejor `fused` < τ ⇒ ∅. */
+export const C_TAU = 0.4;
+/** Banda multi-intención: se aceptan los candidatos dentro de δ del primero. */
+export const C_DELTA = 0.12;
+/** Unidades de intención del turno (conjunciones y puntuación). */
+export const C_CLAUSE_SPLIT = /[,;.]|\by\b|\band\b|\be\b|\bluego\b|\bdespués\b|\bthen\b/gi;
+/** Arquetipos de ESTADO (D3): prototipos de rechazo/confirmación del turno. */
+export const C_REJECT_ARCH = [
+  "no, todavía no",
+  "no gracias, mejor no",
+  "no por ahora",
+  "cancélalo, no quiero",
+];
+export const C_CONFIRM_ARCH = ["sí, hazlo, adelante", "dale, procede", "sí, por favor, confirma"];
+/** Arquetipos ANAFÓRICOS: turnos de apoyo sin acción propia (compuerta). */
+export const C_ANAPHORA_ARCH = [
+  "hazlo con eso",
+  "sí, ese mismo",
+  "continúa con lo mismo",
+  "aplica lo mismo a esa",
+  "y eso también",
+  "hazlo",
+  "ahora con esa",
+  "hazlo también para esa",
+];
+
 // ── Estado continuo de sesión ───────────────────────────────────────
 /** Ponderación del estado z_t previo en la combinación convexa 70/30. */
 export const BLEND_PREV = 0.7;

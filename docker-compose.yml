@@ -2,7 +2,7 @@
 #
 # Servicios:
 #   - qdrant     → motor Qdrant (recall BM25), puerto 6333
-#   - prediction → API de predicción (6776), modelos e5-small (6777) y API Qdrant (6775)
+#   - prediction → API de predicción (6776), modelos (6777) y API Qdrant (6775)
 #
 # Uso:
 #   docker compose up -d          # levanta Qdrant + servidor de predicción
@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
     ports:
       - "6776:6776" # API de predicción
-      - "6777:6777" # API de modelos (e5-large)
+      - "6777:6777" # API de modelos (gte-multilingual-base)
       - "6775:6775" # API Qdrant del servicio
     environment:
       NODE_ENV: production
@@ -45,7 +45,7 @@ services:
       QDRANT_ENABLED: "true"
       QDRANT_URL: http://qdrant:6333
     volumes:
-      # Modelos ONNX (e5-large + e5-small): bind mount para no incluirlos en la imagen.
+      # Modelos ONNX (gte-multilingual-base + variantes e5): bind mount para no incluirlos en la imagen.
       - ./models:/app/models
     depends_on:
       qdrant:

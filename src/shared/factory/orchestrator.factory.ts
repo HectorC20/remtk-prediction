@@ -11,6 +11,7 @@ import { RerankService } from "src/predict/services/rerank.service";
 import { ConfirmationCache } from "src/predict/services/confirm-cache.service";
 import { LexicalProfileService } from "src/predict/services/lexical-profile.service";
 import { JuicioService } from "src/juicio/juicio.service";
+import { VarianteCService } from "src/predict/services/variante-c.service";
 import { AppConfig } from "src/config";
 
 export interface OrchestratorDependencies {
@@ -28,6 +29,8 @@ export interface OrchestratorDependencies {
   lexical: LexicalProfileService;
   /** Capa de juicio (NLI de estado, abstención, puerta, re-rank). */
   juicio: JuicioService;
+  /** Núcleo Variante C (ruta conmutable por `VARIANTE_C_ENABLED`). */
+  varianteC: VarianteCService;
 }
 
 /** Construye y devuelve la instancia del orquestador bajo su interfaz */
@@ -45,5 +48,6 @@ export function createOrchestrator(deps: OrchestratorDependencies): IPredictionO
     deps.cfg,
     deps.lexical,
     deps.juicio,
+    deps.varianteC,
   );
 }

@@ -271,7 +271,7 @@ export class EmbeddingEngineService {
    * [1, dim] (ya pooled) no hay nivel token disponible → [].
    */
   private async runModelTokens(size: ModelSize, text: string): Promise<Float32Array[]> {
-    const { data, dims, mask } = await this.runRaw(size, text);
+    const { data, dims, mask } = await this.runRaw(size, text, true);
     if (dims.length !== 3) return [];
 
     const seq = dims[1];
@@ -293,6 +293,7 @@ export class EmbeddingEngineService {
   private async runRaw(
     size: ModelSize,
     text: string,
+    wantTokens = false,
   ): Promise<{ data: Float32Array; dims: readonly number[]; mask: number[] }> {
     const session = this.sessions.get(size)!;
     const tokenizer = this.tokenizers.get(size)!;
@@ -322,9 +323,19 @@ export class EmbeddingEngineService {
     if (inputNames.includes("token_type_ids")) {
       feeds.token_type_ids = new this.onnx!.Tensor("int64", tokenTypeIds, [1, len]);
     }
+    // Modelos con embeddings posicionales declaran position_ids; e5/gte no lo exigen.
+    if (inputNames.includes("position_ids")) {
+      const positionIds = new BigInt64Array(len);
+      for (let i = 0; i < len; i++) positionIds[i] = BigInt(i);
+      feeds.position_ids = new this.onnx!.Tensor("int64", positionIds, [1, len]);
+    }
     const outputs = await session.run(feeds);
 
-    const result = outputs["sentence_embedding"] ?? outputs["last_hidden_state"];
+    // Nivel token (MaxSim): token_embeddings es el tensor [1, seq, dim]. El
+    // pooling (embed) usa la salida pooled: sentence_embedding si existe.
+    const result = wantTokens
+      ? outputs["token_embeddings"] ?? outputs["last_hidden_state"] ?? outputs["sentence_embedding"]
+      : outputs["sentence_embedding"] ?? outputs["last_hidden_state"] ?? outputs["token_embeddings"];
     if (!result) throw new Error(`sin salida de embedding (${Object.keys(outputs).join(",")})`);
 
     return {

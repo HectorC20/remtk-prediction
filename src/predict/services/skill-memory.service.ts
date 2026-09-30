@@ -11,6 +11,7 @@
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log } from "src/logger";
+import { skillThresholdsByModel } from "src/shared/constants/predict/embedding.constants";
 import { parseKeyRemtk, resolveScopeKey } from "src/shared/scope";
 import type {
   GroundedParameterMatch,
@@ -31,25 +32,17 @@ export class SkillMemoryService {
   /** Cache de embeddings de acciones de ciclo de vida para evitar re-computación */
   private readonly actionEmbeddingCache = new Map<string, Float32Array>();
 
-  /** Piso de similitud para que una ancla describa a la consulta. No decide solo: ver ANCLA_MARGEN. */
-  private static readonly ANCLA_MINIMA = 0.82;
+  constructor(private readonly engine: EmbeddingEngineService) {}
 
   /**
-   * Distancia mínima entre la mejor ancla y la siguiente de OTRO identificador.
-   * Un ancla es un valor que otra consulta usó en el pasado, no una verdad del
-   * turno actual; en este espacio vectorial dos nombres de negocio cualesquiera
-   * cosenean ~0.85, por encima del piso, así que sin margen el turno nuevo
-   * heredaba el id de otro negocio. Sin rival claro se abstiene y el
-   * mini-agente resuelve el identificador listando.
-   *
-   * 0.015 separa lo que miden las dos baterías: las anclas que NO describen a la
-   * entidad nombrada en el turno dejan márgenes de 0.000-0.010, y las
-   * resoluciones correctas 0.018 o más. Más arriba de esto se empieza a
-   * descartar lo correcto ("un hotel en Punta Sal" -> Hoteles gana por 0.018).
+   * Umbrales del subsistema calibrados por modelo (ver
+   * `embedding.constants.skillThresholdsByModel`). La escala del coseno depende
+   * del embedding, así que los umbrales absolutos se calibran por modelo para
+   * que el anclaje de parámetros y el atajo `execute_direct` operen igual.
    */
-  private static readonly ANCLA_MARGEN = 0.015;
-
-  constructor(private readonly engine: EmbeddingEngineService) {}
+  private get thresholds() {
+    return skillThresholdsByModel[this.engine.defaultSize];
+  }
 
   /** Clave compuesta para aislar entidades por scopeKey y sessionId */
   private partitionKey(scopeKey: string, sessionId: string): string {
@@ -228,6 +221,12 @@ export class SkillMemoryService {
     // 1. Resolver entidad de la sesión (puramente vectorial y por actividad)
     let matchedEntity: SessionEntityState | undefined;
     let bestEntitySim = 0;
+    // Coincidencia entre la consulta y la acción pendiente de la entidad ganadora.
+    // Viaja fuera del bucle porque la decisión de ejecutar directo la necesita:
+    // un turno que retoma la acción que la entidad quedó esperando (subir su
+    // imagen, confirmarla, completarla) puede ejecutarse sin preguntar aunque su
+    // texto no empareje la habilidad por encima del piso.
+    let bestEntityActionSim = 0;
 
     if (sessionEntities && sessionEntities.size > 0) {
       for (const entity of sessionEntities.values()) {
@@ -235,10 +234,11 @@ export class SkillMemoryService {
         let sim = EmbeddingEngineService.cosine(queryEmb.embedding, entity.embedding);
 
         // Bonificación vectorial si la acción pendiente coincide semánticamente con la consulta
+        let actionSim = 0;
         if (entity.state.pendingAction) {
           const actionEmb = await this.getActionEmbedding(entity.state.pendingAction);
-          const actionSim = EmbeddingEngineService.cosine(queryEmb.embedding, actionEmb);
-          if (actionSim > 0.6) {
+          actionSim = EmbeddingEngineService.cosine(queryEmb.embedding, actionEmb);
+          if (actionSim > this.thresholds.actionSimMin) {
             sim += actionSim * 0.3;
           }
         }
@@ -248,15 +248,18 @@ export class SkillMemoryService {
         if (finalScore > bestEntitySim) {
           bestEntitySim = finalScore;
           matchedEntity = entity;
+          bestEntityActionSim = actionSim;
         }
       }
     }
 
     // 2. Resolver parámetros grounded por competencia, no por piso absoluto: la
     //    ancla más parecida a la consulta tiene que dejar atrás, por un margen, a
-    //    cualquier ancla de OTRO identificador del scope. Ver ANCLA_MARGEN.
+    //    cualquier ancla de OTRO identificador del scope. Ver
+    //    `skillThresholdsByModel.anchorMargin`.
     const groundedMatches: GroundedParameterMatch[] = [];
     const preResolvedArgs: Record<string, unknown> = {};
+    const thresholds = this.thresholds;
 
     if (bestSkill?.parameterGrounding) {
       const demas = [...(scopeSkills?.values() ?? [])].filter((s) => s.id !== bestSkill.id);
@@ -279,7 +282,7 @@ export class SkillMemoryService {
         const rival = ranking[1];
         if (!ganadora) continue;
         const margen = rival ? ganadora.sim - rival.sim : Number.POSITIVE_INFINITY;
-        if (ganadora.sim >= SkillMemoryService.ANCLA_MINIMA && margen >= SkillMemoryService.ANCLA_MARGEN) {
+        if (ganadora.sim >= thresholds.anchorMinSim && margen >= thresholds.anchorMargin) {
           groundedMatches.push({
             key: paramKey,
             matchedId: ganadora.ancla.id,
@@ -317,15 +320,27 @@ export class SkillMemoryService {
       }
     }
 
-    // Determinar la acción sugerida
+    // Determinar la acción sugerida. Ejecutar directo exige DOS cosas: saber qué
+    // hacer y tener con qué.
+    //  - Saber qué hacer: el turno empareja una habilidad del scope por encima
+    //    del piso, O está retomando la acción pendiente de la entidad activa
+    //    (coincidencia consulta↔acción por encima del piso). Dos caminos porque
+    //    una orden corta de continuación ("te pido que actualices la imagen")
+    //    completa la acción pendiente sin describir la habilidad completa.
+    //  - Tener con qué: el identificador objetivo quedó pre-resuelto, o el par
+    //    categoría+zona (creación).
+    const skillGrounded = Boolean(bestSkill) && bestSkillScore >= thresholds.skillMatchMin;
+    const entityActionGrounded =
+      Boolean(matchedEntity?.state.pendingAction) && bestEntityActionSim >= thresholds.actionSimMin;
+    const hasTargetArgs =
+      Boolean(preResolvedArgs.id) ||
+      (Boolean(preResolvedArgs.categoryId) && Boolean(preResolvedArgs.zoneId));
+
     let suggestedAction: "execute_direct" | "discover_prerequisites" | "ask_user" = "ask_user";
-    if (bestSkill && bestSkillScore >= 0.75) {
-      // Si tenemos los identificadores principales (ej: ID para actualizar, o categoría/zona para crear)
-      if (preResolvedArgs.id || (preResolvedArgs.categoryId && preResolvedArgs.zoneId)) {
-        suggestedAction = "execute_direct";
-      } else {
-        suggestedAction = "discover_prerequisites";
-      }
+    if ((skillGrounded || entityActionGrounded) && hasTargetArgs) {
+      suggestedAction = "execute_direct";
+    } else if (skillGrounded) {
+      suggestedAction = "discover_prerequisites";
     }
 
     // Generar contexto compacto para mini-agentes / planificador (< 200 tokens)

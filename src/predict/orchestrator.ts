@@ -34,6 +34,7 @@ import { LexicalProfileService } from "./services/lexical-profile.service";
 import { CalibrationService } from "./services/calibration.service";
 import { RerankService, topologicalSort, intentDeTanda, type RerankResult } from "./services/rerank.service";
 import { SessionStateCacheService } from "./services/session-state-cache.service";
+import { VarianteCService } from "./services/variante-c.service";
 import { TurnClassifier} from "./turn-classifier";
 import { JuicioService } from "../juicio/juicio.service";
 import type { JuicioContext } from "../shared/interfaces/juicio.interface";
@@ -49,6 +50,7 @@ import {
   MAX_INTENT_CONTEXT_CHARS,
   MAX_INTENT_SEGMENTS,
   MAX_MESSAGE_CHARS,
+  memoryDenialThreshold,
   PREREQUISITE_WEIGHT,
   TOPIC_SHIFT_THRESHOLD,
 } from "src/shared/constants/predict";
@@ -94,6 +96,7 @@ export class PredictionOrchestrator {
     private readonly config: AppConfig,
     private readonly lexical: LexicalProfileService,
     private readonly juicio: JuicioService,
+    private readonly varianteC: VarianteCService,
   ) {}
 
   /** Warm-ups de embeddings pendientes por scopeKey (deduplicado/encadenado). */
@@ -124,6 +127,12 @@ export class PredictionOrchestrator {
       .then(async () => {
         const { recomputed, cached } = await this.keywords.upsertTools(scopeKey, tools);
         await this.graphCache.buildTenantGraph(scopeKey, tools);
+        // Núcleo Variante C (ruta conmutable): indexa la firma `core` del catálogo
+        // en D1 (vector) y D2 (tokens) del scope. Solo con la ruta activa: sin ella
+        // el coste de indexado no se paga. El índice se reconstruye al re-registrar.
+        if (this.config.varianteCEnabled) {
+          await this.varianteC.indexScope(scopeKey, tools);
+        }
         // Tercer paso del warm-up: semilla del perfil léxico del canal (§7).
         // Síncrono y sin ONNX: no compite con la cola de inferencia.
         this.lexical.seedScope(scopeKey, tools);
@@ -467,6 +476,111 @@ export class PredictionOrchestrator {
     }
 
     const graph = this.graphCache.get(scopeKey);
+
+    // ── Núcleo Variante C (ruta conmutable, `VARIANTE_C_ENABLED`) ──────────
+    // Sustituye el ranking por los 3 discriminadores portados del arnés ganador
+    // (D1 recall por unión, D2 MaxSim por cláusula, D3 estado/autonomía/mención) y
+    // la fusión auton/dep con arbitraje. Conserva el andamiaje: scope, pre-plan
+    // DAG declarado y capa de juicio. Si el índice del scope no está listo, degrada
+    // al ranking del pipeline.
+    if (this.config.varianteCEnabled && this.varianteC.has(scopeKey)) {
+      const cRes = await this.varianteC.rank(
+        scopeKey,
+        this.withKeywords(effectiveText, input.keywords),
+        this.contextoDeTurno(input, esAgente),
+      );
+      if (cRes) {
+        const arb = this.varianteC.arbitrate(cRes);
+        const fusedByName = new Map(cRes.out.map((c) => [c.name, c.fused]));
+        // Orden: palabras clave delegadas por el planificador (orden directa, igual
+        // que `pinnedNames`) y luego la ratificación del núcleo C (mención literal o
+        // banda δ). El arbitraje ya devuelve ∅ en reject / dependiente-sin-contexto /
+        // bajo C_TAU.
+        const ordered = [
+          ...new Set([...explicitToolNames(input.keywords, catalogNames), ...arb.tools]),
+        ];
+        const excludedNames = new Set((input.exclude ?? []).map((n) => n.toLowerCase()));
+        const tools: ToolDefinition[] = [];
+        const scores: number[] = [];
+        for (const name of ordered) {
+          if (excludedNames.has(name.toLowerCase())) continue;
+          const def = catalog.get(name);
+          if (!def) continue;
+          tools.push(def);
+          scores.push(fusedByName.get(name) ?? 1);
+        }
+        const calibratedScores = CalibrationService.calibrateRankedScores(scores);
+        const topTool = tools[0];
+        const tanda = intentDeTanda(tools);
+        const base: RerankResult = {
+          tools,
+          complexity: "simple",
+          modelSize: this.engine.defaultSize,
+          rankedScores: scores,
+          calibratedScores,
+          context: {
+            intent: {
+              primaryAction: topTool?.category ?? "execute",
+              confidence: calibratedScores[0] ?? 0.5,
+              category: tanda.category,
+              categories: tanda.categories,
+              summary:
+                tools.length > 0
+                  ? `Núcleo C: ${tools.length} herramientas`
+                  : "Sin herramientas seleccionadas",
+            },
+            constraints: {
+              negations: [],
+              isConfirmation: false,
+              isExploratory: tools.length === 0,
+            },
+            dialogState: {
+              phase: tools.length > 0 ? "execution" : "discovery",
+              topicShift: false,
+              activeDomain: topTool?.group,
+            },
+            anticipation: {
+              suggestedNextTools: [],
+              reasoning: `Núcleo C ${cRes.autonomous ? "autónomo" : "dependiente"} (margen ${cRes.margin.toFixed(3)})`,
+            },
+          },
+        };
+        const withPre = this.withDeclaredPrerequisites(base, catalog, input.exclude);
+        const result = await this.judgeResult(
+          scopeKey,
+          effectiveText,
+          juicioCtx,
+          withPre,
+          pinnedNames,
+          trace,
+          input.exclude,
+          input.source,
+        );
+        trace.recall = catalogNames.length;
+        trace.modelSize = result.modelSize;
+        trace.complexity = result.complexity;
+        trace.outputTools = result.tools.length;
+        log(
+          `[varianteC] scope=${scopeKey} régimen=${cRes.autonomous ? "AUTO" : "DEP"} ` +
+            `margen=${cRes.margin.toFixed(3)} anaf=${cRes.anaphora.toFixed(3)} estado=${cRes.state} ` +
+            `dec=${arb.decision} out=${result.tools.length}`,
+        );
+        if (result.tools.length > 0 && !esAgente) {
+          this.confirmCache.set(input.sessionId, result);
+          this.debugger_.bump({ confirmSets: 1 });
+        }
+        this.trackTurn({
+          input,
+          turn,
+          topicSim,
+          scopeKey,
+          promptText,
+          tools: result.tools.map((t) => t.name),
+        });
+        this.finalize(trace, start, result.tools.map((t) => t.name));
+        return result;
+      }
+    }
 
     // Ruta topológica: el grafo del scope está precomputado en POST /tools.
     if (graph && zt) {
@@ -949,7 +1063,7 @@ export class PredictionOrchestrator {
       const s = EmbeddingEngineService.cosine(promptEmb.embedding, emb);
       if (s > max) max = s;
     }
-    const isNoise = max >= 0.87;
+    const isNoise = max >= memoryDenialThreshold[this.engine.defaultSize];
     log(`[memory:judge] text="${trimmed.slice(0, 50)}" score=${max.toFixed(3)} isNoise=${isNoise}`);
     return { isNoise, noiseScore: max };
   }
@@ -996,6 +1110,25 @@ export class PredictionOrchestrator {
       if (out.length >= cap) break;
     }
     return out;
+  }
+
+  /**
+   * Contexto de diálogo para el núcleo Variante C: los últimos mensajes del
+   * historial SIN el turno actual. El núcleo decide por sí mismo si un turno
+   * autónomo manda o si un turno anafórico debe resolverse por este contexto, así
+   * que el historial no se pre-concatena al texto del turno. Una subconsulta de
+   * agente no hereda el tema de la sesión: se juzga por su propio texto.
+   */
+  private contextoDeTurno(input: PredictionInput, esAgente: boolean): string | undefined {
+    if (esAgente) return undefined;
+    const history = input.history;
+    if (!history || history.length === 0) return undefined;
+    const recent = history
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m) => (m?.content ?? "").trim())
+      .filter((c) => c.length > 0)
+      .map((c) => (c.length > MAX_MESSAGE_CHARS ? c.slice(0, MAX_MESSAGE_CHARS) : c));
+    return recent.length > 0 ? recent.join("\n") : undefined;
   }
 
   /**

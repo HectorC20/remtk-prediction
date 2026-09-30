@@ -5,9 +5,9 @@
  * Descarga los modelos ONNX de embeddings que usa remtk-prediction desde
  * Hugging Face al directorio de modelos, solo si faltan (idempotente).
  *
- * El servidor usa e5-large (default del pipeline) y e5-small (opcional / liviano,
- * ONNX_MODEL_SIZE=small); bge-m3-int8 solo se usa en tests (embed-bge.test.ts) y
- * se descarga como extra.
+ * El servidor usa gte-multilingual-base (modelo del pipeline), con e5-large y
+ * e5-small (ONNX_MODEL_SIZE=large/small) como variantes; bge-m3-int8 solo se usa
+ * en tests (embed-bge.test.ts) y se descarga como extra.
  *
  * Los pesos NO se incrustan en la imagen Docker: viven en el volumen ./models
  * (bind mount) y se pueblan aquí en el primer arranque. No bloquea el boot:
@@ -38,7 +38,7 @@ const HF = "https://huggingface.co";
  */
 const MODELS = [
   {
-    name: "e5-large (default del pipeline)",
+    name: "e5-large (variante)",
     dir: "multilingual-e5-large-onnx",
     base: `${HF}/intfloat/multilingual-e5-large/resolve/main/onnx`,
     files: ["model.onnx", "model.onnx_data", "tokenizer.json", "tokenizer_config.json"],
@@ -50,10 +50,10 @@ const MODELS = [
     files: ["model.onnx", "tokenizer.json", "tokenizer_config.json"],
   },
   {
-    // Bi-encoder de intención alternativo a e5 (ONNX_MODEL_SIZE=gte): 768 dims,
+    // Modelo del pipeline: bi-encoder de intención (ONNX_MODEL_SIZE=gte): 768 dims,
     // pooling CLS y sin prefijos query:/passage:. ONNX int8 auto-contenido, con
     // el tokenizer en la RAÍZ del repo y los pesos en /onnx/ (model_int8.onnx).
-    name: "gte-multilingual-base (ONNX_MODEL_SIZE=gte)",
+    name: "gte-multilingual-base (modelo del pipeline)",
     dir: "gte-multilingual-base-onnx",
     files: [
       { src: `${HF}/onnx-community/gte-multilingual-base/resolve/main/onnx/model_int8.onnx`, dest: "model_int8.onnx" },

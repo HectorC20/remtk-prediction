@@ -9,7 +9,7 @@
  *
  * Dos motores, mismo contrato:
  *  - `JUICIO_NLI_MODEL_PATH` apunta a un cross-encoder NLI ONNX (p. ej.
- *    mDeBERTa XNLI, logits [contradiction, neutral, entailment]): veredicto
+ *    nli-deberta-v3-small, logits [contradiction, entailment, neutral]): veredicto
  *    por softmax de los logits del par premisa/hipótesis.
  *  - Fallback por arquetipos embebidos (coseno, multi-idioma): pools
  *    REJECT vs CONFIRM con margen. Más débil que el cross-encoder pero sin
@@ -29,8 +29,8 @@ import { onnxMaxTokens } from "src/shared/constants/predict/embedding.constants"
 
 const nodeRequire = createRequire(__filename);
 
-/** Orden de logits del modelo XNLI estándar (mDeBERTa-mnli-xnli). */
-const LABEL = { contradiction: 0, neutral: 1, entailment: 2 } as const;
+/** Orden de logits del modelo NLI instalado (nli-deberta-v3-small id2label). */
+const LABEL = { contradiction: 0, entailment: 1, neutral: 2 } as const;
 
 export class EstadoNliService {
   private session?: OnnxSessionLike;

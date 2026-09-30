@@ -17,13 +17,16 @@ import {
   type ModelSize,
 } from "./shared/constants/predict/version.constants";
 import {
+  adaptiveGapThresholdByModel,
+  adaptiveMinScoreByModel,
+} from "./shared/constants/predict/embedding.constants";
+import {
   STRICTPORTEMBEDDING,
   STRICTPORTPREDICT,
   STRICTPORTQDRANT,
 } from "./shared/constants/ports/general.port";
 import {
   familyGatePenaltyDefault,
-  gapThresholdDefault,
   keywordBoostDefault,
   keywordTopKDefault,
   learnDecayLambdaDefault,
@@ -40,13 +43,13 @@ import {
   maxCategoriesDefault,
   maxOutputToolsDefault,
   maxToolsDefault,
-  minScoreDefault,
   minToolsDefault,
   nameAffinityBoostDefault,
   outputToolsCeiling,
   predictWarmupWaitMsCeiling,
   predictWarmupWaitMsDefault,
   recallLimitDefault,
+  varianteCEnabledDefault,
 } from "./shared/constants/predict/general.predict";
 import {
   KEYWORDSCOLLECTIONDEFAULT,
@@ -83,7 +86,7 @@ export interface AppConfig {
 
   onnxEnabled: boolean;
   onnxModelsPath: string;
-  /** Modelo del pipeline (env `ONNX_MODEL_SIZE`): e5-large por defecto, e5-small opcional. */
+  /** Modelo del pipeline (env `ONNX_MODEL_SIZE`): gte-multilingual-base por defecto; e5-small/e5-large opcionales. */
   onnxModelSize: ModelSize;
 
   adaptiveMinTools: number;
@@ -177,6 +180,16 @@ export interface AppConfig {
   /** Tope de candidatas re-puntuadas en el post de juicio. */
   juicioPostTopK: number;
 
+  // ── Núcleo Variante C (ruta conmutable, docs/arquitectura) ──────────────
+  /**
+   * Interruptor de la ruta Variante C: cuando está ON, `predict()` sustituye el
+   * ranking por el núcleo de 3 discriminadores (firma `core`, compuerta
+   * anafórica, MaxSim por cláusula, fusión auton/dep, arbitraje), conservando el
+   * resto del andamiaje. Default ON: el núcleo C es la ruta activa; el pipeline
+   * previo queda como respaldo (rollback con env `VARIANTE_C_ENABLED=false`).
+   */
+  varianteCEnabled: boolean;
+
   qdrantEnabled: boolean;
   qdrantUrl: string;
   qdrantApiKey: string;
@@ -214,7 +227,9 @@ function str(v: string | undefined, d: string): string {
 /** Tamaño de modelo del pipeline: acepta "small"/"large"/"gte"; cualquier otro → default. */
 function modelSize(v: string | undefined, d: ModelSize): ModelSize {
   const s = (v ?? "").trim().toLowerCase();
-  return s === ONNXMODELSIZELARGE || s === ONNXMODELSIZESMALL || s === ONNXMODELSIZEGTE ? s : d;
+  return s === ONNXMODELSIZELARGE || s === ONNXMODELSIZESMALL || s === ONNXMODELSIZEGTE
+    ? s
+    : d;
 }
 
 /** Resuelve la carpeta de modelos: env explícito → rutas del paquete → CWD. */
@@ -269,6 +284,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     0,
     Math.min(int(env.PREDICT_WARMUP_WAIT_MS, predictWarmupWaitMsDefault), predictWarmupWaitMsCeiling),
   );
+  // Modelo del pipeline: de él dependen los umbrales absolutos calibrados
+  // (piso de relevancia y gap natural), cuya escala de coseno cambia por modelo.
+  // Default `gte`: mismo orden de precisión que los modelos pesados (top1 80%,
+  // MRR 0.900) pero ~12× más rápido por query y ~6.6× indexando (bench-embeddings),
+  // lo que cabe en CPU de portátil. `ONNX_MODEL_SIZE=e5-*` para otras variantes.
+  const onnxModelSize = modelSize(env.ONNX_MODEL_SIZE, ONNXMODELSIZEGTE);
 
   return {
     // ── Puertos de los listeners HTTP ───────────────────────────────────
@@ -281,13 +302,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     onnxEnabled: bool(env.ONNX_ENABLED, true),
     onnxModelsPath: resolveModelsPath(env),
     // Pipeline sobre gte-multilingual-base por defecto (ONNX_MODEL_SIZE=small/large para otras variantes).
-    onnxModelSize: modelSize(env.ONNX_MODEL_SIZE, ONNXMODELSIZEGTE),
+    onnxModelSize,
 
     // ── Umbral adaptativo y keywords (capas 2-3 del pipeline) ───────────
     adaptiveMinTools: int(env.ONNX_ADAPTIVE_MIN_TOOLS, minToolsDefault),
     adaptiveMaxTools: int(env.ONNX_ADAPTIVE_MAX_TOOLS, maxToolsDefault),
-    adaptiveGapThreshold: float(env.ONNX_ADAPTIVE_GAP_THRESHOLD, gapThresholdDefault),
-    adaptiveMinScore: float(env.ONNX_ADAPTIVE_MIN_SCORE, minScoreDefault),
+    adaptiveGapThreshold: float(env.ONNX_ADAPTIVE_GAP_THRESHOLD, adaptiveGapThresholdByModel[onnxModelSize]),
+    adaptiveMinScore: float(env.ONNX_ADAPTIVE_MIN_SCORE, adaptiveMinScoreByModel[onnxModelSize]),
     keywordBoost: float(env.KEYWORD_BOOST, keywordBoostDefault),
     nameAffinityBoost: float(env.NAME_AFFINITY_BOOST, nameAffinityBoostDefault),
     familyGatePenalty: float(env.FAMILY_GATE_PENALTY, familyGatePenaltyDefault),
@@ -327,6 +348,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     juicioSpecificityRho: float(env.JUICIO_SPECIFICITY_RHO, specificityRhoDefault),
     juicioProblemMargin: float(env.JUICIO_PROBLEM_MARGIN, problemMarginDefault),
     juicioPostTopK: int(env.JUICIO_POST_TOP_K, juicioPostTopKDefault),
+
+    // ── Núcleo Variante C (ruta conmutable, default ON) ───────────────────
+    varianteCEnabled: bool(env.VARIANTE_C_ENABLED, varianteCEnabledDefault),
 
     // ── Motor Qdrant externo ────────────────────────────────────────────
     qdrantEnabled: bool(env.QDRANT_ENABLED, true),

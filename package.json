@@ -1,7 +1,7 @@
 {
   "name": "remtk-prediction",
   "version": "0.0.1",
-  "description": "Tool Prediction en TypeScript: pipeline de 3 capas (keywords cross-idioma → Qdrant BM25 → umbral adaptativo) con e5-large ONNX por defecto (configurable con ONNX_MODEL_SIZE=small). Usable como librería in-process o como servidor (6776/6777/6775).",
+  "description": "Tool Prediction en TypeScript: pipeline de 3 capas (keywords cross-idioma → Qdrant BM25 → umbral adaptativo) con gte-multilingual-base ONNX por defecto (configurable con ONNX_MODEL_SIZE=small/large). Usable como librería in-process o como servidor (6776/6777/6775).",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
@@ -41,6 +41,8 @@
     "test:hero": "tsx --test tests/mitumbes-hero-configurar-reproduction.test.ts",
     "test:model": "tsx --test tests/embed-model.test.ts",
     "test:compare": "tsx --test tests/embed-compare.test.ts",
+    "test:arquitectura": "tsx --test tests/arquitectura-juicio-comparison.test.ts",
+    "test:varc-mitumbes": "tsx --test tests/mitumbes-variant-c-intent.test.ts",
     "test:bge": "tsx --test tests/embed-bge.test.ts",
     "test:qwen3": "tsx --test tests/embed-qwen3.test.ts",
     "test:e2e": "tsx --test tests/e2e.test.ts",

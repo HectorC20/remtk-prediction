@@ -544,7 +544,7 @@ before(async () => {
   process.env.ONNX_ENABLED = "1";
   process.env.ONNX_MODELS_PATH = "./models";
   // Este bloque §2 valida el comportamiento afinado con e5-small: se fija
-  // explícito aunque el pipeline use e5-large por defecto (ONNX_MODEL_SIZE).
+  // explícito aunque el pipeline use gte por defecto (ONNX_MODEL_SIZE).
   process.env.ONNX_MODEL_SIZE = "small";
   process.env.QDRANT_ENABLED = "0";
   process.env.ONNX_ADAPTIVE_MIN_SCORE = String(MIN_SCORE);

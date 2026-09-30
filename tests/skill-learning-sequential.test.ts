@@ -33,7 +33,9 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startPredictServer } from "../src/app.module";
+import { loadConfig } from "../src/config";
 import { TOPIC_SHIFT_THRESHOLD } from "../src/shared/constants/predict/general.predict";
+import { skillThresholdsByModel } from "../src/shared/constants/predict/embedding.constants";
 import { TOTAL_ACTIVE_TOOLS } from "./fixtures/mitumbes-production-tools";
 
 const AGENTE = "agente-auditoria-v5";
@@ -743,15 +745,18 @@ describe("§3 qué tan buena es realmente la memoria de habilidades", () => {
     }
     const minIn = Math.min(...adentro);
     const maxOut = Math.max(...haciaFuera);
+    // El piso de `execute_direct` se calibra POR MODELO (la escala del coseno
+    // cambia entre modelos); aquí se lee el del modelo activo.
+    const skillFloor = skillThresholdsByModel[loadConfig().onnxModelSize].skillMatchMin;
     console.log(
       `  [s3] mejor separación alcanzable: min(dentro)=${fmt(minIn)} max(fuera)=${fmt(maxOut)} ` +
-        `margen=${fmt(minIn - maxOut)} | piso duro de /skills/predict=0.75 para execute_direct`,
+        `margen=${fmt(minIn - maxOut)} | piso de /skills/predict=${skillFloor} para execute_direct`,
     );
     assert.ok(
       minIn > maxOut,
       `el texto fuera de tema puntúa ${fmt(maxOut)} y la habilidad correcta ${fmt(minIn)}: no hay señal que umbralizar`,
     );
-    assert.ok(minIn > 0.75, "la habilidad correcta no pasa el umbral interno de execute_direct");
+    assert.ok(minIn > skillFloor, "la habilidad correcta no pasa el umbral interno de execute_direct");
   });
 
   test("reaprender la misma habilidad refuerza en vez de duplicar", async () => {

@@ -81,9 +81,7 @@ export class EmbeddingV1Controller {
 
   /** `size` explícito válido ("small"/"large"/"gte") o el default del pipeline. */
   private resolveSize(raw: unknown): ModelSize {
-    return raw === ONNXMODELSIZESMALL ||
-      raw === ONNXMODELSIZELARGE ||
-      raw === ONNXMODELSIZEGTE
+    return raw === ONNXMODELSIZESMALL || raw === ONNXMODELSIZELARGE || raw === ONNXMODELSIZEGTE
       ? (raw as ModelSize)
       : this.engine.defaultSize;
   }

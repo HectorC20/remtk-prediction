@@ -20,6 +20,7 @@ import type {
 } from "src/shared/interfaces/graph.interface";
 import {
   CO_OCCURRENCE_WEIGHT,
+  edgeInferenceMinSimByModel,
   MUTUALLY_EXCLUSIVE_WEIGHT,
   PREREQUISITE_WEIGHT,
 } from "src/shared/constants/predict";
@@ -130,9 +131,10 @@ export class ToolGraphCacheService {
           paramEmbCache.set(probe, pEmb);
         }
 
-        // Selecciona la mejor herramienta proveedora/descubridora de la entidad
+        // Selecciona la mejor herramienta proveedora/descubridora de la entidad.
+        // El umbral es relativo a la escala del coseno del modelo activo.
         let bestTool: string | undefined;
-        let bestSim = 0.835;
+        let bestSim = edgeInferenceMinSimByModel[this.engine.defaultSize];
         for (const other of tools) {
           if (other.name === tool.name) continue;
           if (!tool.group || !other.group || tool.group !== other.group) continue;
