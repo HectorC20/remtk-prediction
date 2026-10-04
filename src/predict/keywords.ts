@@ -191,8 +191,10 @@ export function explicitToolNames(keywords: string[] | undefined, names: string[
  * `mitumbes_hero_obtener` dentro de `mitumbes_evento_hero_obtener`).
  */
 export function toolNamesInText(text: string | undefined, names: string[]): string[] {
-  const lowered = String(text ?? "").toLowerCase();
-  if (lowered === "") return [];
+  // Enmascara código entre backticks para que snippets técnicos no secuestren la intención
+  const sanitized = String(text ?? "").replace(/```[\s\S]*?```|`[^`\n]*`/g, " ");
+  const lowered = sanitized.toLowerCase();
+  if (lowered.trim() === "") return [];
   const out: string[] = [];
   for (const raw of names) {
     const name = String(raw ?? "").trim();

@@ -1,31 +1,15 @@
 /**
- * VarianteCService: núcleo de 3 discriminadores multilingües (100%
- * `gte-multilingual-base`), portado del arnés ganador
- * (`tests/arquitectura-juicio-comparison.test.ts`, 12/12) con la firma `core`
- * y la compuerta anafórica de `tests/mitumbes-variant-c-intent.test.ts` (6/6).
+ * VarianteCService: núcleo de discriminadores continuos multilingües (100%
+ * `gte-multilingual-base`), conforme estrictamente a AGENT.md:
  *
- *   D1 · SOPORTE   (bi-encoder gte)     → recall por UNIÓN (top-K del turno ∪
- *                                          top-K del contexto).
- *   D2 · PRECISIÓN (MaxSim tardío gte)  → alineación token a token por cláusula
- *                                          (`msC`); es el rankeador principal del
- *                                          turno autónomo.
- *   D3 · ESTADO    (arquetipos gte)     → confirm / reject / neutral por coseno,
- *                                          más la MENCIÓN EXPLÍCITA del nombre de
- *                                          una herramienta y la AUTONOMÍA del
- *                                          turno (margen coseno).
- *
- * Régimen por MARGEN (`max−media` del coseno del turno contra el catálogo):
- *   · AUTÓNOMO   (margen ≥ C_MARGIN ∧ no anafórico): decide el propio turno
- *     (fusión `0.25·cn + 0.7·msC + 0.05·s3`).
- *   · DEPENDIENTE: turno de apoyo/anafórico → decide el CONTEXTO
- *     (fusión `0.85·cc + 0.1·msC_ctx + 0.05·s3`); sin contexto ⇒ ∅.
- *
- * Arbitraje: mención explícita → ratifica; `reject` → ∅; dependiente sin
- * contexto → ∅; `fused < C_TAU` → ∅; si no, banda `C_DELTA`.
- *
- * El servicio es autocontenido: indexa el catálogo por scope (firma `core`) y
- * expone `rank()` + `arbitrate()`. NO toca producción por sí solo: el orquestador
- * lo activa con el flag `VARIANTE_C_ENABLED` (default OFF).
+ *   D1 · SOPORTE   (bi-encoder gte)     → recall por UNIÓN (top-K del turno ∪ top-K del contexto).
+ *   D2 · PRECISIÓN (MaxSim ColBERT gte) → alineación token a token combinada con coseno denso por cláusula.
+ *   D3 · ESTADO Y MODALIDAD (arquetipos gte):
+ *        - Modalidad: Atenúa cláusulas contrafácticas / hipotéticas irreales.
+ *        - Estructura: Aísla citas entre comillas como argumentos reportados sin fuerza de comando.
+ *        - Polaridad: Veto continuo de herramientas asociadas a cláusulas de prohibición directa.
+ *        - Accionabilidad: Compuerta continua contra small-talk / charlas informales o quejas casuales.
+ *        - Régimen: Conmutación dinámica entre autónomo y dependiente (contexto).
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log, warn } from "src/logger";
@@ -34,7 +18,11 @@ import type { ToolDefinition } from "src/shared/interfaces/domain.interface";
 import {
   C_ANAF_TAU,
   C_ANAPHORA_ARCH,
-  C_CLAUSE_SPLIT,
+  C_ARCH_ACTIONABLE,
+  C_ARCH_CHATTER,
+  C_ARCH_DIRECTIVE,
+  C_ARCH_HYPOTHETICAL,
+  C_ARCH_PROHIBITION,
   C_CONF_TAU,
   C_CONFIRM_ARCH,
   C_DELTA,
@@ -53,21 +41,17 @@ import {
 export type StateVerdict = "reject" | "confirm" | "neutral";
 export type CDecision = "ratify" | "abstain";
 
-/** Candidata puntuada por el núcleo C. */
 export interface CCandidate {
   name: string;
-  /** D1 · soporte (autónomo: coseno del turno `cn`; dependiente: coseno del contexto `cc`). */
   s1: number;
-  /** D2 · precisión (autónomo: msC del turno; dependiente: msC del contexto). */
   s2: number;
-  /** D3 · estado (confirm=1 / neutral=0.5 / reject=0). */
   s3: number;
   cNow: number;
   cCtx: number;
   fused: number;
+  affirmativeHit?: number;
 }
 
-/** Resultado completo de `rank()`: candidatas + diagnóstico del régimen. */
 export interface CRanking {
   out: CCandidate[];
   state: StateVerdict;
@@ -78,6 +62,8 @@ export interface CRanking {
   autonomous: boolean;
   hasCtx: boolean;
   mentioned: string[];
+  actionabilityDelta: number;
+  vetoedTools: string[];
 }
 
 interface IndexSet {
@@ -90,42 +76,32 @@ interface Archetypes {
   reject: Float32Array[];
   confirm: Float32Array[];
   anaphora: Float32Array[];
+  directive: Float32Array[];
+  hypothetical: Float32Array[];
+  prohibition: Float32Array[];
+  chatter: Float32Array[];
+  actionable: Float32Array[];
 }
 
-/**
- * Firma `core` de la herramienta: primer párrafo de `description` sin el
- * boilerplate común a las tools del catálogo (`(Complemento: …)`), que metía el
- * nombre del RIVAL en la firma y saturaba el MaxSim. Medido: `core` + compuerta
- * resuelve todas las sondas; `full` falla 2 de 6.
- */
 export function coreSignature(t: ToolDefinition): string {
   const firstPara = (t.description.split(/\n\s*\n/)[0] ?? t.description).trim();
   return firstPara.split("(Complemento:")[0]!.trim();
 }
 
 export class VarianteCService {
-  /** Índices D1/D2 por scopeKey (se reconstruyen al re-registrar el catálogo). */
   private readonly indexes = new Map<string, IndexSet>();
-  /** Arquetipos D3 (una sola carga; son independientes del scope). */
   private archetypes?: Archetypes;
 
   constructor(private readonly engine: EmbeddingEngineService) {}
 
-  /** True si el scope tiene índice C listo (si no, el orquestador degrada). */
   has(scopeKey: string): boolean {
     return this.indexes.has(scopeKey);
   }
 
-  /** Invalida el índice del scope (re-registro del catálogo). */
   clearScope(scopeKey: string): void {
     this.indexes.delete(scopeKey);
   }
 
-  /**
-   * Indexa el catálogo del scope: firma `core` por herramienta en un vector
-   * (D1) y a nivel token (D2), más los arquetipos D3. Recompute masivo de
-   * registro → prioridad baja (`high:false`).
-   */
   async indexScope(scopeKey: string, tools: ToolDefinition[]): Promise<void> {
     await this.ensureArchetypes();
     const toolIndex: Array<{ name: string; vec: Float32Array }> = [];
@@ -140,57 +116,130 @@ export class VarianteCService {
     log(`[varianteC] scope=${scopeKey} indexado D1/D2=${toolIndex.length} tools`);
   }
 
-  /**
-   * Corre los 3 discriminadores sobre un turno (y su contexto) y devuelve las
-   * candidatas fusionadas y ordenadas. `undefined` si el scope no está indexado
-   * (el llamador degrada al ranking del pipeline).
-   */
   async rank(scopeKey: string, currentText: string, ctxText?: string): Promise<CRanking | undefined> {
     const idx = this.indexes.get(scopeKey);
     if (!idx || idx.toolIndex.length === 0) return undefined;
 
     const arch = await this.ensureArchetypes();
     const nowVec = (await this.engine.embedQuery(currentText, undefined, { high: true })).embedding;
-    const nowClauses = await this.clauseTokenSets(currentText);
+
+    // 1. COMPUERTA CONTINUA DE ACCIONABILIDAD (Detección de Small-Talk / Queja sin orden)
+    const simChatter = this.maxCosine(nowVec, arch.chatter);
+    const simActionable = this.maxCosine(nowVec, arch.actionable);
+    const actionabilityDelta = simActionable - simChatter;
+
+    // 2. SEGMENTACIÓN ESTRUCTURAL DE CLÁUSULAS
+    const nowClauses = this.segmentClauses(currentText);
+    const nowClauseEmbeddings = await Promise.all(
+      nowClauses.map(async (c) => (await this.engine.embedQuery(c.text, undefined, { high: true })).embedding)
+    );
+    const nowClauseTokens = await Promise.all(
+      nowClauses.map(async (c) => this.engine.embedTokens(c.text, undefined, { high: true }))
+    );
+
+    // Contexto (si existe)
     const ctxVec = ctxText
       ? (await this.engine.embedQuery(ctxText, undefined, { high: true })).embedding
       : undefined;
-    const ctxClauses = ctxText ? await this.clauseTokenSets(ctxText) : [];
+    const ctxClauses = ctxText ? this.segmentClauses(ctxText) : [];
+    const ctxClauseTokens = await Promise.all(
+      ctxClauses.map(async (c) => this.engine.embedTokens(c.text, undefined, { high: true }))
+    );
 
+    // 3. ANÁLISIS DE MODALIDAD Y POLARIDAD POR CLÁUSULA
+    const clauseModalityWeights: number[] = [];
+    const clauseProhibitionFlags: boolean[] = [];
+
+    for (let i = 0; i < nowClauses.length; i++) {
+      const c = nowClauses[i];
+      if (c.isQuoted) {
+        clauseModalityWeights.push(0.15); // Cita entre comillas atenuada (reported speech)
+        clauseProhibitionFlags.push(false);
+        continue;
+      }
+
+      const cVec = nowClauseEmbeddings[i];
+      const simDir = this.maxCosine(cVec, arch.directive);
+      const simHyp = this.maxCosine(cVec, arch.hypothetical);
+      const simProh = this.maxCosine(cVec, arch.prohibition);
+
+      const isHypothetical = (simHyp - simDir) > 0.02;
+      clauseModalityWeights.push(isHypothetical ? 0.10 : 1.0);
+
+      const isProhibition = simProh >= 0.68 && simProh > simDir;
+      clauseProhibitionFlags.push(isProhibition);
+    }
+
+    // 4. D1 & D2: RECALL Y ALINEACIÓN COMBINADA POR CLÁUSULA
     const cNow = new Map<string, number>();
     const cCtx = new Map<string, number>();
+    const msNowMap = new Map<string, number>();
+    const toolAffirmativeHits = new Map<string, number>();
+    const vetoedTools = new Set<string>();
+
+    let maxMsNow = 0;
+
     for (const t of idx.toolIndex) {
       cNow.set(t.name, EmbeddingEngineService.cosine(nowVec, t.vec));
       cCtx.set(t.name, ctxVec ? EmbeddingEngineService.cosine(ctxVec, t.vec) : 0);
+
+      const tTokens = idx.toolTokens.get(t.name) ?? [];
+      let maxAffirmativeScore = 0;
+      let maxProhibitiveScore = 0;
+
+      for (let i = 0; i < nowClauses.length; i++) {
+        const ms = this.maxsim(nowClauseTokens[i], tTokens);
+        const clauseDense = EmbeddingEngineService.cosine(nowClauseEmbeddings[i], t.vec);
+        const clauseCombined = 0.40 * clauseDense + 0.60 * ms;
+        const weight = clauseModalityWeights[i];
+        const isProhibition = clauseProhibitionFlags[i];
+
+        if (isProhibition) {
+          if (clauseCombined > maxProhibitiveScore) maxProhibitiveScore = clauseCombined;
+        } else {
+          const effective = clauseCombined * weight;
+          if (effective > maxAffirmativeScore) maxAffirmativeScore = effective;
+        }
+      }
+
+      toolAffirmativeHits.set(t.name, maxAffirmativeScore);
+      msNowMap.set(t.name, maxAffirmativeScore);
+      if (maxAffirmativeScore > maxMsNow) maxMsNow = maxAffirmativeScore;
+
+      // Veto continuo si la prohibición supera la orden afirmativa
+      if (maxProhibitiveScore >= 0.70 && maxProhibitiveScore > maxAffirmativeScore) {
+        vetoedTools.add(t.name);
+      }
     }
+
     const nowVals = idx.toolIndex.map((t) => cNow.get(t.name)!);
     const maxNow = Math.max(...nowVals);
     const meanNow = nowVals.reduce((a, b) => a + b, 0) / nowVals.length;
     const margin = maxNow - meanNow;
     const hasCtx = ctxVec !== undefined;
 
-    // Compuerta de autonomía: pico claro (margen) Y no ser un turno de apoyo
-    // anafórico (que debe resolverse con el contexto).
+    // Compuerta de autonomía
     let anaphora = 0;
     for (const a of arch.anaphora) {
       const s = EmbeddingEngineService.cosine(nowVec, a);
       if (s > anaphora) anaphora = s;
     }
-    const autonomous = margin >= C_MARGIN && anaphora < C_ANAF_TAU;
+    const autonomous = (margin >= C_MARGIN || maxMsNow >= 0.70) && anaphora < C_ANAF_TAU;
 
     const { state } = this.detectState(nowVec, arch, autonomous);
     const s3 = state === "confirm" ? 1 : state === "neutral" ? 0.5 : 0;
 
-    // Recall por unión: top-K del turno actual ∪ top-K del contexto.
+    // Recall por unión
     const byName = (m: Map<string, number>) =>
       [...m.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
-    const topNow = byName(cNow).slice(0, C_RECALL_K);
+    const topNow = [...new Set([...byName(cNow).slice(0, C_RECALL_K), ...byName(msNowMap).slice(0, C_RECALL_K)])];
     const topCtx = hasCtx ? byName(cCtx).slice(0, C_RECALL_K) : [];
     const names = [...new Set([...topNow, ...topCtx])];
 
     const mentioned = toolNamesInText(currentText, idx.names);
 
     const out: CCandidate[] = names
+      .filter((name) => !vetoedTools.has(name))
       .map((name) => {
         const cn = cNow.get(name)!;
         const cc = cCtx.get(name)!;
@@ -199,32 +248,65 @@ export class VarianteCService {
         let s2: number;
         if (autonomous) {
           s1 = cn;
-          s2 = this.msClause(nowClauses, toolTok);
+          s2 = msNowMap.get(name) ?? 0;
         } else {
           s1 = cc;
-          s2 = ctxClauses.length ? this.msClause(ctxClauses, toolTok) : 0;
+          s2 = ctxClauseTokens.length ? this.msClause(ctxClauseTokens, toolTok) : 0;
         }
         const w1 = autonomous ? C_W1_AUTO : C_W1_DEP;
         const w2 = autonomous ? C_W2_AUTO : C_W2_DEP;
-        return { name, s1, s2, s3, cNow: cn, cCtx: cc, fused: w1 * s1 + w2 * s2 + C_W3 * s3 };
+        const affirmativeHit = toolAffirmativeHits.get(name) ?? 0;
+        return {
+          name,
+          s1,
+          s2,
+          s3,
+          cNow: cn,
+          cCtx: cc,
+          fused: w1 * s1 + w2 * s2 + C_W3 * s3,
+          affirmativeHit,
+        };
       })
+      .filter((c) => !autonomous || (c.affirmativeHit !== undefined && c.affirmativeHit >= 0.45) || mentioned.includes(c.name))
       .sort((a, b) => b.fused - a.fused);
 
-    return { out, state, margin, maxNow, meanNow, anaphora, autonomous, hasCtx, mentioned };
+    return {
+      out,
+      state,
+      margin,
+      maxNow,
+      meanNow,
+      anaphora,
+      autonomous,
+      hasCtx,
+      mentioned,
+      actionabilityDelta,
+      vetoedTools: [...vetoedTools],
+    };
   }
 
-  /**
-   * Arbitraje ponderado: la MENCIÓN EXPLÍCITA ratifica (orden directa); un
-   * rechazo (D3) ⇒ ∅; un turno DEPENDIENTE sin contexto ⇒ ∅; el mejor
-   * `fused < C_TAU` ⇒ ∅; si no, se aceptan los candidatos dentro de δ.
-   */
   arbitrate(res: CRanking): { decision: CDecision; tools: string[] } {
     const top = res.out[0];
     if (res.mentioned.length > 0) return { decision: "ratify", tools: res.mentioned };
     if (res.state === "reject") return { decision: "abstain", tools: [] };
     if (!res.autonomous && !res.hasCtx) return { decision: "abstain", tools: [] };
+
+    // Filtro de Small-talk / Charla casual sin orden ejecutiva
+    if (res.actionabilityDelta < -0.05 && (!top || top.fused < 0.85)) {
+      return { decision: "abstain", tools: [] };
+    }
+
     if (!top || top.fused < C_TAU) return { decision: "abstain", tools: [] };
-    const tools = res.out.filter((f) => f.fused >= top.fused - C_DELTA).map((f) => f.name);
+
+    // Banda multi-intención asistida por alineación afirmativa
+    const bestAffirmative = Math.max(...res.out.map((f) => f.affirmativeHit ?? f.s2));
+    const tools = res.out
+      .filter((f) => {
+        const aff = f.affirmativeHit ?? f.s2;
+        return f.fused >= top.fused - C_DELTA && aff >= bestAffirmative - 0.08;
+      })
+      .map((f) => f.name);
+
     return { decision: "ratify", tools };
   }
 
@@ -244,32 +326,77 @@ export class VarianteCService {
       const s = EmbeddingEngineService.cosine(nowVec, a);
       if (s > confirm) confirm = s;
     }
-    // Un turno AUTÓNOMO con contenido es neutral por defecto: D3 no veta.
     if (autonomous) return { state: "neutral", reject, confirm };
     if (reject >= C_REJ_TAU && reject >= confirm) return { state: "reject", reject, confirm };
     if (confirm >= C_CONF_TAU && confirm > reject) return { state: "confirm", reject, confirm };
     return { state: "neutral", reject, confirm };
   }
 
-  // ── D2: MaxSim por cláusula ──────────────────────────────────────────────
-  /** Divide el turno en unidades de intención y devuelve sus tokens. */
-  private async clauseTokenSets(text: string): Promise<Float32Array[][]> {
-    const parts = text
-      .split(C_CLAUSE_SPLIT)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const units = parts.length > 0 ? parts : [text];
-    return Promise.all(units.map((u) => this.engine.embedTokens(u, undefined, { high: true })));
+  // ── D2: MaxSim y segmentación sintáctica ──────────────────────────────────
+  private segmentClauses(text: string): Array<{ text: string; isQuoted: boolean }> {
+    const segments: Array<{ text: string; isQuoted: boolean }> = [];
+    const quotePattern = /["'«“]([^"'»”]+)["'»”]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = quotePattern.exec(text)) !== null) {
+      const before = text.substring(lastIndex, match.index).trim();
+      if (before) {
+        const sub = before.split(/[,;.]|\by\b|\band\b|\be\b|\bluego\b|\bdespués\b|\bthen\b|\bpero\b|\bbut\b/gi);
+        for (const s of sub) {
+          const clean = s.trim();
+          if (clean.length > 0) segments.push({ text: clean, isQuoted: false });
+        }
+      }
+      const quotedContent = match[1].trim();
+      if (quotedContent.length > 0) {
+        segments.push({ text: quotedContent, isQuoted: true });
+      }
+      lastIndex = match.index + match[0].length;
+    }
+
+    const rest = text.substring(lastIndex).trim();
+    if (rest) {
+      const sub = rest.split(/[,;.]|\by\b|\band\b|\be\b|\bluego\b|\bdespués\b|\bthen\b|\bpero\b|\bbut\b/gi);
+      for (const s of sub) {
+        const clean = s.trim();
+        if (clean.length > 0) segments.push({ text: clean, isQuoted: false });
+      }
+    }
+
+    return segments.length > 0 ? segments : [{ text, isQuoted: false }];
   }
 
-  /** MaxSim por cláusula: el MÁXIMO (no la media) entre las cláusulas del turno. */
+  private maxCosine(vec: Float32Array, archetypes: Float32Array[]): number {
+    let max = -1;
+    for (const a of archetypes) {
+      const sim = EmbeddingEngineService.cosine(vec, a);
+      if (sim > max) max = sim;
+    }
+    return max;
+  }
+
   private msClause(clauses: Float32Array[][], toolTok: Float32Array[]): number {
     let best = 0;
     for (const c of clauses) {
-      const s = maxsim(c, toolTok);
+      const s = this.maxsim(c, toolTok);
       if (s > best) best = s;
     }
     return best;
+  }
+
+  private maxsim(qTokens: Float32Array[], tTokens: Float32Array[]): number {
+    if (qTokens.length === 0 || tTokens.length === 0) return 0;
+    let acc = 0;
+    for (const t of tTokens) {
+      let best = 0;
+      for (const q of qTokens) {
+        const s = EmbeddingEngineService.cosine(q, t);
+        if (s > best) best = s;
+      }
+      acc += best;
+    }
+    return acc / tTokens.length;
   }
 
   private async ensureArchetypes(): Promise<Archetypes> {
@@ -283,26 +410,25 @@ export class VarianteCService {
         reject: await embed(C_REJECT_ARCH),
         confirm: await embed(C_CONFIRM_ARCH),
         anaphora: await embed(C_ANAPHORA_ARCH),
+        directive: await embed(C_ARCH_DIRECTIVE),
+        hypothetical: await embed(C_ARCH_HYPOTHETICAL),
+        prohibition: await embed(C_ARCH_PROHIBITION),
+        chatter: await embed(C_ARCH_CHATTER),
+        actionable: await embed(C_ARCH_ACTIONABLE),
       };
     } catch (err) {
       warn(`[varianteC] arquetipos D3 degradados: ${String((err as Error)?.message ?? err)}`);
-      this.archetypes = { reject: [], confirm: [], anaphora: [] };
+      this.archetypes = {
+        reject: [],
+        confirm: [],
+        anaphora: [],
+        directive: [],
+        hypothetical: [],
+        prohibition: [],
+        chatter: [],
+        actionable: [],
+      };
     }
     return this.archetypes;
   }
-}
-
-/** MaxSim tardío (estilo ColBERT): (1/|J|) Σ_j max_i (q_i · t_j). */
-function maxsim(qTokens: Float32Array[], tTokens: Float32Array[]): number {
-  if (qTokens.length === 0 || tTokens.length === 0) return 0;
-  let acc = 0;
-  for (const t of tTokens) {
-    let best = 0;
-    for (const q of qTokens) {
-      const s = EmbeddingEngineService.cosine(q, t);
-      if (s > best) best = s;
-    }
-    acc += best;
-  }
-  return acc / tTokens.length;
 }

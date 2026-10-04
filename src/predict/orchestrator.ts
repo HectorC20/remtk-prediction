@@ -546,16 +546,10 @@ export class PredictionOrchestrator {
           },
         };
         const withPre = this.withDeclaredPrerequisites(base, catalog, input.exclude);
-        const result = await this.judgeResult(
-          scopeKey,
-          effectiveText,
-          juicioCtx,
-          withPre,
-          pinnedNames,
-          trace,
-          input.exclude,
-          input.source,
-        );
+        // Variante C ya contiene sus 3 discriminadores (D1 soporte, D2 MaxSim ColBERT, D3 estado/arquetipos)
+        // y arbitraje calibrado. No se pasa por judgeResult (juicio.post legado) para no descalibrar el ranking
+        // ni resembrar herramientas cuando Variante C decide abstención.
+        const result = withPre;
         trace.recall = catalogNames.length;
         trace.modelSize = result.modelSize;
         trace.complexity = result.complexity;

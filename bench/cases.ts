@@ -126,4 +126,154 @@ export const BENCH_CASES: BenchCase[] = [
     ],
     expected: ["web_search"],
   },
+  {
+    id: "auto-correccion-tiempo-real",
+    why: "El usuario cambia de opinión a mitad de frase: empieza pidiendo generar imagen, pero la orden final es solo escribir un archivo.",
+    turns: [
+      {
+        role: "user",
+        content: "Genera una imagen para el flyer del evento... espera, no, no generes nada todavía, solo escribe un archivo con las notas de la reunión.",
+      },
+    ],
+    expected: ["write_file"],
+  },
+  {
+    id: "ironia-pragmatica",
+    why: "El tono irónico formula una acción que en realidad se prohíbe explícitamente.",
+    turns: [
+      {
+        role: "user",
+        content: "Sí, claro, mándale el borrador sin revisar al cliente para que vea todos nuestros errores... obviamente guárdalo para revisarlo mañana.",
+      },
+    ],
+    expected: ["save_draft"],
+  },
+  {
+    id: "secuestro-lexico-codigo",
+    why: "Bloque de código con términos críticos que compiten con una consulta simple al final.",
+    turns: [
+      {
+        role: "user",
+        content: "Estoy revisando este script en Python: `import requests; def delete_database_records(): database_query('DROP TABLE users')`. Ignora ese código, lo que realmente necesito es saber a cuánto está el tipo de cambio del dólar hoy.",
+      },
+    ],
+    expected: ["get_exchange_rate"],
+  },
+  {
+    id: "doble-negacion-cruzada",
+    why: "'No dejes de...' es una orden afirmativa enfática, mientras que la segunda parte es una exclusión estricta.",
+    turns: [
+      {
+        role: "user",
+        content: "No dejes de enviarle el balance de ventas de ayer a mi jefe por correo, pero por favor no toques la lista de facturas ni consultes la base de datos.",
+      },
+    ],
+    expected: ["download_report", "send_email"],
+    multi: true,
+  },
+  {
+    id: "revocacion-post-propuesta",
+    why: "El usuario rechaza una propuesta previa con lenguaje educado y vacilante.",
+    turns: [
+      { role: "user", content: "¿me agendarías la reunión con el equipo mañana?" },
+      { role: "assistant", content: "¿Agendo el evento en tu calendario para mañana 10am?" },
+      { role: "user", content: "Pensándolo bien, mejor déjalo ahí, el cliente me acaba de decir que no podrá asistir." },
+    ],
+    expected: [],
+  },
+  {
+    id: "condicional-contrafactico",
+    why: "La acción futura depende de un resultado que el asistente primero debe inspeccionar.",
+    turns: [
+      {
+        role: "user",
+        content: "Si el dólar está a más de 3.80 soles envíale una alerta por correo a finanzas, pero si está más bajo no hagas nada.",
+      },
+    ],
+    expected: ["get_exchange_rate"],
+  },
+  {
+    id: "polisemia-dominio-cruzado",
+    why: "La palabra 'fondo' se usa con dos significados totalmente distintos en la misma orden.",
+    turns: [
+      {
+        role: "user",
+        content: "Genera una imagen con el fondo nuevo para la web y luego revisa el tipo de cambio para el fondo de inversiones.",
+      },
+    ],
+    expected: ["image_generate", "get_exchange_rate"],
+    multi: true,
+  },
+  {
+    id: "multi-leer-resumir",
+    why: "Dos acciones acopladas: lectura de archivo y resumen de documento.",
+    turns: [
+      {
+        role: "user",
+        content: "Lee el archivo propuesta.pdf en el workspace y genera un resumen del documento para la gerencia.",
+      },
+    ],
+    expected: ["read_file", "summarize_document"],
+    multi: true,
+  },
+  {
+    id: "multi-clima-whatsapp",
+    why: "Consulta de pronóstico del tiempo y notificación inmediata por mensajería.",
+    turns: [
+      {
+        role: "user",
+        content: "Revisa qué clima hace hoy en Trujillo y envíale un mensaje de WhatsApp a Carlos con el pronóstico.",
+      },
+    ],
+    expected: ["get_weather", "send_whatsapp"],
+    multi: true,
+  },
+  {
+    id: "multi-scrape-archivo",
+    why: "Extracción web y persistencia de contenido en archivo.",
+    turns: [
+      {
+        role: "user",
+        content: "Extrae el contenido de la URL del portal de noticias y escribe un archivo con los datos recopilados.",
+      },
+    ],
+    expected: ["scrape_url", "write_file"],
+    multi: true,
+  },
+  {
+    id: "multi-tipo-cambio-calendario",
+    why: "Consulta de finanzas/moneda y creación de evento de calendario coordinado.",
+    turns: [
+      {
+        role: "user",
+        content: "Consulta el tipo de cambio actual del dólar y crea un evento en el calendario para la reunión de finanzas a las 3pm.",
+      },
+    ],
+    expected: ["get_exchange_rate", "create_calendar_event"],
+    multi: true,
+  },
+  {
+    id: "multi-traducir-correo",
+    why: "Traducción de idioma y envío por correo electrónico.",
+    turns: [
+      {
+        role: "user",
+        content: "Traduce este texto técnico al inglés y envía un correo electrónico al cliente con la traducción.",
+      },
+    ],
+    expected: ["translate_text", "send_email"],
+    multi: true,
+  },
+  {
+    id: "multi-sql-reporte",
+    why: "Consulta de base de datos relacional y descarga de balance/reporte.",
+    turns: [
+      {
+        role: "user",
+        content: "Ejecuta una consulta SQL en la base de datos para ver los usuarios y descarga el reporte de ventas de este mes.",
+      },
+    ],
+    expected: ["database_query", "download_report"],
+    multi: true,
+  },
 ];
