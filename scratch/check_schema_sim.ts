@@ -2,7 +2,7 @@ import { Tokenizer } from "@huggingface/tokenizers";
 import { InferenceSession, Tensor } from "onnxruntime-node";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { MITUMBES_VERBATIM_TOOLS } from "../tests/mitumbes-item-creation-comparison.test";
+import { MITUMBES_VERBATIM_TOOLS } from "../tests/fixtures/mitumbes-real-catalog";
 
 async function main() {
   const e5Dir = "models/multilingual-e5-small-onnx";

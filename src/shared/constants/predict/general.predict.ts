@@ -169,7 +169,7 @@ export const varianteCEnabledDefault = true;
 /** Tope de candidatas del recall por unión (turno ∪ contexto). */
 export const C_RECALL_K = 8;
 /** Margen (max−media del coseno del turno) que marca un turno AUTÓNOMO. */
-export const C_MARGIN = 0.10;
+export const C_MARGIN = 0.13;
 /**
  * Compuerta anafórica: si el turno se parece a un arquetipo de apoyo por encima
  * de este coseno, es DEPENDIENTE aunque tenga margen (debe resolver con el
@@ -211,41 +211,6 @@ export const C_ANAPHORA_ARCH = [
   "hazlo",
   "ahora con esa",
   "hazlo también para esa",
-];
-/** Arquetipos de MODALIDAD y POLARIDAD (D3 continuo): */
-export const C_ARCH_DIRECTIVE = [
-  "ejecuta ahora la siguiente acción de inmediato",
-  "procede a realizar la tarea solicitada",
-  "por favor consulta o envía esto",
-  "please execute the requested action now directly",
-];
-
-export const C_ARCH_HYPOTHETICAL = [
-  "en caso de que sucediera hipotéticamente en el futuro",
-  "si fuera el caso o si tuviéramos esa situación irreal te pediría",
-  "en un escenario supuesto donde fuera necesario",
-  "if hypothetically this were to happen in an unreal scenario",
-];
-
-export const C_ARCH_PROHIBITION = [
-  "está terminantemente prohibido hacer esto",
-  "ni se te ocurra realizar esta acción de ningún modo",
-  "bajo ninguna circunstancia toques o ejecutes esto",
-  "do not dare do this under any circumstance, completely forbidden",
-];
-
-export const C_ARCH_CHATTER = [
-  "comentario casual de conversación o queja sobre el ambiente físico",
-  "expresión de estado de ánimo o charla informal sin pedir ninguna tarea ni consulta",
-  "charla cotidiana informal sin ninguna solicitud de operación o consulta",
-  "casual small talk or ambient complaint without requesting any service",
-];
-
-export const C_ARCH_ACTIONABLE = [
-  "solicitud concreta de información, consulta de datos o ejecución de herramienta",
-  "instrucción u orden para que el sistema opere, busque o consulte algo",
-  "petición formal de consulta meteorológica, financiera o procesamiento de datos",
-  "concrete request to query data, check status, run a tool or perform a task",
 ];
 
 // ── Estado continuo de sesión ───────────────────────────────────────

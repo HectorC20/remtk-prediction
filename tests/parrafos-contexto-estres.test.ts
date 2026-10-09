@@ -23,6 +23,7 @@ Esta herramienta se conecta a las réplicas de análisis de PostgreSQL y BigQuer
 Requisitos de seguridad: No permite mutaciones (INSERT/UPDATE/DELETE). Si el usuario solicita cálculos financieros o reportes agregados que dependan de tablas de datos, esta es la herramienta primaria adecuada.`,
     tags: ["sql", "analitica", "base de datos", "reportes", "metricas"],
     intentSummary: "Ejecutar consultas analíticas en la base de datos corporativa",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     id: "p2",
@@ -36,6 +37,7 @@ Diseñado para consolidar información contable al cierre de cada mes o trimestr
 Casos de uso: Preparar el dossier contable para la junta directiva, emitir el balance mensual de ventas, o preparar resúmenes ejecutivos listos para enviar por correo a los auditores.`,
     tags: ["balance", "financiero", "reporte", "pdf", "ventas", "contabilidad"],
     intentSummary: "Generar y descargar reportes y balances financieros ejecutivos",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     id: "p3",
@@ -49,6 +51,7 @@ Permite adjuntar reportes generados, configurar múltiples destinatarios en copi
 Importante: Úsese solo cuando exista una confirmación explícita o una orden directa de envío final al destinatario. Si el usuario aún está redactando o revisando, debe preferirse guardar en borrador.`,
     tags: ["correo", "email", "enviar", "notificacion", "comunicacion"],
     intentSummary: "Enviar correos electrónicos y comunicados corporativos",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     id: "p4",
@@ -62,6 +65,7 @@ Mantiene el estado editable de cualquier comunicación o documento para que el e
 Regla de aplicación: Debe seleccionarse siempre que el usuario indique que la información no debe enviarse todavía, que desea revisarla después, o que prefiere dejarla pendiente de aprobación.`,
     tags: ["borrador", "guardar", "pendiente", "revision", "draft"],
     intentSummary: "Guardar borradores y documentos en revisión sin enviar",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     id: "p5",
@@ -75,6 +79,7 @@ Proporciona información actualizada de los tipos de cambio de compra y venta se
 Utilidad: Necesario al momento de calcular presupuestos en moneda extranjera o definir el valor en moneda local para facturas y transacciones comerciales.`,
     tags: ["tipo de cambio", "dolar", "divisa", "moneda", "cotizacion"],
     intentSummary: "Consultar cotizaciones de divisas y tipos de cambio actuales",
+    inputSchema: { type: "object", properties: {} },
   },
 ];
 

@@ -388,14 +388,14 @@ async function main(): Promise<void> {
   const reg = filas.filter((f) => f.okB && !f.okM).map((f) => f.id);
   if (reg.length) console.log(`regresiones: ${reg.join(", ")}`);
 
-  const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "results");
+  const dir = path.resolve(process.cwd(), "bench", "results");
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `mejora-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   fs.writeFileSync(file, JSON.stringify({ baseline: okB, mejora: okM, total: filas.length, casos: filas }, null, 2));
   console.log(`[mejora] reporte → ${file}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && process.argv[1].includes("mejora-arquitectura")) {
   main().catch((e) => {
     console.error("[mejora] fallo fatal:", e);
     process.exit(1);

@@ -85,7 +85,7 @@ async function runTest() {
     };
 
     const out = await session.run(feeds);
-    const logits = Object.values(out)[0].data as Float32Array;
+    const logits = (Object.values(out)[0] as any).data as Float32Array;
 
     // Softmax
     const maxLogit = Math.max(logits[0], logits[1], logits[2]);
