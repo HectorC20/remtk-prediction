@@ -34,6 +34,7 @@ export interface MemoryPredictionResult {
   rankedScores: number[];
   skillContext?: SkillPredictResult;
   activeEntities?: SessionEntityState[];
+  isMeta?: boolean;
 }
 
 /**

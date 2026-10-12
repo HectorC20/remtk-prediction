@@ -223,7 +223,7 @@ export class VarianteCService {
     if (res.mentioned.length > 0) return { decision: "ratify", tools: res.mentioned };
     if (res.state === "reject") return { decision: "abstain", tools: [] };
     if (!res.autonomous && !res.hasCtx) return { decision: "abstain", tools: [] };
-    if (!top || top.fused < C_TAU) return { decision: "abstain", tools: [] };
+    if (!top || top.fused < C_TAU || (top.s1 < 0.35 && top.fused < 0.50)) return { decision: "abstain", tools: [] };
     const tools = res.out.filter((f) => f.fused >= top.fused - C_DELTA).map((f) => f.name);
     return { decision: "ratify", tools };
   }

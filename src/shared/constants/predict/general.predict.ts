@@ -168,8 +168,8 @@ export const INTEREST_TOP_MATCHES = 5;
 export const varianteCEnabledDefault = true;
 /** Tope de candidatas del recall por unión (turno ∪ contexto). */
 export const C_RECALL_K = 8;
-/** Margen (max−media del coseno del turno) que marca un turno AUTÓNOMO. */
-export const C_MARGIN = 0.13;
+/** Margen (max−media del coseno del turno) que marca un turno AUTÓNOMO. Calibrado para la escala densa de embeddings multilingües (separación natural entre consultas conversacionales ≤0.060 y acciones reales ≥0.070). */
+export const C_MARGIN = 0.065;
 /**
  * Compuerta anafórica: si el turno se parece a un arquetipo de apoyo por encima
  * de este coseno, es DEPENDIENTE aunque tenga margen (debe resolver con el

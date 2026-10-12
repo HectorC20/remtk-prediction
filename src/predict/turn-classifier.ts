@@ -6,8 +6,11 @@ import { TurnType } from "../shared/interfaces";
 import type { JuicioEstado } from "src/shared/interfaces/juicio.interface";
 import type { TurnClassificationResult } from "src/shared/interfaces";
 
-const META_QUESTION_PROBE =
-  "preguntar qué herramientas, funciones o capacidades tiene disponibles el sistema";
+const META_QUESTION_PROBES = [
+  "preguntar qué herramientas, funciones o capacidades tiene disponibles el sistema",
+  "preguntar sobre qué hemos estado hablando o recordar el diálogo previo de la conversación",
+  "preguntar qué temas se han conversado o qué se habló antes en el chat",
+];
 
 const CATALOG_INQUIRY_PROBE =
   "preguntar por las herramientas o funciones disponibles de un complemento o catálogo";
@@ -25,6 +28,7 @@ export interface TurnClassifierContext {
 
 export class TurnClassifier {
   private metaEmb?: Float32Array;
+  private metaEmbs?: Float32Array[];
   private catalogEmb?: Float32Array;
 
   constructor(
@@ -107,7 +111,7 @@ export class TurnClassifier {
    */
   async isMetaQuestion(text: string): Promise<boolean> {
     await this.ensureMetaEmb();
-    if (!this.metaEmb) return false;
+    if (!this.metaEmbs || this.metaEmbs.length === 0) return false;
     if (await this.matchesMetaPool(text)) return true;
 
     const spans = text
@@ -123,14 +127,22 @@ export class TurnClassifier {
 
   private async matchesMetaPool(segment: string): Promise<boolean> {
     const input = await this.engine.embedQuery(segment, this.engine.defaultSize, { high: true });
-    const s = EmbeddingEngineService.cosine(input.embedding, this.metaEmb!);
-    return s >= META_QUESTION_THRESHOLD;
+    for (const emb of this.metaEmbs || []) {
+      const s = EmbeddingEngineService.cosine(input.embedding, emb);
+      if (s >= 0.82) return true;
+    }
+    return false;
   }
 
   private async ensureMetaEmb(): Promise<void> {
-    if (this.metaEmb) return;
-    const res = await this.engine.embedQuery(META_QUESTION_PROBE, this.engine.defaultSize);
-    this.metaEmb = res.embedding;
+    if (this.metaEmbs && this.metaEmbs.length > 0) return;
+    const embs: Float32Array[] = [];
+    for (const probe of META_QUESTION_PROBES) {
+      const res = await this.engine.embedQuery(probe, this.engine.defaultSize);
+      embs.push(res.embedding);
+    }
+    this.metaEmbs = embs;
+    this.metaEmb = embs[0];
   }
 
   /**

@@ -916,14 +916,27 @@ export class PredictionOrchestrator {
     log(`[memory] embedded model=${promptEmb.model} dim=${promptEmb.dim}`);
 
     // Detección de cambio de tema por cosine contra el estado previo de la sesión.
+    const words = text.split(/\s+/).filter(Boolean);
+    const isPunctuationAnaphora = text.includes("?") || text.includes("¿");
+    const isVeryBrief = words.length <= 2 && text.length <= 15;
+    const isBriefAnaphora = (isPunctuationAnaphora && words.length <= 5 && text.length <= 35) || isVeryBrief;
+    const isMeta = await this.classifier.isMetaQuestion(text);
+
     let topicScore = 0;
     let shift = false;
     const prev = this.topics.get(input.sessionId);
-    if (prev) {
+
+    if (isBriefAnaphora || isMeta) {
+      shift = false;
+      topicScore = prev ? 1.0 : 0;
+    } else if (prev) {
       topicScore = EmbeddingEngineService.cosine(promptEmb.embedding, prev.embedding);
-      shift = topicScore < TOPIC_SHIFT_THRESHOLD;
+      shift = topicScore < 0.42;
     }
-    this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
+
+    if (!isBriefAnaphora && !isMeta) {
+      this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
+    }
 
     const { tenant, agentId } = parseKeyRemtk(input.keyRemtk, input.tenant, input.agentId);
 
@@ -960,6 +973,7 @@ export class PredictionOrchestrator {
       topicScore,
       modelSize: promptEmb.model,
       rankedScores: scored.map((s) => s.score),
+      isMeta,
     };
     log(`[memory] memories=${result.memories.length} topicShift=${shift} topicScore=${topicScore.toFixed(3)}`);
     return result;
