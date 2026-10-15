@@ -144,13 +144,17 @@ test("POST /memory/predict devuelve memorias, topicShift y scores", async () => 
   assert.ok(Array.isArray(result.rankedScores));
 });
 
-test("POST /embed (6777) responde embedding con la dim del modelo por defecto (large)", async () => {
+test("POST /embed (6777) responde embedding con la dim del modelo por defecto", async () => {
+  const { loadConfig } = await import("../src/config");
+  const { onnxEmbedDim } = await import("../src/shared/constants/predict/embedding.constants");
+  const defDim = onnxEmbedDim[loadConfig().onnxModelSize];
+
   const res = await post(embedUrl, "/embed", { text: "hola mundo" });
   assert.equal(res.status, 200);
   const data = res.data as { embedding: number[]; model: string; dim: number; modelPath: string };
   assert.equal(data.model, "hash");
-  assert.equal(data.dim, 1024);
-  assert.equal(data.embedding.length, 1024);
+  assert.equal(data.dim, defDim);
+  assert.equal(data.embedding.length, defDim);
 
   // `size` explícito se respeta (remtk-memory indexa en 384 dims con "small").
   const small = await post(embedUrl, "/embed", { text: "hola", size: "small" });
@@ -158,12 +162,16 @@ test("POST /embed (6777) responde embedding con la dim del modelo por defecto (l
   assert.equal(smallData.dim, 384);
 });
 
-test("GET /models (6777) expone el modelo por defecto (large)", async () => {
+test("GET /models (6777) expone el modelo por defecto", async () => {
+  const { loadConfig } = await import("../src/config");
+  const { onnxEmbedDim } = await import("../src/shared/constants/predict/embedding.constants");
+  const defSize = loadConfig().onnxModelSize;
+
   const res = await fetch(`${embedUrl}/models`);
   assert.equal(res.status, 200);
-  const data = (await res.json()) as { large?: { dim?: number } };
+  const data = (await res.json()) as Record<string, { dim?: number } | undefined>;
   assert.ok(data && typeof data === "object");
-  assert.equal(data.large?.dim, 1024);
+  assert.equal(data[defSize]?.dim, onnxEmbedDim[defSize]);
 });
 
 test("API Qdrant (6775) responde status y recall de tools", async () => {

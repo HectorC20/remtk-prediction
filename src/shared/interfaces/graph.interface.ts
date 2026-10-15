@@ -24,6 +24,8 @@ export interface ToolGraphNode {
   prerequisites: string[];
   conflicts: string[];
   definition: ToolDefinition;
+  /** Clasificación topológica del nodo: si es una mutación/escritura o consulta de solo lectura */
+  isMutation?: boolean;
 }
 
 export interface TenantToolGraph {

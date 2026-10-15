@@ -42,6 +42,9 @@ import { ChatMessage, TopicState, MemoryDefinition, MemoryPredictionInput, Memor
 import {
   BLEND_NEW,
   BLEND_PREV,
+  C_ANAF_TAU,
+  C_ANAPHORA_ARCH,
+  C_CONFIRM_ARCH,
   INTEREST_INTENT_WEIGHT,
   INTEREST_MAX_ANCHORS,
   INTEREST_TOPIC_WEIGHT,
@@ -298,14 +301,14 @@ export class PredictionOrchestrator {
     log(`[pipeline] predict session=${input.sessionId} tenant=${input.tenant} scope=${scopeKey} turn=${turn}`);
 
     // Consulta de catálogo o meta-pregunta sobre capacidades del sistema
-    const isMeta = await this.classifier.isMetaQuestion(text);
-    const isCatalog = !isMeta && (await this.classifier.isCatalogInquiry(text));
+    const isCatalog = await this.classifier.isCatalogInquiry(text);
+    const isMeta = !isCatalog && (await this.classifier.isMetaQuestion(text));
     const catalog = this.qdrant.catalog(scopeKey);
     const allTools = catalog.all();
     let queryTokens = matchTokenSet(text);
     const families = namedFamilies(queryTokens, allTools.map((t) => t.name));
 
-    if (isMeta || (isCatalog && families.size > 0)) {
+    if (isCatalog) {
       if (families.size > 0) {
         // Retornamos todas las herramientas registradas de esa familia
         const familyTools = allTools.filter((t) => {
@@ -335,30 +338,56 @@ export class PredictionOrchestrator {
             },
           };
         }
-      }
-
-      if (input.source === "human" && isMeta) {
-        log(`[pipeline] early-exit: meta-pregunta general (capacidades) → 0 tools`);
-        this.finalize(trace, start, []);
-        return {
-          tools: [],
-          complexity: "simple",
-          modelSize: "hash",
-          rankedScores: [],
-          calibratedScores: [],
-          graph: { nodes: [], edges: [], executionOrder: [] },
-          context: {
-            intent: {
-              primaryAction: "meta",
-              confidence: 0.95,
-              summary: "Pregunta sobre capacidades del sistema",
+      } else {
+        // Consulta general de catálogo de herramientas disponibles (sin filtro de familia específico)
+        const catalogTools = allTools.slice(0, this.config.maxOutputTools);
+        if (catalogTools.length > 0) {
+          log(`[pipeline] consulta de catálogo general → devolviendo ${catalogTools.length} tools`);
+          this.finalize(trace, start, catalogTools.map((t) => t.name));
+          return {
+            tools: catalogTools,
+            complexity: "simple",
+            modelSize: this.engine.defaultSize,
+            rankedScores: catalogTools.map(() => 1.0),
+            calibratedScores: catalogTools.map(() => 0.98),
+            graph: { nodes: catalogTools.map((t) => t.name), edges: [], executionOrder: catalogTools.map((t) => t.name) },
+            context: {
+              intent: {
+                primaryAction: "meta",
+                confidence: 0.98,
+                ...intentDeTanda(catalogTools),
+                summary: "Catálogo de herramientas disponibles",
+              },
+              constraints: { negations: [], isConfirmation: false, isExploratory: true },
+              dialogState: { phase: "discovery", topicShift: false },
+              anticipation: { suggestedNextTools: [], reasoning: "Catálogo general solicitado" },
             },
-            constraints: { negations: [], isConfirmation: false, isExploratory: true },
-            dialogState: { phase: "discovery", topicShift: false },
-            anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
-          },
-        };
+          };
+        }
       }
+    }
+
+    if (input.source === "human" && isMeta) {
+      log(`[pipeline] early-exit: meta-pregunta general (diálogo/capacidades) → 0 tools`);
+      this.finalize(trace, start, []);
+      return {
+        tools: [],
+        complexity: "simple",
+        modelSize: "hash",
+        rankedScores: [],
+        calibratedScores: [],
+        graph: { nodes: [], edges: [], executionOrder: [] },
+        context: {
+          intent: {
+            primaryAction: "meta",
+            confidence: 0.95,
+            summary: "Pregunta sobre diálogo previo o capacidades del sistema",
+          },
+          constraints: { negations: [], isConfirmation: false, isExploratory: true },
+          dialogState: { phase: "discovery", topicShift: false },
+          anticipation: { suggestedNextTools: [], reasoning: "Meta-pregunta resuelta sin herramientas" },
+        },
+      };
     }
 
     // Early exit: confirmación con plan cacheado previo (empty o nli_confirm).
@@ -565,9 +594,12 @@ export class PredictionOrchestrator {
             `margen=${cRes.margin.toFixed(3)} anaf=${cRes.anaphora.toFixed(3)} estado=${cRes.state} ` +
             `dec=${arb.decision} out=${result.tools.length}`,
         );
-        if (result.tools.length > 0 && !esAgente) {
+        const hasMutations = this.graphCache.hasMutations(scopeKey, result.tools.map((t) => t.name));
+        if (result.tools.length > 0 && !esAgente && hasMutations) {
           this.confirmCache.set(input.sessionId, result);
           this.debugger_.bump({ confirmSets: 1 });
+        } else if (!esAgente) {
+          this.confirmCache.delete(input.sessionId);
         }
         this.trackTurn({
           input,
@@ -618,9 +650,12 @@ export class PredictionOrchestrator {
       trace.learnTerms = learned.scores.size;
       this.debugger_.bump({ embeddingsCached: graph.nodes.size });
 
-      if (result.tools.length > 0 && !esAgente) {
+      const hasMutations = this.graphCache.hasMutations(scopeKey, result.tools.map((t) => t.name));
+      if (result.tools.length > 0 && !esAgente && hasMutations) {
         this.confirmCache.set(input.sessionId, result);
         this.debugger_.bump({ confirmSets: 1 });
+      } else if (!esAgente) {
+        this.confirmCache.delete(input.sessionId);
       }
 
       this.trackTurn({
@@ -698,10 +733,13 @@ export class PredictionOrchestrator {
     trace.outputTools = result.tools.length;
 
     // Cachea el plan para confirmaciones posteriores de la sesión (solo turnos
-    // humanos: el plan de una subtarea no es estado del diálogo).
-    if (result.tools.length > 0 && !esAgente) {
+    // humanos con acciones de mutación o dependencias: las consultas puras no esperan confirmación).
+    const hasMutations = this.graphCache.hasMutations(scopeKey, result.tools.map((t) => t.name));
+    if (result.tools.length > 0 && !esAgente && hasMutations) {
       this.confirmCache.set(input.sessionId, result);
       this.debugger_.bump({ confirmSets: 1 });
+    } else if (!esAgente) {
+      this.confirmCache.delete(input.sessionId);
     }
 
     this.trackTurn({
@@ -916,27 +954,26 @@ export class PredictionOrchestrator {
     log(`[memory] embedded model=${promptEmb.model} dim=${promptEmb.dim}`);
 
     // Detección de cambio de tema por cosine contra el estado previo de la sesión.
-    const words = text.split(/\s+/).filter(Boolean);
-    const isPunctuationAnaphora = text.includes("?") || text.includes("¿");
-    const isVeryBrief = words.length <= 2 && text.length <= 15;
-    const isBriefAnaphora = (isPunctuationAnaphora && words.length <= 5 && text.length <= 35) || isVeryBrief;
-    const isMeta = await this.classifier.isMetaQuestion(text);
-
     let topicScore = 0;
     let shift = false;
     const prev = this.topics.get(input.sessionId);
-
-    if (isBriefAnaphora || isMeta) {
-      shift = false;
-      topicScore = prev ? 1.0 : 0;
-    } else if (prev) {
+    if (prev) {
       topicScore = EmbeddingEngineService.cosine(promptEmb.embedding, prev.embedding);
-      shift = topicScore < 0.42;
-    }
+      shift = topicScore < TOPIC_SHIFT_THRESHOLD;
 
-    if (!isBriefAnaphora && !isMeta) {
-      this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
+      // Si el prompt es un turno de soporte anafórico o confirmación en el espacio latente,
+      // no es un cambio de tema: continúa la línea temática de la sesión.
+      if (shift) {
+        for (const arch of [...C_ANAPHORA_ARCH, ...C_CONFIRM_ARCH]) {
+          const archEmb = await this.anchorEmbedding(arch);
+          if (archEmb && EmbeddingEngineService.cosine(promptEmb.embedding, archEmb) >= C_ANAF_TAU) {
+            shift = false;
+            break;
+          }
+        }
+      }
     }
+    this.topics.set(input.sessionId, this.updateTopic(prev, promptEmb.embedding, shift));
 
     const { tenant, agentId } = parseKeyRemtk(input.keyRemtk, input.tenant, input.agentId);
 
@@ -973,7 +1010,6 @@ export class PredictionOrchestrator {
       topicScore,
       modelSize: promptEmb.model,
       rankedScores: scored.map((s) => s.score),
-      isMeta,
     };
     log(`[memory] memories=${result.memories.length} topicShift=${shift} topicScore=${topicScore.toFixed(3)}`);
     return result;

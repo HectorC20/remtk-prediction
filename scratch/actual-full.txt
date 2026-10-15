@@ -1,0 +1,795 @@
+
+> remtk-prediction@0.0.1 test C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction
+> tsx --test tests/rerank.test.ts tests/e2e.test.ts tests/graph.test.ts tests/learn-barrier.test.ts tests/mitumbes-barrier.test.ts tests/calibration-context.test.ts tests/spatial-predict.test.ts tests/intent-recognition.test.ts tests/complex-system-plan.test.ts tests/continuous-flow-intent.test.ts tests/web-file-generation.test.ts tests/catalog-inquiry.test.ts tests/predict-dag-cold-catalog.test.ts tests/predict-intent-context.test.ts tests/e2e-nest-log-reproduction.test.ts tests/skill-memory-architecture.test.ts tests/skill-learning-sequential.test.ts
+
+2026-10-12T04:48:40.614Z [[rerank:graph] top=login(1.000), get_profile(0.000)]
+2026-10-12T04:48:40.638Z [[rerank:graph] selected=2 order=login(1.000)>get_profile(0.000) complexity=simple]
+✔ CalibrationService: corrección de anisotropía elimina el suelo basal (13.4095ms)
+✔ CalibrationService: sigmoide y Temperature Scaling devuelven P in [0, 1] (0.9765ms)
+✔ RerankService & Context: predice contexto estructural y anticipa herramientas siguientes en el DAG (97.2667ms)
+2026-10-12T04:49:56.129Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:56.162Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:02.903Z [[qdrant] indexados 6 tools + 6 keywords (scope=catalog-test-tenant-2026)]
+2026-10-12T04:50:02.958Z [[tools] tenant=catalog-test-tenant-2026 scope=catalog-test-tenant-2026 indexados=6 (embeddings en warm-up)]
+2026-10-12T04:50:15.494Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Qué herramientas de mitumbes tienes"]
+2026-10-12T04:50:15.532Z [[pipeline] predict session=session-catalog-1 tenant=catalog-test-tenant-2026 scope=catalog-test-tenant-2026 turn=new_query]
+2026-10-12T04:50:36.904Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:50:48.416Z [[pipeline] consulta de catálogo con familia=[mitumb] → devolviendo 5 tools]
+2026-10-12T04:50:48.420Z [[pipeline] predict session=session-catalog-1 tenant=catalog-test-tenant-2026 turn=new_query confirm_hit=false recall=0 degraded=false in=35 out=0 out_tools=mitumbes_item_crear,mitumbes_item_listar,mitumbes_item_actualizar,mitumbes_hero_obtener,mitumbes_usuario_listar model=hash emb_compute=0 emb_cached=0 complexity=simple 35571ms]
+✔ Consulta de catálogo: 'Qué herramientas de mitumbes tienes' devuelve todas las herramientas del namespace mitumbes (94729.7324ms)
+2026-10-12T04:51:04.139Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Listar herramientas MCP disponibles de mitumbes para el usuario"]
+2026-10-12T04:51:05.126Z [[pipeline] predict session=session-catalog-2 tenant=catalog-test-tenant-2026 scope=catalog-test-tenant-2026 turn=new_query]
+2026-10-12T04:51:13.477Z [[pipeline] consulta de catálogo con familia=[mitumb] → devolviendo 5 tools]
+2026-10-12T04:51:15.803Z [[pipeline] predict session=session-catalog-2 tenant=catalog-test-tenant-2026 turn=new_query confirm_hit=false recall=0 degraded=false in=63 out=0 out_tools=mitumbes_item_crear,mitumbes_item_listar,mitumbes_item_actualizar,mitumbes_hero_obtener,mitumbes_usuario_listar model=hash emb_compute=0 emb_cached=0 complexity=simple 16855ms]
+✔ Subtarea de agente: 'Listar herramientas MCP disponibles de mitumbes' entrega el inventario completo de la familia (29158.4339ms)
+2026-10-12T04:51:20.028Z [[graph] scope=catalog-test-tenant-2026 nodes=6 edges=10 hash=37361a01]
+2026-10-12T04:51:41.114Z [[memory:judge] text="No tengo ninguna herramienta llamada mitumbes_item" score=0.678 isNoise=true]
+✖ Juicio semántico de memoria contextual: POST /memory/judge detecta negaciones de herramientas como ruido (25234.3077ms)
+2026-10-12T04:51:49.500Z [[varianteC] scope=catalog-test-tenant-2026 indexado D1/D2=6 tools]
+2026-10-12T04:51:52.616Z [[lexical] seed scope=catalog-test-tenant-2026 seeded=6 cached=0 pruned=0 tools=6 v=1]
+2026-10-12T04:51:54.637Z [[tools] scope=catalog-test-tenant-2026 warm-up completo indexados=6 embeddings recomputed=6 cached=0]
+2026-10-12T04:49:58.950Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:59.306Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:07.502Z [[qdrant] indexados 12 tools + 12 keywords (scope=complex-system-tenant-2026)]
+2026-10-12T04:50:07.531Z [[tools] tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 indexados=12 (embeddings en warm-up)]
+2026-10-12T04:50:28.275Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Analizar arquitectura existente e inspeccionar package.json"]
+2026-10-12T04:50:28.298Z [[pipeline] predict session=complex-test-4ygea1h3mka tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:50:59.683Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:51:29.885Z [[pipeline] warm-up scope=complex-system-tenant-2026 no concluyó en 15000ms → ruta plana (pre-plan DAG solo por prerequisites declaradas)]
+2026-10-12T04:51:37.177Z [[keywords] query=["arquitectura","inspeccionar","existente","analizar","package","json"] reduced=12/12 model=gte top1=workspace_read_file(0.789)]
+2026-10-12T04:51:39.143Z [[pipeline] reduce candidates=12 degraded=false]
+2026-10-12T04:52:09.879Z [[recall] query="Analizar arquitectura existente e inspeccionar package.json" expanded="Analizar arquitectura existente e inspeccionar package.json" keywords=["analizar","arquitectura","existente","inspeccionar","package","json"]]
+2026-10-12T04:52:24.898Z [[graph] scope=complex-system-tenant-2026 nodes=12 edges=16 hash=16d9c5ec]
+2026-10-12T04:52:30.339Z [[recall] prompt_matches=7 keyword_matches=3]
+2026-10-12T04:52:32.513Z [[recall] candidates=7]
+2026-10-12T04:52:34.687Z [[rerank] fused=12 top1=workspace_read_file(0.939) relevancia=0.939 learnW=0.00]
+2026-10-12T04:52:36.835Z [[rerank] selected=3 complexity=simple]
+2026-10-12T04:52:38.998Z [[juicio] señales noop=0.000 energy=-0.940 top=0.939]
+2026-10-12T04:52:48.436Z [[juicio] re-rank top=workspace_read_file(0.970),sandbox_scan_tools(0.275),sandbox_install_packages(0.274)]
+2026-10-12T04:52:49.042Z [[pipeline] predict session=complex-test-4ygea1h3mka tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=59 out=2 out_tools=workspace_read_file,sandbox_scan_tools model=gte emb_compute=0 emb_cached=12 complexity=simple 143778ms]
+✔ Fase 1: 'Analizar arquitectura existente e inspeccionar package.json' -> workspace_read_file (214676.239ms)
+2026-10-12T04:52:54.907Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Crear backend NestJS con entidades PostgreSQL para multi-tenant, servicios, horarios y reservas"]
+2026-10-12T04:52:57.078Z [[pipeline] predict session=complex-test-qs2jiq4kc9n tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:53:19.381Z [[recall] query="Crear backend NestJS con entidades PostgreSQL para multi-tenant, servicios, horarios y reservas" expanded="Crear backend NestJS con entidades PostgreSQL para multi-tenant, servicios, horarios y reservas" keywords=["crear","backend","nestjs","con","entidades","postgresql","para","multi-tenant"]]
+2026-10-12T04:53:28.963Z [[varianteC] scope=complex-system-tenant-2026 indexado D1/D2=12 tools]
+2026-10-12T04:53:30.542Z [[lexical] seed scope=complex-system-tenant-2026 seeded=12 cached=0 pruned=0 tools=12 v=1]
+2026-10-12T04:53:31.933Z [[tools] scope=complex-system-tenant-2026 warm-up completo indexados=12 embeddings recomputed=12 cached=0]
+2026-10-12T04:53:33.515Z [[recall] prompt_matches=7 keyword_matches=2]
+2026-10-12T04:53:34.744Z [[recall] candidates=7]
+2026-10-12T04:53:36.236Z [[rerank:graph] piso de relevancia no superado (relevancia=0.708 < min=0.8) → 0 tools]
+2026-10-12T04:53:37.913Z [[pipeline] predict session=complex-test-qs2jiq4kc9n tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=95 out=0 model=gte emb_compute=0 emb_cached=12 complexity=simple 46332ms]
+✖ Fase 2: 'Crear backend NestJS con entidades PostgreSQL para tenants y reservas' -> workspace_write_file (49961.8482ms)
+2026-10-12T04:53:41.151Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Implementar lock distribuido con Redis SET NX EX para evitar double booking en reservas simultaneas"]
+2026-10-12T04:53:42.661Z [[pipeline] predict session=complex-test-sl3wqt7vyi tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:53:45.618Z [[varianteC] scope=complex-system-tenant-2026 régimen=DEP margen=0.059 anaf=0.537 estado=neutral dec=abstain out=0]
+2026-10-12T04:53:47.247Z [[pipeline] predict session=complex-test-sl3wqt7vyi tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=99 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 7756ms]
+✖ Fase 3: 'Implementar Redis lock distribuido para evitar double booking simultáneo' -> workspace_write_file / replace (10064.4505ms)
+2026-10-12T04:53:51.747Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Crear y registrar nueva herramienta personalizada MCP en sandbox para buscar negocios y consultar disponibilidad"]
+2026-10-12T04:53:53.522Z [[pipeline] predict session=complex-test-o0nd996di4p tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:53:59.717Z [[juicio] señales noop=0.000 energy=-0.902 top=0.865]
+2026-10-12T04:54:20.516Z [[juicio] re-rank top=register_tool(0.937),sandbox_run_registered_tool(0.450),sandbox_scan_tools(0.344),sandbox_install_packages(0.324),sandbox_run_command(0.321)]
+2026-10-12T04:54:20.749Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.247 anaf=0.496 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:20.947Z [[pipeline] predict session=complex-test-o0nd996di4p tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=112 out=2 out_tools=register_tool,sandbox_run_registered_tool model=gte emb_compute=0 emb_cached=0 complexity=simple 31220ms]
+✔ Fase 4: 'Crear y registrar herramientas MCP en el sandbox con tool.json' -> register_tool / sandbox_scan_tools (31545.981ms)
+2026-10-12T04:54:21.201Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Quiero una cita con el dentista mañana después de las 5, pero antes de las 7, y si no hay espacio busca el sábado"]
+2026-10-12T04:54:22.040Z [[pipeline] predict session=complex-test-a4t3hdysf9a tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:54:23.094Z [[juicio] señales noop=0.000 energy=-0.816 top=0.764]
+2026-10-12T04:54:35.969Z [[juicio] re-rank top=get_current_datetime(0.565),schedule_task(0.302),sandbox_install_packages(0.296),web_search(0.289),sandbox_scan_tools(0.289)]
+2026-10-12T04:54:35.971Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.194 anaf=0.466 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:35.971Z [[pipeline] predict session=complex-test-a4t3hdysf9a tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=113 out=2 out_tools=get_current_datetime,schedule_task model=gte emb_compute=0 emb_cached=0 complexity=simple 14983ms]
+✔ Fase 5: 'Quiero una cita con el dentista mañana después de las 5 o este sábado' -> get_current_datetime (14990.3812ms)
+2026-10-12T04:54:36.262Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Crear docker-compose.yml con frontend, backend, postgres, redis, worker y whatsapp-gateway"]
+2026-10-12T04:54:36.264Z [[pipeline] predict session=complex-test-ujdbfdgpofi tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:54:37.661Z [[juicio] señales noop=0.000 energy=-0.839 top=0.754]
+2026-10-12T04:54:42.274Z [[juicio] re-rank top=workspace_write_file(0.335),sandbox_install_packages(0.312),sandbox_run_command(0.312),sandbox_scan_tools(0.309),register_tool(0.305)]
+2026-10-12T04:54:42.276Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.107 anaf=0.532 estado=neutral dec=ratify out=5]
+2026-10-12T04:54:42.278Z [[pipeline] predict session=complex-test-ujdbfdgpofi tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=90 out=5 out_tools=workspace_write_file,sandbox_install_packages,sandbox_run_command,sandbox_scan_tools,register_tool model=gte emb_compute=0 emb_cached=0 complexity=simple 6215ms]
+✔ Fase 6: 'Crear docker-compose.yml con postgres, redis, worker y frontend' -> workspace_write_file (6306.207ms)
+2026-10-12T04:54:42.525Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Simular 100 solicitudes concurrentes intentando reservar el mismo horario y demostrar que solo 1 gana el slot"]
+2026-10-12T04:54:42.611Z [[pipeline] predict session=complex-test-39e2wcpqme6 tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:54:43.032Z [[juicio] señales noop=0.000 energy=-0.873 top=0.789]
+2026-10-12T04:54:46.853Z [[juicio] re-rank top=schedule_task(0.326),get_current_datetime(0.319),sandbox_run_registered_tool(0.318),sandbox_install_packages(0.316),sandbox_run_command(0.316)]
+2026-10-12T04:54:46.855Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.115 anaf=0.541 estado=neutral dec=ratify out=5]
+2026-10-12T04:54:46.856Z [[pipeline] predict session=complex-test-39e2wcpqme6 tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=109 out=5 out_tools=schedule_task,get_current_datetime,sandbox_run_registered_tool,sandbox_install_packages,sandbox_run_command model=gte emb_compute=0 emb_cached=0 complexity=simple 4570ms]
+✔ Fase 7: 'Ejecutar test de 100 solicitudes concurrentes para validar slot único' -> sandbox_run / workspace (4579.661ms)
+2026-10-12T04:54:47.072Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Crear seed con 10 negocios, 100 empleados y 10000 reservas, documentar API y crear .env.example"]
+2026-10-12T04:54:47.073Z [[pipeline] predict session=complex-test-lthj19ghb1d tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:54:49.375Z [[juicio] señales noop=0.000 energy=-0.840 top=0.754]
+2026-10-12T04:55:04.107Z [[juicio] re-rank top=register_tool(0.311),sandbox_install_packages(0.310),sandbox_scan_tools(0.310),workspace_write_file(0.308),sandbox_run_command(0.307)]
+2026-10-12T04:55:04.122Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.068 anaf=0.533 estado=neutral dec=ratify out=5]
+2026-10-12T04:55:04.123Z [[pipeline] predict session=complex-test-lthj19ghb1d tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=95 out=5 out_tools=register_tool,sandbox_install_packages,sandbox_scan_tools,workspace_write_file,sandbox_run_command model=gte emb_compute=0 emb_cached=0 complexity=simple 17253ms]
+✔ Fase 8: 'Crear seed de 10 negocios, 100 empleados, 10 000 reservas y .env.example' -> workspace_write_file (17266.0293ms)
+2026-10-12T04:55:04.798Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Ejecutar las migraciones de base de datos y correr la suite de tests en el sandbox"]
+2026-10-12T04:55:04.812Z [[pipeline] predict session=complex-test-qf8lp2zh9m tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:55:06.842Z [[juicio] señales noop=0.000 energy=-0.923 top=0.851]
+2026-10-12T04:55:20.513Z [[juicio] re-rank top=sandbox_run_command(0.786),register_tool(0.353),sandbox_run_registered_tool(0.350),sandbox_scan_tools(0.340),sandbox_install_packages(0.337)]
+2026-10-12T04:55:20.527Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.170 anaf=0.533 estado=neutral dec=ratify out=2]
+2026-10-12T04:55:20.528Z [[pipeline] predict session=complex-test-qf8lp2zh9m tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=82 out=2 out_tools=sandbox_run_command,register_tool model=gte emb_compute=0 emb_cached=0 complexity=simple 16321ms]
+✔ Fase 9: 'Ejecutar migraciones de base de datos y tests en el sandbox' -> sandbox_run_command (16442.0607ms)
+2026-10-12T04:55:21.282Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Instalar paquetes y dependencias npm para el backend en el sandbox"]
+2026-10-12T04:55:21.298Z [[pipeline] predict session=complex-test-ydgbzjkct8e tenant=complex-system-tenant-2026 scope=complex-system-tenant-2026 turn=new_query]
+2026-10-12T04:55:23.128Z [[juicio] señales noop=0.000 energy=-0.943 top=0.896]
+2026-10-12T04:55:33.803Z [[juicio] re-rank top=sandbox_install_packages(0.954),register_tool(0.355),sandbox_run_command(0.353),sandbox_scan_tools(0.340),sandbox_run_registered_tool(0.329)]
+2026-10-12T04:55:33.812Z [[varianteC] scope=complex-system-tenant-2026 régimen=AUTO margen=0.279 anaf=0.527 estado=neutral dec=ratify out=2]
+2026-10-12T04:55:33.813Z [[pipeline] predict session=complex-test-ydgbzjkct8e tenant=complex-system-tenant-2026 turn=new_query confirm_hit=false recall=12 degraded=false in=66 out=2 out_tools=sandbox_install_packages,register_tool model=gte emb_compute=0 emb_cached=0 complexity=simple 13175ms]
+✔ Fase 10: 'Instalar paquetes y dependencias npm en el sandbox' -> sandbox_install_packages / sandbox_run_command (13284.024ms)
+2026-10-12T04:49:59.160Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:59.307Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:06.569Z [[qdrant] indexados 9 tools + 9 keywords (scope=continuous-flow-tenant-2026)]
+2026-10-12T04:50:06.571Z [[tools] tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 indexados=9 (embeddings en warm-up)]
+✖ Turno 1: 'qué documentos existe?' -> workspace_list / workspace_list_root (62131.5879ms)
+2026-10-12T04:50:26.071Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="podrás diseñar un markdown detallando sobre JEV AI"]
+2026-10-12T04:50:26.105Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 turn=new_query]
+2026-10-12T04:50:54.061Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:51:24.846Z [[pipeline] warm-up scope=continuous-flow-tenant-2026 no concluyó en 15000ms → ruta plana (pre-plan DAG solo por prerequisites declaradas)]
+2026-10-12T04:51:30.963Z [[keywords] query=["detallando","markdown","disenar","podras","sobre","jev"] reduced=9/9 model=gte top1=document_generate(0.659)]
+2026-10-12T04:51:33.167Z [[pipeline] reduce candidates=9 degraded=false]
+2026-10-12T04:51:46.718Z [[recall] query="podrás diseñar un markdown detallando sobre JEV AI" expanded="podrás diseñar un markdown detallando sobre JEV AI" keywords=["podrás","diseñar","markdown","detallando","sobre","jev"]]
+2026-10-12T04:51:55.283Z [[graph] scope=continuous-flow-tenant-2026 nodes=9 edges=12 hash=3f388c7c]
+2026-10-12T04:52:01.910Z [[recall] prompt_matches=5 keyword_matches=4]
+2026-10-12T04:52:03.751Z [[recall] candidates=5]
+2026-10-12T04:52:05.377Z [[rerank] fused=9 top1=document_generate(0.809) relevancia=0.809 learnW=0.00]
+2026-10-12T04:52:07.237Z [[rerank] selected=2 complexity=simple]
+2026-10-12T04:52:09.048Z [[juicio] señales noop=0.000 energy=-0.823 top=0.809]
+2026-10-12T04:52:40.034Z [[varianteC] scope=continuous-flow-tenant-2026 indexado D1/D2=9 tools]
+2026-10-12T04:52:42.104Z [[lexical] seed scope=continuous-flow-tenant-2026 seeded=9 cached=0 pruned=0 tools=9 v=1]
+2026-10-12T04:52:44.294Z [[tools] scope=continuous-flow-tenant-2026 warm-up completo indexados=9 embeddings recomputed=9 cached=0]
+2026-10-12T04:52:52.496Z [[juicio] re-rank top=document_generate(0.331),workspace_write_file(0.313)]
+2026-10-12T04:52:54.684Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 turn=new_query confirm_hit=false recall=9 degraded=false in=50 out=2 out_tools=document_generate,workspace_write_file model=gte emb_compute=0 emb_cached=9 complexity=simple 152371ms]
+✔ Turno 2: 'podrás diseñar un markdown detallando sobre JEV AI' -> workspace_write_file (160008.0356ms)
+2026-10-12T04:52:57.497Z [[juicio:pivot] curr=document_generate(0.624) prev=workspace_write_file onPrev=0.509 shift=0.115 prom=0.135 min=0.85 → pivot=false]
+2026-10-12T04:52:59.559Z [[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=true prom=0.135 → turn=confirmation_empty conf=0.96 text="en pdf"]
+2026-10-12T04:53:01.532Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 turn=confirmation_empty]
+2026-10-12T04:53:04.589Z [[pipeline] early-exit: confirmación con plan cacheado]
+2026-10-12T04:53:06.703Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 turn=confirmation_empty confirm_hit=true recall=0 degraded=false in=6 out=0 out_tools=document_generate,workspace_write_file model=hash emb_compute=0 emb_cached=0 complexity=simple 9730ms]
+✔ Turno 3: 'en pdf' (anáfora / exportación) -> document_generate / document_convert (12022.6535ms)
+2026-10-12T04:53:10.613Z [[juicio:pivot] curr=document_generate(0.679) prev=workspace_write_file onPrev=0.628 shift=0.051 prom=0.123 min=0.85 → pivot=false]
+2026-10-12T04:53:12.829Z [[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=false prom=0.123 → turn=confirmation_nuance conf=0.92 text="actualiza el markdown agregando una sección de benchmarks y regenera el pdf"]
+2026-10-12T04:53:14.996Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 turn=confirmation_nuance]
+2026-10-12T04:53:18.295Z [[session] state session=continuous-flow-session-xyz sim=0.587 umbral=0.86 lambda=0.4240744333511973]
+2026-10-12T04:53:22.409Z [[juicio] señales noop=0.000 energy=-0.892 top=0.825]
+2026-10-12T04:54:10.231Z [[juicio] re-rank top=workspace_replace_in_file(0.334),document_convert(0.324),workspace_read_file(0.311),workspace_list_root(0.310),workspace_list(0.306)]
+2026-10-12T04:54:11.143Z [[varianteC] scope=continuous-flow-tenant-2026 régimen=AUTO margen=0.115 anaf=0.529 estado=neutral dec=ratify out=5]
+2026-10-12T04:54:12.016Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 turn=confirmation_nuance confirm_hit=false recall=9 degraded=false in=75 out=5 out_tools=workspace_replace_in_file,document_convert,workspace_read_file,workspace_list_root,workspace_list model=gte emb_compute=0 emb_cached=0 complexity=simple 62938ms]
+✔ Turno 4: 'actualiza el markdown agregando una sección de benchmarks y regenera el pdf' -> workspace_replace_in_file / document_generate (64112.8965ms)
+2026-10-12T04:54:14.128Z [[juicio:pivot] curr=clima_tumbes(0.790) prev=document_generate onPrev=0.348 shift=0.442 prom=0.372 min=0.85 → pivot=false]
+2026-10-12T04:54:15.302Z [[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=false prom=0.372 → turn=confirmation_nuance conf=0.92 text="cuál es el clima en Tumbes hoy?"]
+2026-10-12T04:54:16.705Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 turn=confirmation_nuance]
+2026-10-12T04:54:19.391Z [[session] state session=continuous-flow-session-xyz sim=0.380 umbral=0.86 lambda=0.12352913689560056]
+2026-10-12T04:54:20.510Z [[juicio] señales noop=0.000 energy=-0.884 top=0.884]
+2026-10-12T04:54:22.451Z [[juicio] re-rank top=clima_tumbes(0.929)]
+2026-10-12T04:54:24.020Z [[varianteC] scope=continuous-flow-tenant-2026 régimen=AUTO margen=0.445 anaf=0.474 estado=neutral dec=ratify out=1]
+2026-10-12T04:54:25.412Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 turn=confirmation_nuance confirm_hit=false recall=9 degraded=false in=31 out=1 out_tools=clima_tumbes model=gte emb_compute=0 emb_cached=0 complexity=simple 12311ms]
+✔ Turno 5: 'cuál es el clima en Tumbes hoy?' (cambio de tema) -> clima_tumbes (12504.4142ms)
+2026-10-12T04:54:25.773Z [[juicio:pivot] curr=workspace_list_root(0.618) prev=clima_tumbes onPrev=0.450 shift=0.168 prom=0.054 min=0.85 → pivot=false]
+2026-10-12T04:54:26.051Z [[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=false prom=0.054 → turn=confirmation_nuance conf=0.92 text="ahora muéstrame de nuevo los archivos generados"]
+2026-10-12T04:54:26.052Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 scope=continuous-flow-tenant-2026 turn=confirmation_nuance]
+2026-10-12T04:54:26.291Z [[session] state session=continuous-flow-session-xyz sim=0.430 umbral=0.86 lambda=0.17366483836967392]
+2026-10-12T04:54:26.293Z [[varianteC] scope=continuous-flow-tenant-2026 régimen=DEP margen=0.055 anaf=0.645 estado=neutral dec=abstain out=0]
+2026-10-12T04:54:26.294Z [[pipeline] predict session=continuous-flow-session-xyz tenant=continuous-flow-tenant-2026 turn=confirmation_nuance confirm_hit=false recall=9 degraded=false in=47 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 753ms]
+✖ Turno 6: 'ahora muéstrame de nuevo los archivos generados' -> workspace_list (763.8136ms)
+2026-10-12T04:49:18.973Z [[embed] ONNX deshabilitado — se usará fallback hash]
+2026-10-12T04:49:19.008Z [[embed] ONNX deshabilitado — se usará fallback hash]
+✔ health de los 3 puertos responde ok (5607.5747ms)
+✔ el catálogo de ejemplo tiene al menos 10 herramientas (36.9253ms)
+2026-10-12T04:49:21.546Z [[tools] tenant=tenant-demo scope=tenant-demo indexados=12 (embeddings en warm-up)]
+2026-10-12T04:49:21.679Z [[graph] scope=tenant-demo nodes=12 edges=4 hash=d6a73ddd]
+2026-10-12T04:49:21.694Z [[varianteC] scope=tenant-demo indexado D1/D2=12 tools]
+2026-10-12T04:49:21.809Z [[lexical] seed scope=tenant-demo seeded=12 cached=0 pruned=0 tools=12 v=1]
+2026-10-12T04:49:21.844Z [[tools] scope=tenant-demo warm-up completo indexados=12 embeddings recomputed=12 cached=0]
+✔ POST /tools indexa las 12 herramientas y /tools/count las reporta (932.7646ms)
+2026-10-12T04:49:22.156Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="busca información sobre el clima en lima"]
+2026-10-12T04:49:22.160Z [[pipeline] predict session=session-1 tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T04:49:35.885Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:49:37.691Z [[varianteC] scope=tenant-demo régimen=AUTO margen=0.280 anaf=0.000 estado=neutral dec=abstain out=0]
+2026-10-12T04:49:37.716Z [[pipeline] predict session=session-1 tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=40 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 15579ms]
+✖ POST /predict selecciona herramientas del catálogo (15754.0383ms)
+2026-10-12T04:49:37.972Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="envía un correo electrónico al equipo"]
+2026-10-12T04:49:37.980Z [[pipeline] predict session=session-confirm tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T04:49:38.460Z [[varianteC] scope=tenant-demo régimen=AUTO margen=0.440 anaf=0.000 estado=neutral dec=abstain out=0]
+2026-10-12T04:49:38.461Z [[pipeline] predict session=session-confirm tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=37 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 490ms]
+2026-10-12T04:49:38.509Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="continúa"]
+2026-10-12T04:49:38.524Z [[pipeline] predict session=session-confirm tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T04:49:38.993Z [[session] state session=session-confirm sim=0.000 umbral=0.86 lambda=n/a]
+2026-10-12T04:49:39.003Z [[varianteC] scope=tenant-demo régimen=DEP margen=0.000 anaf=0.500 estado=neutral dec=abstain out=0]
+2026-10-12T04:49:39.019Z [[pipeline] predict session=session-confirm tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=8 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 510ms]
+✔ POST /predict con confirmación responde tools (early-exit se valida con modelo real) (1317.2015ms)
+2026-10-12T04:49:39.165Z [[memory] embedded model=hash dim=768]
+2026-10-12T04:49:39.202Z [[memory] memories=0 topicShift=false topicScore=0.000]
+✔ POST /memory/predict devuelve memorias, topicShift y scores (186.4876ms)
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) (241.4508ms)
+✖ GET /models (6777) expone el modelo por defecto (large) (141.3087ms)
+✔ API Qdrant (6775) responde status y recall de tools (1009.2184ms)
+✔ GET /debug expone engine, stats y trazas (34.7216ms)
+2026-10-12T04:48:40.454Z [[graph] scope=tenant-graph nodes=6 edges=3 hash=f1fcdb26]
+2026-10-12T04:48:40.493Z [[rerank:graph] top=a(1.000), b(0.170)]
+2026-10-12T04:48:40.502Z [[rerank:graph] selected=2 order=a(1.000)>b(0.170) complexity=simple]
+2026-10-12T04:48:40.524Z [[rerank:graph] top=b(1.000), a(0.000)]
+2026-10-12T04:48:40.529Z [[rerank:graph] mutex removidos=a final=1]
+2026-10-12T04:48:40.544Z [[rerank:graph] selected=1 order=b(1.000) complexity=simple]
+2026-10-12T04:48:40.567Z [[session] state session=s1 sim=1.000 umbral=0.86 lambda=n/a]
+2026-10-12T04:48:40.578Z [[session] state session=s2 sim=0.000 umbral=0.86 lambda=n/a]
+2026-10-12T04:48:40.635Z [[graph] scope=lat nodes=50 edges=225 hash=597fa5ee]
+2026-10-12T04:48:40.673Z [[rerank:graph] top=tool_45(0.482), tool_0(0.204), tool_1(0.204), tool_2(0.204), tool_3(0.204)]
+2026-10-12T04:48:40.684Z [[rerank:graph] selected=2 order=tool_45(0.482)>tool_0(0.204) complexity=simple]
+✔ topologicalSort: pre-requisitos antes que dependientes (24.491ms)
+✔ topologicalSort: tolera ciclos y devuelve todos los nodos (0.7875ms)
+✔ ToolGraphCacheService: construye nodos, aristas y matriz de adyacencia (79.7149ms)
+✔ graphFilter: propaga pre-requisitos y ordena topológicamente (46.1434ms)
+✔ graphFilter: resuelve mutexes dejando el de mayor score (31.7096ms)
+✔ SessionStateCacheService: mezcla convexa sin cambio de tema (11.9747ms)
+✔ SessionStateCacheService: reset ante cambio de tema (12.499ms)
+✔ graphFilter: latencia < 15 ms con 50 tools (104.5345ms)
+2026-10-12T04:49:59.451Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:59.476Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:07.352Z [[qdrant] indexados 8 tools + 8 keywords (scope=intent-test-tenant-2026)]
+2026-10-12T04:50:07.436Z [[tools] tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 indexados=8 (embeddings en warm-up)]
+2026-10-12T04:50:21.758Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="noticias de tumbes hoy"]
+2026-10-12T04:50:21.761Z [[pipeline] predict session=session-4talxk8jz7x tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:50:45.783Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:51:14.531Z [[pipeline] warm-up scope=intent-test-tenant-2026 no concluyó en 15000ms → ruta plana (pre-plan DAG solo por prerequisites declaradas)]
+2026-10-12T04:51:22.345Z [[keywords] query=["noticias","tumbes","hoy"] reduced=8/8 model=gte top1=web_search(0.630)]
+2026-10-12T04:51:24.619Z [[pipeline] reduce candidates=8 degraded=false]
+2026-10-12T04:51:38.982Z [[recall] query="noticias de tumbes hoy" expanded="noticias de tumbes hoy" keywords=["noticias","tumbes","hoy"]]
+2026-10-12T04:51:45.328Z [[graph] scope=intent-test-tenant-2026 nodes=8 edges=7 hash=88d75fb8]
+2026-10-12T04:51:55.928Z [[recall] prompt_matches=5 keyword_matches=1]
+2026-10-12T04:51:57.924Z [[recall] candidates=5]
+2026-10-12T04:51:59.990Z [[rerank] fused=8 top1=clima_tumbes(0.844) relevancia=0.844 learnW=0.00]
+2026-10-12T04:52:02.026Z [[rerank] selected=2 complexity=simple]
+2026-10-12T04:52:03.927Z [[juicio] señales noop=0.000 energy=-0.845 top=0.844]
+2026-10-12T04:52:11.445Z [[juicio] re-rank top=clima_tumbes(0.390),web_search(0.264)]
+2026-10-12T04:52:13.513Z [[pipeline] predict session=session-4talxk8jz7x tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=22 out=2 out_tools=clima_tumbes,web_search model=gte emb_compute=0 emb_cached=8 complexity=simple 114129ms]
+✖ Escenario 1: 'noticias de tumbes hoy' identifica intención de búsqueda y selecciona web_search (180080.044ms)
+2026-10-12T04:52:22.667Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="quien es MILO J"]
+2026-10-12T04:52:24.826Z [[pipeline] predict session=session-iii7eauxma tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:52:30.558Z [[varianteC] scope=intent-test-tenant-2026 indexado D1/D2=8 tools]
+2026-10-12T04:52:32.805Z [[lexical] seed scope=intent-test-tenant-2026 seeded=8 cached=0 pruned=0 tools=8 v=1]
+2026-10-12T04:52:34.923Z [[tools] scope=intent-test-tenant-2026 warm-up completo indexados=8 embeddings recomputed=8 cached=0]
+2026-10-12T04:52:37.603Z [[varianteC] scope=intent-test-tenant-2026 régimen=DEP margen=0.034 anaf=0.567 estado=neutral dec=abstain out=0]
+2026-10-12T04:52:39.725Z [[pipeline] predict session=session-iii7eauxma tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=15 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 18713ms]
+✖ Escenario 2: 'quien es MILO J' identifica intención informativa y selecciona web_search (26204.436ms)
+2026-10-12T04:52:42.541Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="busqueda por internet"]
+2026-10-12T04:52:44.699Z [[pipeline] predict session=session-evbzgu4fvau tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:52:47.917Z [[juicio] señales noop=0.000 energy=-0.837 top=0.790]
+2026-10-12T04:53:17.896Z [[juicio] re-rank top=web_search(0.857),web_search_research(0.301),search_chat_history(0.299),web_search_extract(0.298),workspace_read_file(0.294)]
+2026-10-12T04:53:19.941Z [[varianteC] scope=intent-test-tenant-2026 régimen=AUTO margen=0.156 anaf=0.556 estado=neutral dec=ratify out=2]
+2026-10-12T04:53:22.067Z [[pipeline] predict session=session-evbzgu4fvau tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=21 out=2 out_tools=web_search,web_search_research model=gte emb_compute=0 emb_cached=0 complexity=simple 40041ms]
+✔ Escenario 3: 'busqueda por internet' selecciona web_search con alta afinidad (41992.6431ms)
+2026-10-12T04:53:24.573Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="que tiempo hace en tumbes"]
+2026-10-12T04:53:26.465Z [[pipeline] predict session=session-34gve8s3xn7 tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:53:28.813Z [[juicio] señales noop=0.000 energy=-0.834 top=0.834]
+2026-10-12T04:53:31.299Z [[juicio] re-rank top=clima_tumbes(0.464)]
+2026-10-12T04:53:32.759Z [[varianteC] scope=intent-test-tenant-2026 régimen=AUTO margen=0.338 anaf=0.446 estado=neutral dec=ratify out=1]
+2026-10-12T04:53:33.985Z [[pipeline] predict session=session-34gve8s3xn7 tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=25 out=1 out_tools=clima_tumbes model=gte emb_compute=0 emb_cached=0 complexity=simple 10040ms]
+✔ Escenario 4: 'que tiempo hace en tumbes' prioriza clima_tumbes sobre búsqueda genérica (11402.4428ms)
+2026-10-12T04:53:36.273Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="crear un archivo notas.txt con un resumen"]
+2026-10-12T04:53:37.912Z [[pipeline] predict session=session-a1mu20195a tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:53:41.756Z [[juicio] señales noop=0.000 energy=-0.856 top=0.798]
+2026-10-12T04:54:01.289Z [[juicio] re-rank top=workspace_write_file(0.654),workspace_read_file(0.340),web_search_extract(0.311),schedule_task(0.307),search_chat_history(0.306)]
+2026-10-12T04:54:02.773Z [[varianteC] scope=intent-test-tenant-2026 régimen=AUTO margen=0.135 anaf=0.538 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:04.067Z [[pipeline] predict session=session-a1mu20195a tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=41 out=2 out_tools=workspace_write_file,workspace_read_file model=gte emb_compute=0 emb_cached=0 complexity=simple 28623ms]
+✔ Escenario 5: 'crear un archivo notas.txt con un resumen' identifica intención de workspace (30274.3084ms)
+2026-10-12T04:54:07.199Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="revisa los turnos anteriores del chat para ver el link que me diste"]
+2026-10-12T04:54:08.273Z [[pipeline] predict session=session-sur3hvja0b tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:54:10.643Z [[juicio] señales noop=0.000 energy=-0.876 top=0.836]
+2026-10-12T04:54:18.535Z [[juicio] re-rank top=search_chat_history(0.506),web_search_extract(0.318),workspace_read_file(0.315),schedule_task(0.307),web_search(0.307)]
+2026-10-12T04:54:20.314Z [[varianteC] scope=intent-test-tenant-2026 régimen=AUTO margen=0.157 anaf=0.570 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:20.701Z [[pipeline] predict session=session-sur3hvja0b tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=67 out=2 out_tools=search_chat_history,web_search_extract model=gte emb_compute=0 emb_cached=0 complexity=simple 15007ms]
+✔ Escenario 6: 'revisa los turnos anteriores del chat' selecciona search_chat_history (15213.4931ms)
+2026-10-12T04:54:21.154Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="noticias recientes de tecnología en la web"]
+2026-10-12T04:54:21.940Z [[pipeline] predict session=session-qs0rs0mnx7p tenant=intent-test-tenant-2026 scope=intent-test-tenant-2026 turn=new_query]
+2026-10-12T04:54:22.358Z [[juicio] señales noop=0.000 energy=-0.829 top=0.775]
+2026-10-12T04:54:24.960Z [[juicio] re-rank top=web_search(0.845),search_chat_history(0.301),web_search_extract(0.298),web_search_research(0.295),workspace_write_file(0.290)]
+2026-10-12T04:54:25.511Z [[varianteC] scope=intent-test-tenant-2026 régimen=AUTO margen=0.126 anaf=0.438 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:25.547Z [[pipeline] predict session=session-qs0rs0mnx7p tenant=intent-test-tenant-2026 turn=new_query confirm_hit=false recall=8 degraded=false in=42 out=2 out_tools=web_search,search_chat_history model=gte emb_compute=0 emb_cached=0 complexity=simple 4408ms]
+✔ Escenario 7: CalibratedScores y context.intent cumplen con distribución probabilística [0, 1] (4830.2938ms)
+2026-10-12T04:48:44.807Z [[embed] ONNX deshabilitado — se usará fallback hash]
+2026-10-12T04:48:44.850Z [[tools] tenant=dag-frio scope=dag-frio indexados=4 (embeddings en warm-up)]
+2026-10-12T04:48:45.545Z [[graph] scope=dag-frio nodes=4 edges=8 hash=e6fb9390]
+2026-10-12T04:48:45.619Z [[varianteC] scope=dag-frio indexado D1/D2=4 tools]
+2026-10-12T04:48:45.678Z [[tools] scope=dag-frio warm-up completo indexados=4 embeddings recomputed=4 cached=0]
+2026-10-12T04:48:45.763Z [[embed] ONNX deshabilitado — se usará fallback hash]
+2026-10-12T04:48:45.776Z [[tools] tenant=dag-frio scope=dag-frio indexados=4 (embeddings en warm-up)]
+2026-10-12T04:48:45.804Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Redactar y guardar el ítem La Pichanga Gastrobar en ES, EN, PT y QU"]
+2026-10-12T04:48:45.816Z [[pipeline] predict session=sess-wait tenant=dag-frio scope=dag-frio turn=new_query]
+2026-10-12T04:48:45.898Z [[pipeline] keywords delegadas=1]
+2026-10-12T04:48:45.910Z [[pipeline] tools explícitas=mitumbes_item_crear]
+✔ §1 waitForWarmupBounded corta en la cota y confirma al concluir (946.0877ms)
+2026-10-12T04:48:46.294Z [[graph] scope=dag-frio nodes=4 edges=8 hash=e6fb9390]
+2026-10-12T04:48:46.325Z [[varianteC] scope=dag-frio indexado D1/D2=4 tools]
+2026-10-12T04:48:46.326Z [[tools] scope=dag-frio warm-up completo indexados=4 embeddings recomputed=4 cached=0]
+2026-10-12T04:48:46.345Z [[pipeline] keywords delegadas=1]
+2026-10-12T04:48:46.358Z [[pipeline] ruta plana pre-plan: antecedentes=2 salida=3]
+2026-10-12T04:48:46.366Z [[varianteC] scope=dag-frio régimen=AUTO margen=0.099 anaf=0.000 estado=neutral dec=ratify out=3]
+2026-10-12T04:48:46.376Z [[pipeline] predict session=sess-wait tenant=dag-frio turn=new_query confirm_hit=false recall=4 degraded=false in=67 out=3 out_tools=mitumbes_categoria_listar,mitumbes_zona_listar,mitumbes_item_crear model=small emb_compute=0 emb_cached=0 complexity=simple 567ms]
+2026-10-12T04:48:46.386Z [[embed] ONNX deshabilitado — se usará fallback hash]
+2026-10-12T04:48:46.404Z [[tools] tenant=dag-frio scope=dag-frio indexados=4 (embeddings en warm-up)]
+2026-10-12T04:48:46.444Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Redactar y guardar el ítem La Pichanga Gastrobar en ES, EN, PT y QU"]
+2026-10-12T04:48:46.455Z [[pipeline] predict session=sess-flat tenant=dag-frio scope=dag-frio turn=new_query]
+2026-10-12T04:48:46.465Z [[pipeline] keywords delegadas=1]
+2026-10-12T04:48:46.474Z [[pipeline] tools explícitas=mitumbes_item_crear]
+2026-10-12T04:48:46.476Z [[pipeline] warm-up scope=dag-frio no concluyó en 0ms → ruta plana (pre-plan DAG solo por prerequisites declaradas)]
+2026-10-12T04:48:46.508Z [[keywords] query=["mitumbes_item_crear","gastrobar","redactar","pichanga","guardar","item"] reduced=4/4 model=hash top1=mitumbes_item_crear(0.302)]
+2026-10-12T04:48:46.510Z [[pipeline] reduce candidates=4 degraded=false]
+2026-10-12T04:48:46.533Z [[rerank] fused=4 top1=mitumbes_item_crear(0.402) relevancia=0.402 learnW=0.00]
+2026-10-12T04:48:46.552Z [[rerank] selected=3 complexity=simple]
+2026-10-12T04:48:46.563Z [[pipeline] ruta plana pre-plan: antecedentes=2 salida=3]
+2026-10-12T04:48:46.572Z [[pipeline] predict session=sess-flat tenant=dag-frio turn=new_query confirm_hit=false recall=4 degraded=false in=67 out=3 out_tools=mitumbes_zona_listar,mitumbes_categoria_listar,mitumbes_item_crear model=hash emb_compute=0 emb_cached=4 complexity=simple 152ms]
+✔ §2 /predict espera el warm-up y toma la ruta topológica (631.4601ms)
+✔ §3 ruta plana: repone los antecedentes declarados con su DAG (196.5194ms)
+2026-10-12T04:48:46.894Z [[graph] scope=dag-frio nodes=4 edges=8 hash=e6fb9390]
+2026-10-12T04:48:46.947Z [[varianteC] scope=dag-frio indexado D1/D2=4 tools]
+2026-10-12T04:48:46.963Z [[tools] scope=dag-frio warm-up completo indexados=4 embeddings recomputed=4 cached=0]
+2026-10-12T04:49:54.607Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:54.652Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:03.076Z [[qdrant] indexados 196 tools + 196 keywords (scope=predict-intent-context-2026-09-28)]
+2026-10-12T04:50:03.116Z [[tools] tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 indexados=196 (embeddings en warm-up)]
+2026-10-12T04:58:55.968Z [[graph] scope=predict-intent-context-2026-09-28 nodes=196 edges=2960 hash=906982fe]
+2026-10-12T05:00:33.200Z [[varianteC] scope=predict-intent-context-2026-09-28 indexado D1/D2=196 tools]
+2026-10-12T05:00:33.373Z [[lexical] seed scope=predict-intent-context-2026-09-28 seeded=196 cached=0 pruned=0 tools=196 v=1]
+2026-10-12T05:00:33.392Z [[tools] scope=predict-intent-context-2026-09-28 warm-up completo indexados=196 embeddings recomputed=196 cached=0]
+2026-10-12T05:00:34.849Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Consultar UUID de la zona 'Tumbes' en el catálogo"]
+2026-10-12T05:00:34.889Z [[pipeline] predict session=sints-cruzada-zona tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:00:41.414Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T05:00:42.556Z [[juicio] señales noop=0.000 energy=-0.928 top=0.853]
+2026-10-12T05:01:04.288Z [[juicio] re-rank top=mitumbes_zona_listar(0.407),mitumbes_zona_obtener(0.341),mitumbes_item_crear(0.339),mitumbes_lugar_obtener(0.339),mitumbes_categoria_obtener(0.336)]
+2026-10-12T05:01:04.298Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.184 anaf=0.539 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:04.300Z [[pipeline] predict session=sints-cruzada-zona tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=49 out=2 out_tools=mitumbes_zona_listar,mitumbes_zona_obtener model=gte emb_compute=0 emb_cached=0 complexity=simple 30807ms]
+2026-10-12T05:01:04.389Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Consultar UUID de la zona 'Tumbes' en el catálogo"]
+2026-10-12T05:01:04.391Z [[pipeline] predict session=sintent-cruzada-zona tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:10.852Z [[intentContext] segmentos=6 conservados=3 | 0.649:Buscar/verificar si existe una herramien | 0.635:El ítem tiene ID 3265a5e6-86a2-4156-a23f | 0.612:El usuario adjuntó una imagen con fileId | 0.590:El usuario quiere actualizar la imagen d | 0.586:Ejecutar la actualización de la imagen d | 0.461:Necesito planificar tareas:]
+2026-10-12T05:01:10.906Z [[juicio] señales noop=0.000 energy=-0.928 top=0.853]
+2026-10-12T05:01:13.714Z [[juicio] re-rank top=mitumbes_zona_listar(0.407),mitumbes_zona_obtener(0.341),mitumbes_item_crear(0.339),mitumbes_lugar_obtener(0.339),mitumbes_categoria_obtener(0.336)]
+2026-10-12T05:01:13.728Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.184 anaf=0.539 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:13.749Z [[pipeline] predict session=sintent-cruzada-zona tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=49 out=2 out_tools=mitumbes_zona_listar,mitumbes_zona_obtener model=gte emb_compute=0 emb_cached=0 complexity=simple 9369ms]
+2026-10-12T05:01:14.283Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Actualizar imagen del ítem La Pichanga Gastrobar"]
+2026-10-12T05:01:14.297Z [[pipeline] predict session=sints-consultada tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:15.693Z [[juicio] señales noop=0.000 energy=-0.903 top=0.843]
+2026-10-12T05:01:26.855Z [[juicio] re-rank top=mitumbes_item_actualizar(0.530),mitumbes_item_imagen_adjuntar(0.349),mitumbes_item_imagenes_listar(0.331),mitumbes_lugar_actualizar(0.331),mitumbes_item_imagen_eliminar(0.327)]
+2026-10-12T05:01:26.868Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.256 anaf=0.508 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:26.883Z [[pipeline] predict session=sints-consultada tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=48 out=2 out_tools=mitumbes_item_actualizar,mitumbes_item_imagen_adjuntar model=gte emb_compute=0 emb_cached=0 complexity=simple 13055ms]
+2026-10-12T05:01:26.998Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Actualizar imagen del ítem La Pichanga Gastrobar"]
+2026-10-12T05:01:27.012Z [[pipeline] predict session=sintent-consultada tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:27.477Z [[intentContext] segmentos=6 conservados=3 | 0.928:El usuario quiere actualizar la imagen d | 0.764:El ítem tiene ID 3265a5e6-86a2-4156-a23f | 0.758:Ejecutar la actualización de la imagen d | 0.660:El usuario adjuntó una imagen con fileId | 0.599:Buscar/verificar si existe una herramien | 0.427:Necesito planificar tareas:]
+2026-10-12T05:01:27.534Z [[juicio] señales noop=0.000 energy=-0.903 top=0.843]
+2026-10-12T05:01:29.685Z [[juicio] re-rank top=mitumbes_item_actualizar(0.530),mitumbes_item_imagen_adjuntar(0.349),mitumbes_item_imagenes_listar(0.331),mitumbes_lugar_actualizar(0.331),mitumbes_item_imagen_eliminar(0.327)]
+2026-10-12T05:01:29.708Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.256 anaf=0.508 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:29.709Z [[pipeline] predict session=sintent-consultada tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=48 out=2 out_tools=mitumbes_item_actualizar,mitumbes_item_imagen_adjuntar model=gte emb_compute=0 emb_cached=0 complexity=simple 2725ms]
+  [cruzada] zona sin=[mitumbes_zona_listar, mitumbes_zona_obtener] con=[mitumbes_zona_listar, mitumbes_zona_obtener]
+  [cruzada] imagen sin=[mitumbes_item_actualizar, mitumbes_item_imagen_adjuntar] con=[mitumbes_item_actualizar, mitumbes_item_imagen_adjuntar]
+▶ intentContext: el pre-pensamiento del planificador enriquece la consulta de predicción
+  ✖ un bloque que describe OTRA subtarea no desplaza la herramienta que la consulta ya fijaba (56352.7573ms)
+2026-10-12T05:01:29.870Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Actualizar imagen del ítem La Pichanga Gastrobar"]
+2026-10-12T05:01:29.883Z [[pipeline] predict session=sints-familia tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:32.245Z [[juicio] señales noop=0.000 energy=-0.903 top=0.843]
+2026-10-12T05:01:34.464Z [[juicio] re-rank top=mitumbes_item_actualizar(0.530),mitumbes_item_imagen_adjuntar(0.349),mitumbes_item_imagenes_listar(0.331),mitumbes_lugar_actualizar(0.331),mitumbes_item_imagen_eliminar(0.327)]
+2026-10-12T05:01:34.479Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.256 anaf=0.508 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:34.481Z [[pipeline] predict session=sints-familia tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=48 out=2 out_tools=mitumbes_item_actualizar,mitumbes_item_imagen_adjuntar model=gte emb_compute=0 emb_cached=0 complexity=simple 4623ms]
+2026-10-12T05:01:34.619Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Actualizar imagen del ítem La Pichanga Gastrobar"]
+2026-10-12T05:01:34.636Z [[pipeline] predict session=sintent-familia tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:35.231Z [[intentContext] segmentos=6 conservados=3 | 0.928:El usuario quiere actualizar la imagen d | 0.764:El ítem tiene ID 3265a5e6-86a2-4156-a23f | 0.758:Ejecutar la actualización de la imagen d | 0.660:El usuario adjuntó una imagen con fileId | 0.599:Buscar/verificar si existe una herramien | 0.427:Necesito planificar tareas:]
+2026-10-12T05:01:35.285Z [[juicio] señales noop=0.000 energy=-0.903 top=0.843]
+2026-10-12T05:01:37.044Z [[juicio] re-rank top=mitumbes_item_actualizar(0.530),mitumbes_item_imagen_adjuntar(0.349),mitumbes_item_imagenes_listar(0.331),mitumbes_lugar_actualizar(0.331),mitumbes_item_imagen_eliminar(0.327)]
+2026-10-12T05:01:37.046Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.256 anaf=0.508 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:37.047Z [[pipeline] predict session=sintent-familia tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=48 out=2 out_tools=mitumbes_item_actualizar,mitumbes_item_imagen_adjuntar model=gte emb_compute=0 emb_cached=0 complexity=simple 2447ms]
+  [familia] sin=[mitumbes_item_actualizar, mitumbes_item_imagen_adjuntar]
+  [familia] con=[mitumbes_item_actualizar, mitumbes_item_imagen_adjuntar] pool_agregadas=undefined
+  ✖ el bloque ANCHA el pool de candidatas sin reescribir la tanda de la consulta (7353.1841ms)
+2026-10-12T05:01:37.586Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="listar las zonas del catálogo de mitumbes"]
+2026-10-12T05:01:37.599Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:38.105Z [[juicio] señales noop=0.000 energy=-0.907 top=0.833]
+2026-10-12T05:01:49.666Z [[juicio] re-rank top=mitumbes_zona_listar(0.937),mitumbes_item_listar(0.932),mitumbes_buscar(0.900),mitumbes_lugar_listar(0.871),mitumbes_zona_obtener(0.754)]
+2026-10-12T05:01:49.681Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.212 anaf=0.526 estado=neutral dec=ratify out=4]
+2026-10-12T05:01:49.694Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=41 out=4 out_tools=mitumbes_zona_listar,mitumbes_item_listar,mitumbes_buscar,mitumbes_lugar_listar model=gte emb_compute=0 emb_cached=0 complexity=simple 12515ms]
+2026-10-12T05:01:50.014Z [[juicio:pivot] curr=mitumbes_categoria_listar(0.767) prev=mitumbes_zona_listar onPrev=0.583 shift=0.184 prom=0.249 min=0.85 → pivot=false]
+2026-10-12T05:01:50.029Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="buscar categorías"]
+2026-10-12T05:01:50.047Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:01:50.464Z [[session] state session=sa-cache-mixto sim=0.648 umbral=0.86 lambda=0.5459893609138001]
+2026-10-12T05:01:50.492Z [[juicio] señales noop=0.000 energy=-0.869 top=0.802]
+2026-10-12T05:01:56.043Z [[juicio] re-rank top=mitumbes_buscar(0.919),mitumbes_categoria_listar(0.431),mitumbes_categoria_actualizar(0.380),mitumbes_categoria_obtener(0.350),mitumbes_categoria_eliminar(0.333)]
+2026-10-12T05:01:56.058Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.282 anaf=0.545 estado=neutral dec=ratify out=2]
+2026-10-12T05:01:56.073Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=17 out=2 out_tools=mitumbes_buscar,mitumbes_categoria_listar model=gte emb_compute=0 emb_cached=0 complexity=simple 6306ms]
+  [cache] humano=[mitumbes_zona_listar, mitumbes_item_listar, mitumbes_buscar] agente=[mitumbes_buscar, mitumbes_categoria_listar]
+2026-10-12T05:01:56.187Z [[juicio:pivot] curr=docker_shell_op_2(0.599) prev=mitumbes_categoria_listar onPrev=0.449 shift=0.150 prom=0.082 min=0.85 → pivot=false]
+2026-10-12T05:01:56.217Z [[classifier] juicio contextual: hasPlan=true isPivot=false anaphora=true prom=0.082 → turn=confirmation_empty conf=0.96 text="hazlo"]
+2026-10-12T05:01:56.218Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=confirmation_empty]
+2026-10-12T05:01:56.649Z [[pipeline] early-exit: confirmación con plan cacheado]
+2026-10-12T05:01:56.651Z [[pipeline] predict session=sa-cache-mixto tenant=predict-intent-context-2026-09-28 turn=confirmation_empty confirm_hit=true recall=0 degraded=false in=5 out=0 out_tools=mitumbes_zona_listar,mitumbes_item_listar,mitumbes_buscar,mitumbes_lugar_listar model=hash emb_compute=0 emb_cached=0 complexity=simple 495ms]
+  ✔ una subconsulta de agente no se responde con el plan cacheado de otro turno de la sesión (19545.8324ms)
+2026-10-12T05:01:56.746Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Consultar UUID de la zona 'Tumbes' en el catálogo"]
+2026-10-12T05:01:56.761Z [[pipeline] predict session=sintent-coto tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:02:01.950Z [[intentContext] segmentos=7 conservados=3 | 0.881:Task 1: consultar - Obtener UUIDs de zon | 0.790:So I need to consult tools to get the ca | 0.777:The category "Restaurante" and zone "Tum | 0.736:Category is Restaurant, zone is Tumbes. | 0.682:There's a tool `mitumbes_item_crear` tha | 0.612:The user wants to create the item "La Pi | 0.474:stripe_charge_cre]
+2026-10-12T05:02:02.556Z [[juicio] señales noop=0.000 energy=-0.928 top=0.853]
+2026-10-12T05:02:05.658Z [[juicio] re-rank top=mitumbes_zona_listar(0.407),mitumbes_zona_obtener(0.341),mitumbes_item_crear(0.339),mitumbes_lugar_obtener(0.339),mitumbes_categoria_obtener(0.336)]
+2026-10-12T05:02:05.672Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.184 anaf=0.539 estado=neutral dec=ratify out=2]
+2026-10-12T05:02:05.684Z [[pipeline] predict session=sintent-coto tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=49 out=2 out_tools=mitumbes_zona_listar,mitumbes_zona_obtener model=gte emb_compute=0 emb_cached=0 complexity=simple 8943ms]
+  ✔ el bloque largo se acota: no desplaza el texto de la subtarea (9086.1309ms)
+2026-10-12T05:02:06.470Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="crear un ítem nuevo en el catálogo de mitumbes con su categoría y zona"]
+2026-10-12T05:02:06.485Z [[pipeline] predict session=sintregresion-a tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:02:07.795Z [[juicio] señales noop=0.000 energy=-0.928 top=0.844]
+2026-10-12T05:02:20.812Z [[juicio] re-rank top=mitumbes_item_crear(0.948),mitumbes_item_imagen_adjuntar(0.930),mitumbes_item_relacionar(0.906),mitumbes_item_crear_varios(0.903),mitumbes_categoria_crear_varios(0.894)]
+2026-10-12T05:02:20.814Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.250 anaf=0.562 estado=neutral dec=ratify out=5]
+2026-10-12T05:02:20.825Z [[pipeline] predict session=sintregresion-a tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=70 out=5 out_tools=mitumbes_item_crear,mitumbes_item_imagen_adjuntar,mitumbes_item_relacionar,mitumbes_item_crear_varios,mitumbes_categoria_crear_varios model=gte emb_compute=0 emb_cached=0 complexity=simple 15005ms]
+2026-10-12T05:02:20.898Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="crear un ítem nuevo en el catálogo de mitumbes con su categoría y zona"]
+2026-10-12T05:02:20.910Z [[pipeline] predict session=sintregresion-b tenant=predict-intent-context-2026-09-28 scope=predict-intent-context-2026-09-28 turn=new_query]
+2026-10-12T05:02:22.098Z [[juicio] rerank ∅ → decide sobre catálogo: sostenidas por ancla=62 top=mitumbes_item_crear(0.941)]
+2026-10-12T05:02:22.111Z [[juicio] señales noop=0.000 energy=-1.028 top=0.941]
+2026-10-12T05:02:25.892Z [[juicio] re-rank top=mitumbes_item_crear(0.975),mitumbes_item_listar(0.947),mitumbes_item_actualizar(0.943),mitumbes_item_crear_varios(0.916),mitumbes_buscar(0.912)]
+2026-10-12T05:02:25.893Z [[varianteC] scope=predict-intent-context-2026-09-28 régimen=AUTO margen=0.250 anaf=0.562 estado=neutral dec=abstain out=4]
+2026-10-12T05:02:25.905Z [[pipeline] predict session=sintregresion-b tenant=predict-intent-context-2026-09-28 turn=new_query confirm_hit=false recall=196 degraded=false in=70 out=4 out_tools=mitumbes_item_crear,mitumbes_item_listar,mitumbes_item_actualizar,mitumbes_item_crear_varios model=gte emb_compute=0 emb_cached=0 complexity=simple 5017ms]
+  ✖ sin `intentContext` el comportamiento del turno es idéntico al de antes (20204.6799ms)
+✖ intentContext: el pre-pensamiento del planificador enriquece la consulta de predicción (791701.2111ms)
+2026-10-12T04:48:40.833Z [[rerank] fused=4 top1=mitumbes_categoria_listar(0.900) relevancia=0.900 learnW=0.00]
+2026-10-12T04:48:40.867Z [[rerank] selected=2 complexity=simple]
+2026-10-12T04:48:40.871Z [[rerank] fused=4 top1=schedule_delete(0.950) relevancia=0.950 learnW=0.00]
+2026-10-12T04:48:40.895Z [[rerank] selected=2 complexity=simple]
+✔ cosine: normaliza y acota a [0,1] (20.9342ms)
+✔ cosine: tolera longitudes distintas (min) (0.5816ms)
+✔ adaptiveThreshold: sin candidatas → vacío (17.5099ms)
+✔ adaptiveThreshold: con menos que el mínimo devuelve ese número menor (1.1941ms)
+✔ adaptiveThreshold: corta en el primer gap > umbral (0.5036ms)
+✔ adaptiveThreshold: scores planos sin gap → devuelve el cluster denso (0.8467ms)
+✔ estimateComplexity: rangos por cantidad y promedio (10.5867ms)
+✔ familia: el namespace es el discriminante entre complementos (12.5359ms)
+✔ namedFamilies: solo ancla familias realmente nombradas en la consulta (1.4677ms)
+✔ puerta de familia: la consulta que nombra `mitumbes` descarta las `schedule_*` (118.8025ms)
+✔ SpatialPredictService - Direct creation with cursor coordinates (21.1108ms)
+✔ SpatialPredictService - Direct creation of circle with custom color (0.5688ms)
+✔ SpatialPredictService - Anaphoric reference (change color of selected object) (0.4666ms)
+✔ SpatialPredictService - Relative movement (direction-based) (12.2738ms)
+✔ SpatialPredictService - Absolute positioning: center (3.0054ms)
+✔ SpatialPredictService - Absolute positioning: top-right corner (9.9639ms)
+✔ SpatialPredictService - Movement with fine magnitude (un poco) (0.7439ms)
+✔ SpatialPredictService - Movement with large magnitude (bastante) (0.8609ms)
+✔ SpatialPredictService - Target cursor location (tráelo acá) (1.6586ms)
+✔ SpatialPredictService - Resize element (0.8126ms)
+✔ SpatialPredictService - Add text label (13.5176ms)
+2026-10-12T04:49:58.092Z [[embed] sesión ONNX cargada: gte (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\gte-multilingual-base-onnx\model_int8.onnx)]
+2026-10-12T04:49:58.181Z [[embed] warmup gte → ONNX cargado (dim=768)]
+2026-10-12T04:50:07.267Z [[qdrant] indexados 5 tools + 5 keywords (scope=web-file-tenant-2026)]
+2026-10-12T04:50:07.296Z [[tools] tenant=web-file-tenant-2026 scope=web-file-tenant-2026 indexados=5 (embeddings en warm-up)]
+2026-10-12T04:50:40.778Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="créame una página web para un restaurante con HTML y CSS"]
+2026-10-12T04:50:40.870Z [[pipeline] predict session=web-test-0toea3dop8ah tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:51:22.152Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T04:51:32.792Z [[graph] scope=web-file-tenant-2026 nodes=5 edges=6 hash=282a90eb]
+2026-10-12T04:51:49.134Z [[pipeline] warm-up scope=web-file-tenant-2026 no concluyó en 15000ms → ruta plana (pre-plan DAG solo por prerequisites declaradas)]
+2026-10-12T04:51:58.490Z [[varianteC] scope=web-file-tenant-2026 indexado D1/D2=5 tools]
+2026-10-12T04:52:00.582Z [[lexical] seed scope=web-file-tenant-2026 seeded=5 cached=0 pruned=0 tools=5 v=1]
+2026-10-12T04:52:02.572Z [[tools] scope=web-file-tenant-2026 warm-up completo indexados=5 embeddings recomputed=5 cached=0]
+2026-10-12T04:52:04.579Z [[recall] query="créame una página web para un restaurante con HTML y CSS" expanded="créame una página web para un restaurante con HTML y CSS" keywords=["créame","una","página","web","para","restaurante","con","html"]]
+2026-10-12T04:52:06.540Z [[recall] prompt_matches=5 keyword_matches=2]
+2026-10-12T04:52:08.304Z [[recall] candidates=5]
+2026-10-12T04:52:10.049Z [[rerank:graph] piso de relevancia no superado (relevancia=0.725 < min=0.8) → 0 tools]
+2026-10-12T04:52:12.082Z [[juicio] rerank ∅ → decide sobre catálogo: sostenidas por ancla=1 top=web_search(0.613)]
+2026-10-12T04:52:14.201Z [[juicio] señales noop=0.000 energy=-0.613 top=0.613]
+2026-10-12T04:52:29.434Z [[juicio] re-rank top=web_search(0.274)]
+2026-10-12T04:52:31.565Z [[pipeline] predict session=web-test-0toea3dop8ah tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=56 out=1 out_tools=web_search model=gte emb_compute=0 emb_cached=5 complexity=simple 120154ms]
+✖ 1. 'créame una página web para un restaurante con HTML y CSS' -> workspace_write_file (198684.5139ms)
+2026-10-12T04:52:35.839Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="genera una landing page en el sandbox con index.html, styles.css y script.js"]
+2026-10-12T04:52:38.010Z [[pipeline] predict session=web-test-kvdhtl6zv6e tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:52:44.616Z [[juicio] señales noop=0.000 energy=-0.859 top=0.801]
+2026-10-12T04:53:26.930Z [[juicio] re-rank top=workspace_write_file(0.780),workspace_read_file(0.324),workspace_replace_in_file(0.320),workspace_list(0.319),web_search(0.303)]
+2026-10-12T04:53:28.401Z [[varianteC] scope=web-file-tenant-2026 régimen=AUTO margen=0.105 anaf=0.526 estado=neutral dec=ratify out=2]
+2026-10-12T04:53:30.006Z [[pipeline] predict session=web-test-kvdhtl6zv6e tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=76 out=2 out_tools=workspace_write_file,workspace_read_file model=gte emb_compute=0 emb_cached=0 complexity=simple 55829ms]
+✔ 2. 'genera una landing page en el sandbox con index.html, styles.css y script.js' -> workspace_write_file (57467.0649ms)
+2026-10-12T04:53:32.694Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="crea un archivo styles.css con diseño responsive y animaciones"]
+2026-10-12T04:53:33.984Z [[pipeline] predict session=web-test-4pnqc00fmv2 tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:53:38.998Z [[varianteC] scope=web-file-tenant-2026 régimen=DEP margen=0.063 anaf=0.506 estado=neutral dec=abstain out=0]
+2026-10-12T04:53:40.292Z [[pipeline] predict session=web-test-4pnqc00fmv2 tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=62 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 8718ms]
+✖ 3. 'crea un archivo styles.css con diseño responsive y animaciones' -> workspace_write_file (10238.2292ms)
+2026-10-12T04:53:42.918Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="diseña un componente interactivo en javascript app.js"]
+2026-10-12T04:53:44.314Z [[pipeline] predict session=web-test-m3ca05y8re tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:53:49.241Z [[juicio] señales noop=0.000 energy=-0.830 top=0.774]
+2026-10-12T04:54:06.416Z [[juicio] re-rank top=workspace_write_file(0.525),workspace_read_file(0.317),workspace_replace_in_file(0.307),workspace_list(0.304),web_search(0.294)]
+2026-10-12T04:54:07.541Z [[varianteC] scope=web-file-tenant-2026 régimen=AUTO margen=0.094 anaf=0.493 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:08.581Z [[pipeline] predict session=web-test-m3ca05y8re tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=53 out=2 out_tools=workspace_write_file,workspace_read_file model=gte emb_compute=0 emb_cached=0 complexity=simple 26669ms]
+✔ 4. 'diseña un componente interactivo en javascript app.js' -> workspace_write_file (27814.5045ms)
+2026-10-12T04:54:10.910Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="actualiza el diseño agregando modo oscuro al styles.css"]
+2026-10-12T04:54:11.839Z [[pipeline] predict session=web-test-moikjptnejs tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:54:15.576Z [[juicio] señales noop=0.000 energy=-0.824 top=0.788]
+2026-10-12T04:54:19.354Z [[juicio] re-rank top=workspace_replace_in_file(0.321),workspace_read_file(0.306),web_search(0.299),workspace_list(0.296),workspace_write_file(0.291)]
+2026-10-12T04:54:20.505Z [[varianteC] scope=web-file-tenant-2026 régimen=AUTO margen=0.092 anaf=0.516 estado=neutral dec=ratify out=5]
+2026-10-12T04:54:20.726Z [[pipeline] predict session=web-test-moikjptnejs tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=55 out=5 out_tools=workspace_replace_in_file,workspace_read_file,web_search,workspace_list,workspace_write_file model=gte emb_compute=0 emb_cached=0 complexity=simple 11012ms]
+✔ 5. 'actualiza el diseño agregando modo oscuro al styles.css' -> workspace_replace_in_file / workspace_write_file (11202.0614ms)
+2026-10-12T04:54:20.825Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="inspecciona el código de index.html generado"]
+2026-10-12T04:54:20.929Z [[pipeline] predict session=web-test-c9c904ny5y9 tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:54:21.468Z [[juicio] señales noop=0.000 energy=-0.855 top=0.827]
+2026-10-12T04:54:23.642Z [[juicio] re-rank top=workspace_read_file(0.917),workspace_write_file(0.327),workspace_replace_in_file(0.311),web_search(0.307),workspace_list(0.306)]
+2026-10-12T04:54:25.410Z [[varianteC] scope=web-file-tenant-2026 régimen=AUTO margen=0.146 anaf=0.524 estado=neutral dec=ratify out=2]
+2026-10-12T04:54:25.531Z [[pipeline] predict session=web-test-c9c904ny5y9 tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=44 out=2 out_tools=workspace_read_file,workspace_write_file model=gte emb_compute=0 emb_cached=0 complexity=simple 4764ms]
+✔ 6. 'inspecciona el código de index.html generado' -> workspace_read_file (4994.4648ms)
+2026-10-12T04:54:26.244Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="intenta crear de nuevo la página html"]
+2026-10-12T04:54:26.245Z [[pipeline] predict session=web-test-s8lxnlpqsq8 tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:54:26.479Z [[varianteC] scope=web-file-tenant-2026 régimen=DEP margen=0.057 anaf=0.600 estado=neutral dec=abstain out=0]
+2026-10-12T04:54:26.481Z [[pipeline] predict session=web-test-s8lxnlpqsq8 tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=37 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 531ms]
+✖ 7. 'intenta crear de nuevo la página html' -> workspace_write_file (725.8813ms)
+2026-10-12T04:54:26.501Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="Reintentar la creación de la página HTML"]
+2026-10-12T04:54:26.502Z [[pipeline] predict session=web-test-gx6xgdndnu tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:54:26.714Z [[juicio] señales noop=0.000 energy=-0.849 top=0.799]
+2026-10-12T04:54:29.551Z [[juicio] re-rank top=workspace_write_file(0.353),workspace_read_file(0.322),workspace_replace_in_file(0.315),workspace_list(0.302),web_search(0.302)]
+2026-10-12T04:54:29.553Z [[varianteC] scope=web-file-tenant-2026 régimen=AUTO margen=0.071 anaf=0.564 estado=neutral dec=ratify out=5]
+2026-10-12T04:54:29.556Z [[pipeline] predict session=web-test-gx6xgdndnu tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=40 out=5 out_tools=workspace_write_file,workspace_read_file,workspace_replace_in_file,workspace_list,web_search model=gte emb_compute=0 emb_cached=0 complexity=simple 3070ms]
+✔ 8. 'Reintentar la creación de la página HTML' -> workspace_write_file (3077.5725ms)
+2026-10-12T04:54:30.366Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="guardar archivo jev-ai.html en el workspace"]
+2026-10-12T04:54:30.369Z [[pipeline] predict session=web-test-oxffec4wjdh tenant=web-file-tenant-2026 scope=web-file-tenant-2026 turn=new_query]
+2026-10-12T04:54:30.856Z [[juicio] rerank ∅ → decide sobre catálogo: sostenidas por ancla=4 top=workspace_write_file(0.746)]
+2026-10-12T04:54:30.857Z [[juicio] señales noop=0.000 energy=-0.786 top=0.746]
+2026-10-12T04:54:31.804Z [[juicio] re-rank top=workspace_write_file(0.843),workspace_read_file(0.585),workspace_list(0.341),workspace_replace_in_file(0.298)]
+2026-10-12T04:54:31.806Z [[varianteC] scope=web-file-tenant-2026 régimen=DEP margen=0.046 anaf=0.528 estado=neutral dec=abstain out=2]
+2026-10-12T04:54:31.807Z [[pipeline] predict session=web-test-oxffec4wjdh tenant=web-file-tenant-2026 turn=new_query confirm_hit=false recall=5 degraded=false in=43 out=2 out_tools=workspace_write_file,workspace_read_file model=gte emb_compute=0 emb_cached=0 complexity=simple 2086ms]
+✔ 9. 'guardar archivo jev-ai.html en el workspace' -> workspace_write_file (2250.0742ms)
+ℹ tests 85
+ℹ suites 1
+ℹ pass 69
+ℹ fail 16
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 849765.6479
+
+✖ failing tests:
+
+test at tests\catalog-inquiry.test.ts:138:1
+✖ Juicio semántico de memoria contextual: POST /memory/judge detecta negaciones de herramientas como ruido (25234.3077ms)
+  AssertionError [ERR_ASSERTION]: El score de ruido debe ser alto
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\catalog-inquiry.test.ts:149:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\complex-system-plan.test.ts:225:1
+✖ Fase 2: 'Crear backend NestJS con entidades PostgreSQL para tenants y reservas' -> workspace_write_file (49961.8482ms)
+  AssertionError [ERR_ASSERTION]: Debe predecir workspace_write_file
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\complex-system-plan.test.ts:229:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\complex-system-plan.test.ts:236:1
+✖ Fase 3: 'Implementar Redis lock distribuido para evitar double booking simultáneo' -> workspace_write_file / replace (10064.4505ms)
+  AssertionError [ERR_ASSERTION]: Debe incluir herramientas de edición/creación de código o scheduler: 
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\complex-system-plan.test.ts:240:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\continuous-flow-intent.test.ts:170:1
+✖ Turno 1: 'qué documentos existe?' -> workspace_list / workspace_list_root (62131.5879ms)
+  [TypeError: fetch failed] {
+    [cause]: Error: read ECONNRESET
+        at TCP.onStreamRead (node:internal/stream_base_commons:216:20) {
+      errno: -4077,
+      code: 'ECONNRESET',
+      syscall: 'read'
+    }
+  }
+
+test at tests\continuous-flow-intent.test.ts:224:1
+✖ Turno 6: 'ahora muéstrame de nuevo los archivos generados' -> workspace_list (763.8136ms)
+  AssertionError [ERR_ASSERTION]: Debe retornar al workspace para listar archivos, obtenido: 
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\continuous-flow-intent.test.ts:228:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\e2e.test.ts:74:1
+✖ POST /predict selecciona herramientas del catálogo (15754.0383ms)
+  AssertionError [ERR_ASSERTION]: debe seleccionar al menos una herramienta
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:92:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\e2e.test.ts:147:1
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) (241.4508ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  768 !== 1024
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:152:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 768,
+    expected: 1024,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\e2e.test.ts:161:1
+✖ GET /models (6777) expone el modelo por defecto (large) (141.3087ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 1024
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:166:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 1024,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\intent-recognition.test.ts:169:1
+✖ Escenario 1: 'noticias de tumbes hoy' identifica intención de búsqueda y selecciona web_search (180080.044ms)
+  AssertionError [ERR_ASSERTION]: La confianza debe superar 0.8
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\intent-recognition.test.ts:179:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\intent-recognition.test.ts:185:1
+✖ Escenario 2: 'quien es MILO J' identifica intención informativa y selecciona web_search (26204.436ms)
+  AssertionError [ERR_ASSERTION]: Debe predecir herramientas
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\intent-recognition.test.ts:189:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\predict-intent-context.test.ts:137:3
+✖ un bloque que describe OTRA subtarea no desplaza la herramienta que la consulta ya fijaba (56352.7573ms)
+  AssertionError [ERR_ASSERTION]: el pre-pensamiento del plan no puede desbancar la herramienta que la consulta ya tenía en punta: [mitumbes_item_actualizar, mitumbes_item_imagen_adjuntar]
+  + actual - expected
+  
+  + 'mitumbes_item_actualizar'
+  - 'mitumbes_item_imagen_adjuntar'
+                   ^
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\predict-intent-context.test.ts:175:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1619:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'mitumbes_item_actualizar',
+    expected: 'mitumbes_item_imagen_adjuntar',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\predict-intent-context.test.ts:183:3
+✖ el bloque ANCHA el pool de candidatas sin reescribir la tanda de la consulta (7353.1841ms)
+  AssertionError [ERR_ASSERTION]: el bloque trae candidatas que la consulta cruda no encontró
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\predict-intent-context.test.ts:209:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\predict-intent-context.test.ts:301:3
+✖ sin `intentContext` el comportamiento del turno es idéntico al de antes (20204.6799ms)
+  AssertionError [ERR_ASSERTION]: un intentContext vacío no debe mover ni una herramienta
+  + actual - expected
+  
+    [
+      'mitumbes_item_crear',
+  +   'mitumbes_item_listar',
+  +   'mitumbes_item_actualizar',
+  -   'mitumbes_item_imagen_adjuntar',
+  -   'mitumbes_item_relacionar',
+      'mitumbes_item_crear_varios',
+  -   'mitumbes_categoria_crear_varios'
+    ]
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\predict-intent-context.test.ts:318:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'mitumbes_item_crear', 'mitumbes_item_listar', 'mitumbes_item_actualizar', 'mitumbes_item_crear_varios' ],
+    expected: [ 'mitumbes_item_crear', 'mitumbes_item_imagen_adjuntar', 'mitumbes_item_relacionar', 'mitumbes_item_crear_varios', 'mitumbes_categoria_crear_varios' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\web-file-generation.test.ts:138:1
+✖ 1. 'créame una página web para un restaurante con HTML y CSS' -> workspace_write_file (198684.5139ms)
+  AssertionError [ERR_ASSERTION]: Debe incluir workspace_write_file o workspace_replace_in_file para crear la página web, obtenido: web_search
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\web-file-generation.test.ts:142:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\web-file-generation.test.ts:159:1
+✖ 3. 'crea un archivo styles.css con diseño responsive y animaciones' -> workspace_write_file (10238.2292ms)
+  AssertionError [ERR_ASSERTION]: Debe incluir workspace_write_file para styles.css, obtenido: 
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\web-file-generation.test.ts:163:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\web-file-generation.test.ts:199:1
+✖ 7. 'intenta crear de nuevo la página html' -> workspace_write_file (725.8813ms)
+  AssertionError [ERR_ASSERTION]: Debe incluir workspace_write_file para reintentar crear la página HTML, obtenido: 
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\web-file-generation.test.ts:203:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+ ELIFECYCLE  Test failed. See above for more details.

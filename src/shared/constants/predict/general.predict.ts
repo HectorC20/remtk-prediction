@@ -213,6 +213,12 @@ export const C_ANAPHORA_ARCH = [
   "hazlo también para esa",
 ];
 
+// ── Proyecciones latentes de acción vs lectura para el grafo de herramientas ──
+export const TOOL_MUTATION_ARCHETYPE =
+  "mutación de escritura o persistencia: crear, modificar, actualizar, eliminar, reservar, agendar";
+export const TOOL_READ_ARCHETYPE =
+  "consulta de lectura o información: buscar, consultar, obtener, listar, leer, inspeccionar";
+
 // ── Estado continuo de sesión ───────────────────────────────────────
 /** Ponderación del estado z_t previo en la combinación convexa 70/30. */
 export const BLEND_PREV = 0.7;

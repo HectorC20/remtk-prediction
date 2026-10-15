@@ -7,13 +7,13 @@ import type { JuicioEstado } from "src/shared/interfaces/juicio.interface";
 import type { TurnClassificationResult } from "src/shared/interfaces";
 
 const META_QUESTION_PROBES = [
-  "preguntar qué herramientas, funciones o capacidades tiene disponibles el sistema",
   "preguntar sobre qué hemos estado hablando o recordar el diálogo previo de la conversación",
   "preguntar qué temas se han conversado o qué se habló antes en el chat",
+  "preguntar sobre quién eres o pedir una presentación general del asistente",
 ];
 
 const CATALOG_INQUIRY_PROBE =
-  "preguntar por las herramientas o funciones disponibles de un complemento o catálogo";
+  "preguntar por las herramientas, funciones o capacidades disponibles del sistema o catálogo";
 
 import type { CrossEncoderService } from "src/juicio/services/cross-encoder.service";
 
@@ -153,14 +153,15 @@ export class TurnClassifier {
     if (this.crossEncoder && (await this.crossEncoder.ready())) {
       const sCat = await this.crossEncoder.score(
         text,
-        "listar o preguntar qué herramientas, funciones o catálogo tiene disponibles un complemento.",
+        "listar o preguntar qué herramientas, funciones o catálogo tiene disponibles el sistema o un complemento.",
       );
       const sSpec = await this.crossEncoder.score(
         text,
         "solicitar o verificar una herramienta para realizar una acción específica como crear o modificar.",
       );
-      if (sCat === undefined || sSpec === undefined) return false;
-      return sCat > 0.5 && sCat > sSpec;
+      if (sCat !== undefined && sSpec !== undefined) {
+        if (sCat > 0.45 && sCat > sSpec) return true;
+      }
     }
     if (!this.catalogEmb) {
       const res = await this.engine.embedQuery(CATALOG_INQUIRY_PROBE, this.engine.defaultSize);
@@ -168,6 +169,6 @@ export class TurnClassifier {
     }
     const input = await this.engine.embedQuery(text, this.engine.defaultSize, { high: true });
     const s = EmbeddingEngineService.cosine(input.embedding, this.catalogEmb);
-    return s >= 0.92;
+    return s >= 0.80;
   }
 }

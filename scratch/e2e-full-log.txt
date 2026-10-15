@@ -1,0 +1,96 @@
+2026-10-12T14:52:14.484Z [[embed] ONNX deshabilitado — se usará fallback hash]
+2026-10-12T14:52:14.491Z [[embed] ONNX deshabilitado — se usará fallback hash]
+✔ health de los 3 puertos responde ok (794.7892ms)
+✔ el catálogo de ejemplo tiene al menos 10 herramientas (1.152ms)
+2026-10-12T14:52:14.961Z [[tools] tenant=tenant-demo scope=tenant-demo indexados=12 (embeddings en warm-up)]
+2026-10-12T14:52:14.976Z [[graph] scope=tenant-demo nodes=12 edges=4 hash=d6a73ddd]
+2026-10-12T14:52:14.980Z [[varianteC] scope=tenant-demo indexado D1/D2=12 tools]
+2026-10-12T14:52:14.989Z [[lexical] seed scope=tenant-demo seeded=12 cached=0 pruned=0 tools=12 v=1]
+2026-10-12T14:52:14.991Z [[tools] scope=tenant-demo warm-up completo indexados=12 embeddings recomputed=12 cached=0]
+✔ POST /tools indexa las 12 herramientas y /tools/count las reporta (114.9388ms)
+2026-10-12T14:52:15.021Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="busca información sobre el clima en lima"]
+2026-10-12T14:52:15.023Z [[pipeline] predict session=session-1 tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T14:52:15.747Z [[juicio:reranker] cross-encoder cargado (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\models\ms-marco-minilm-l6-int8-onnx\model.onnx)]
+2026-10-12T14:52:15.808Z [[varianteC] scope=tenant-demo régimen=AUTO margen=0.280 anaf=0.000 estado=neutral dec=abstain out=0]
+2026-10-12T14:52:15.810Z [[pipeline] predict session=session-1 tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=40 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 791ms]
+✖ POST /predict selecciona herramientas del catálogo (809.8953ms)
+2026-10-12T14:52:15.828Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="envía un correo electrónico al equipo"]
+2026-10-12T14:52:15.840Z [[pipeline] predict session=session-confirm tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T14:52:15.890Z [[varianteC] scope=tenant-demo régimen=AUTO margen=0.440 anaf=0.000 estado=neutral dec=abstain out=0]
+2026-10-12T14:52:15.892Z [[pipeline] predict session=session-confirm tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=37 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 64ms]
+2026-10-12T14:52:15.899Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="continúa"]
+2026-10-12T14:52:15.905Z [[pipeline] predict session=session-confirm tenant=tenant-demo scope=tenant-demo turn=new_query]
+2026-10-12T14:52:15.942Z [[session] state session=session-confirm sim=0.000 umbral=0.86 lambda=n/a]
+2026-10-12T14:52:15.945Z [[varianteC] scope=tenant-demo régimen=AUTO margen=0.000 anaf=0.500 estado=neutral dec=abstain out=0]
+2026-10-12T14:52:15.946Z [[pipeline] predict session=session-confirm tenant=tenant-demo turn=new_query confirm_hit=false recall=12 degraded=false in=8 out=0 model=gte emb_compute=0 emb_cached=0 complexity=simple 47ms]
+✔ POST /predict con confirmación responde tools (early-exit se valida con modelo real) (131.2355ms)
+2026-10-12T14:52:15.958Z [[memory] embedded model=hash dim=768]
+2026-10-12T14:52:15.960Z [[memory] memories=0 topicShift=false topicScore=0.000]
+✔ POST /memory/predict devuelve memorias, topicShift y scores (14.5742ms)
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) (24.7638ms)
+✖ GET /models (6777) expone el modelo por defecto (large) (10.2164ms)
+✔ API Qdrant (6775) responde status y recall de tools (66.7068ms)
+✔ GET /debug expone engine, stats y trazas (6.5668ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 7
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7919.0012
+
+✖ failing tests:
+
+test at tests\e2e.test.ts:74:1
+✖ POST /predict selecciona herramientas del catálogo (809.8953ms)
+  AssertionError [ERR_ASSERTION]: debe seleccionar al menos una herramienta
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:92:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\e2e.test.ts:147:1
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) (24.7638ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  768 !== 1024
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:152:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 768,
+    expected: 1024,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\e2e.test.ts:161:1
+✖ GET /models (6777) expone el modelo por defecto (large) (10.2164ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 1024
+  
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\e2e.test.ts:166:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 1024,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

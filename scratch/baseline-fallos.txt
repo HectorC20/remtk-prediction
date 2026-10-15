@@ -1,0 +1,32 @@
+✖ 1. 'créame una página web para un restaurante con HTML y CSS' -> workspace_write_file 
+✖ 1. 'créame una página web para un restaurante con HTML y CSS' -> workspace_write_file 
+✖ 3. 'crea un archivo styles.css con diseño responsive y animaciones' -> workspace_write_file 
+✖ 3. 'crea un archivo styles.css con diseño responsive y animaciones' -> workspace_write_file 
+✖ 7. 'intenta crear de nuevo la página html' -> workspace_write_file 
+✖ 7. 'intenta crear de nuevo la página html' -> workspace_write_file 
+✖ Escenario 1: 'noticias de tumbes hoy' identifica intención de búsqueda y selecciona web_search 
+✖ Escenario 1: 'noticias de tumbes hoy' identifica intención de búsqueda y selecciona web_search 
+✖ Escenario 2: 'quien es MILO J' identifica intención informativa y selecciona web_search 
+✖ Escenario 2: 'quien es MILO J' identifica intención informativa y selecciona web_search 
+✖ Fase 2: 'Crear backend NestJS con entidades PostgreSQL para tenants y reservas' -> workspace_write_file 
+✖ Fase 2: 'Crear backend NestJS con entidades PostgreSQL para tenants y reservas' -> workspace_write_file 
+✖ Fase 3: 'Implementar Redis lock distribuido para evitar double booking simultáneo' -> workspace_write_file / replace 
+✖ Fase 3: 'Implementar Redis lock distribuido para evitar double booking simultáneo' -> workspace_write_file / replace 
+✖ GET /models (6777) expone el modelo por defecto (large) 
+✖ GET /models (6777) expone el modelo por defecto (large) 
+✖ Juicio semántico de memoria contextual: POST /memory/judge detecta negaciones de herramientas como ruido 
+✖ Juicio semántico de memoria contextual: POST /memory/judge detecta negaciones de herramientas como ruido 
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) 
+✖ POST /embed (6777) responde embedding con la dim del modelo por defecto (large) 
+✖ POST /predict selecciona herramientas del catálogo 
+✖ POST /predict selecciona herramientas del catálogo 
+✖ Turno 2: 'podrás diseñar un markdown detallando sobre JEV AI' -> workspace_write_file 
+✖ Turno 2: 'podrás diseñar un markdown detallando sobre JEV AI' -> workspace_write_file 
+✖ Turno 3: 'en pdf' (anáfora / exportación) -> document_generate / document_convert 
+✖ Turno 3: 'en pdf' (anáfora / exportación) -> document_generate / document_convert 
+✖ Turno 6: 'ahora muéstrame de nuevo los archivos generados' -> workspace_list 
+✖ Turno 6: 'ahora muéstrame de nuevo los archivos generados' -> workspace_list 
+✖ el bloque ANCHA el pool de candidatas sin reescribir la tanda de la consulta 
+✖ failing tests:
+✖ intentContext: el pre-pensamiento del planificador enriquece la consulta de predicción 
+✖ un bloque que describe OTRA subtarea no desplaza la herramienta que la consulta ya fijaba 

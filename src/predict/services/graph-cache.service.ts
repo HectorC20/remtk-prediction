@@ -23,6 +23,8 @@ import {
   edgeInferenceMinSimByModel,
   MUTUALLY_EXCLUSIVE_WEIGHT,
   PREREQUISITE_WEIGHT,
+  TOOL_MUTATION_ARCHETYPE,
+  TOOL_READ_ARCHETYPE,
 } from "src/shared/constants/predict";
 
 export class ToolGraphCacheService {
@@ -40,15 +42,36 @@ export class ToolGraphCacheService {
     return this.edgesByScope.get(scopeKey) ?? [];
   }
 
+  /** Determina si un conjunto de herramientas incluye mutaciones de persistencia o dependencias en el grafo */
+  hasMutations(scopeKey: string, toolNames: string[]): boolean {
+    const graph = this.graphs.get(scopeKey);
+    if (!graph) return false;
+    for (const name of toolNames) {
+      const node = graph.nodes.get(name);
+      if (node?.isMutation) return true;
+    }
+    return false;
+  }
+
   /** POST /tools: reconstruye el grafo del scope (embeddings passage: + aristas). */
   async buildTenantGraph(scopeKey: string, tools: ToolDefinition[]): Promise<TenantToolGraph> {
     const versionHash = computeVersionHash(tools);
 
     // Nodos: embedding passage: de la firma de cada herramienta (prioridad baja,
     // es recompute masivo de registro, no de predicción).
+    const [mutEmbRes, readEmbRes] = await Promise.all([
+      this.engine.embedPassage(TOOL_MUTATION_ARCHETYPE, this.engine.defaultSize, { high: false }),
+      this.engine.embedPassage(TOOL_READ_ARCHETYPE, this.engine.defaultSize, { high: false }),
+    ]);
+    const mutArchetype = mutEmbRes.embedding;
+    const readArchetype = readEmbRes.embedding;
+
     const nodes = new Map<string, ToolGraphNode>();
     for (const tool of tools) {
       const res = await this.engine.embedPassage(toolSignature(tool), this.engine.defaultSize, { high: false });
+      const sAction = EmbeddingEngineService.cosine(res.embedding, mutArchetype);
+      const sRead = EmbeddingEngineService.cosine(res.embedding, readArchetype);
+      const isMutation = sAction > sRead;
       nodes.set(tool.name, {
         id: tool.id,
         name: tool.name,
@@ -56,6 +79,7 @@ export class ToolGraphCacheService {
         prerequisites: tool.prerequisites ?? [],
         conflicts: tool.conflicts ?? [],
         definition: tool,
+        isMutation,
       });
     }
 

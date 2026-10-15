@@ -48,6 +48,8 @@ import {
   C_W2_AUTO,
   C_W2_DEP,
   C_W3,
+  TOOL_MUTATION_ARCHETYPE,
+  TOOL_READ_ARCHETYPE,
 } from "src/shared/constants/predict";
 
 export type StateVerdict = "reject" | "confirm" | "neutral";
@@ -65,6 +67,7 @@ export interface CCandidate {
   cNow: number;
   cCtx: number;
   fused: number;
+  isMutation?: boolean;
 }
 
 /** Resultado completo de `rank()`: candidatas + diagnóstico del régimen. */
@@ -81,7 +84,7 @@ export interface CRanking {
 }
 
 interface IndexSet {
-  toolIndex: Array<{ name: string; vec: Float32Array }>;
+  toolIndex: Array<{ name: string; vec: Float32Array; isMutation?: boolean }>;
   toolTokens: Map<string, Float32Array[]>;
   names: string[];
 }
@@ -128,12 +131,22 @@ export class VarianteCService {
    */
   async indexScope(scopeKey: string, tools: ToolDefinition[]): Promise<void> {
     await this.ensureArchetypes();
-    const toolIndex: Array<{ name: string; vec: Float32Array }> = [];
+    const [mutEmbRes, readEmbRes] = await Promise.all([
+      this.engine.embedPassage(TOOL_MUTATION_ARCHETYPE, this.engine.defaultSize, { high: false }),
+      this.engine.embedPassage(TOOL_READ_ARCHETYPE, this.engine.defaultSize, { high: false }),
+    ]);
+    const mutArchetype = mutEmbRes.embedding;
+    const readArchetype = readEmbRes.embedding;
+
+    const toolIndex: Array<{ name: string; vec: Float32Array; isMutation?: boolean }> = [];
     const toolTokens = new Map<string, Float32Array[]>();
     for (const t of tools) {
       const s = coreSignature(t);
       const { embedding } = await this.engine.embedPassage(s, undefined, { high: false });
-      toolIndex.push({ name: t.name, vec: embedding });
+      const sAction = EmbeddingEngineService.cosine(embedding, mutArchetype);
+      const sRead = EmbeddingEngineService.cosine(embedding, readArchetype);
+      const isMutation = sAction > sRead;
+      toolIndex.push({ name: t.name, vec: embedding, isMutation });
       toolTokens.set(t.name, await this.engine.embedTokens(s, undefined, { high: false }));
     }
     this.indexes.set(scopeKey, { toolIndex, toolTokens, names: tools.map((t) => t.name) });
@@ -150,7 +163,12 @@ export class VarianteCService {
     if (!idx || idx.toolIndex.length === 0) return undefined;
 
     const arch = await this.ensureArchetypes();
-    const nowVec = (await this.engine.embedQuery(currentText, undefined, { high: true })).embedding;
+    const nowRes = await this.engine.embedQuery(currentText, undefined, { high: true });
+    // Degradación en cascada (igual que juicio): con motor hash no hay geometría
+    // real — el núcleo abstendría con cosenos sin sentido (fused < C_TAU) y se
+    // comería el respaldo del pipeline. `undefined` ⇒ el llamador degrada.
+    if (nowRes.model === "hash") return undefined;
+    const nowVec = nowRes.embedding;
     const nowClauses = await this.clauseTokenSets(currentText);
     const ctxVec = ctxText
       ? (await this.engine.embedQuery(ctxText, undefined, { high: true })).embedding
@@ -170,13 +188,38 @@ export class VarianteCService {
     const hasCtx = ctxVec !== undefined;
 
     // Compuerta de autonomía: pico claro (margen) Y no ser un turno de apoyo
-    // anafórico (que debe resolverse con el contexto).
+    // anafórico (que debe resolverse con el contexto), O la presencia de una
+    // cláusula ejecutiva en el turno actual con alto MaxSim (ms >= 0.75) sobre
+    // una herramienta de mutación (la acción ejecutiva manda, el contexto solo
+    // aporta datos). Sin contexto no hay qué depender.
     let anaphora = 0;
     for (const a of arch.anaphora) {
       const s = EmbeddingEngineService.cosine(nowVec, a);
       if (s > anaphora) anaphora = s;
     }
-    const autonomous = margin >= C_MARGIN && anaphora < C_ANAF_TAU;
+
+    const mutMap = new Map<string, boolean>();
+    for (const t of idx.toolIndex) {
+      mutMap.set(t.name, !!t.isMutation);
+    }
+
+    let hasExecutiveMutation = false;
+    for (const t of idx.toolIndex) {
+      if (t.isMutation) {
+        const cn = cNow.get(t.name) ?? 0;
+        if (cn >= 0.55) {
+          const tok = idx.toolTokens.get(t.name) ?? [];
+          if (this.msClause(nowClauses, tok) >= 0.78) {
+            hasExecutiveMutation = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const autonomous =
+      hasExecutiveMutation ||
+      ((margin >= C_MARGIN || !hasCtx) && anaphora < C_ANAF_TAU);
 
     const { state } = this.detectState(nowVec, arch, autonomous);
     const s3 = state === "confirm" ? 1 : state === "neutral" ? 0.5 : 0;
@@ -195,18 +238,29 @@ export class VarianteCService {
         const cn = cNow.get(name)!;
         const cc = cCtx.get(name)!;
         const toolTok = idx.toolTokens.get(name) ?? [];
+        const nowMs = this.msClause(nowClauses, toolTok);
+        const ctxMs = ctxClauses.length ? this.msClause(ctxClauses, toolTok) : 0;
         let s1: number;
         let s2: number;
         if (autonomous) {
           s1 = cn;
-          s2 = this.msClause(nowClauses, toolTok);
+          s2 = nowMs;
         } else {
           s1 = cc;
-          s2 = ctxClauses.length ? this.msClause(ctxClauses, toolTok) : 0;
+          s2 = Math.max(nowMs, ctxMs);
         }
         const w1 = autonomous ? C_W1_AUTO : C_W1_DEP;
         const w2 = autonomous ? C_W2_AUTO : C_W2_DEP;
-        return { name, s1, s2, s3, cNow: cn, cCtx: cc, fused: w1 * s1 + w2 * s2 + C_W3 * s3 };
+        return {
+          name,
+          s1,
+          s2,
+          s3,
+          cNow: cn,
+          cCtx: cc,
+          fused: w1 * s1 + w2 * s2 + C_W3 * s3,
+          isMutation: mutMap.get(name),
+        };
       })
       .sort((a, b) => b.fused - a.fused);
 
@@ -215,15 +269,19 @@ export class VarianteCService {
 
   /**
    * Arbitraje ponderado: la MENCIÓN EXPLÍCITA ratifica (orden directa); un
-   * rechazo (D3) ⇒ ∅; un turno DEPENDIENTE sin contexto ⇒ ∅; el mejor
-   * `fused < C_TAU` ⇒ ∅; si no, se aceptan los candidatos dentro de δ.
+   * rechazo (D3) ⇒ ∅; un turno DEPENDIENTE sin contexto ⇒ ∅;
+   * un turno DEPENDIENTE sobre lectura sin orden explícita (s2 < 0.70) ⇒ ∅ (evita loops informativos);
+   * el mejor `fused < C_TAU` ⇒ ∅; si no, se aceptan los candidatos dentro de δ.
    */
   arbitrate(res: CRanking): { decision: CDecision; tools: string[] } {
     const top = res.out[0];
     if (res.mentioned.length > 0) return { decision: "ratify", tools: res.mentioned };
     if (res.state === "reject") return { decision: "abstain", tools: [] };
     if (!res.autonomous && !res.hasCtx) return { decision: "abstain", tools: [] };
-    if (!top || top.fused < C_TAU || (top.s1 < 0.35 && top.fused < 0.50)) return { decision: "abstain", tools: [] };
+    if (!res.autonomous && res.hasCtx && !top?.isMutation && (top?.s2 ?? 0) < 0.70) {
+      return { decision: "abstain", tools: [] };
+    }
+    if (!top || top.fused < C_TAU) return { decision: "abstain", tools: [] };
     const tools = res.out.filter((f) => f.fused >= top.fused - C_DELTA).map((f) => f.name);
     return { decision: "ratify", tools };
   }

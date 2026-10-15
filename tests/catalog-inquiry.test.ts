@@ -146,7 +146,7 @@ test("Juicio semántico de memoria contextual: POST /memory/judge detecta negaci
   assert.equal(denialRes.status, 200);
   const denialData = (await denialRes.json()) as { isNoise: boolean; noiseScore: number };
   assert.equal(denialData.isNoise, true, "Debe clasificar la negación de herramientas como ruido parásito");
-  assert.ok(denialData.noiseScore >= 0.81, "El score de ruido debe ser alto");
+  assert.ok(denialData.noiseScore >= 0.52, "El score de ruido debe ser alto (>= umbral gte 0.52)");
 
   const legitimateRes = await fetch(`${serverUrl}/memory/judge`, {
     method: "POST",
@@ -158,5 +158,5 @@ test("Juicio semántico de memoria contextual: POST /memory/judge detecta negaci
   assert.equal(legitimateRes.status, 200);
   const legitimateData = (await legitimateRes.json()) as { isNoise: boolean; noiseScore: number };
   assert.equal(legitimateData.isNoise, false, "Información legítima de negocio NO debe ser marcada como ruido");
-  assert.ok(legitimateData.noiseScore < 0.81, "El score de ruido para datos reales debe ser bajo");
+  assert.ok(legitimateData.noiseScore < 0.52, "El score de ruido para datos reales debe ser bajo (< umbral gte 0.52)");
 });

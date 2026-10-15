@@ -1,0 +1,102 @@
+2026-10-12T14:41:21.951Z [[varianteC] scope=programmer-workflows-tenant-2026 régimen=AUTO margen=0.072 anaf=0.489 estado=neutral dec=ratify out=5]
+2026-10-12T14:41:21.952Z [[pipeline] predict session=coder-test-v8yd1s25sxo tenant=programmer-workflows-tenant-2026 turn=new_query confirm_hit=false recall=14 degraded=false in=84 out=5 out_tools=run_test_suite,run_db_migration,lint_and_format_code,install_package_dependency,git_commit model=gte emb_compute=0 emb_cached=0 complexity=simple 3082ms]
+✖ 3. Creación de nuevo módulo/servicio: 'crea un nuevo servicio payment.service.ts con métodos para procesar pagos con Stripe' (3093.2857ms)
+2026-10-12T14:41:22.027Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="crea un archivo de pruebas unitarias user.controller.spec.ts con casos de test"]
+2026-10-12T14:41:22.029Z [[pipeline] predict session=coder-test-n8805h4r5i tenant=programmer-workflows-tenant-2026 scope=programmer-workflows-tenant-2026 turn=new_query]
+2026-10-12T14:41:22.464Z [[juicio] señales noop=0.000 energy=-0.885 top=0.818]
+2026-10-12T14:41:25.150Z [[juicio] re-rank top=workspace_write_file(0.809),run_test_suite(0.639),git_commit(0.362),workspace_read_file(0.336),inspect_runtime_logs(0.320)]
+2026-10-12T14:41:25.152Z [[varianteC] scope=programmer-workflows-tenant-2026 régimen=AUTO margen=0.130 anaf=0.528 estado=neutral dec=ratify out=2]
+2026-10-12T14:41:25.153Z [[pipeline] predict session=coder-test-n8805h4r5i tenant=programmer-workflows-tenant-2026 turn=new_query confirm_hit=false recall=14 degraded=false in=78 out=2 out_tools=workspace_write_file,run_test_suite model=gte emb_compute=0 emb_cached=0 complexity=simple 3182ms]
+✔ 4. Creación de archivo de pruebas: 'crea un archivo de pruebas unitarias user.controller.spec.ts con casos de test' (3199.5863ms)
+2026-10-12T14:41:25.205Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="ejecuta la suite de pruebas unitarias con jest para verificar los cambios"]
+2026-10-12T14:41:25.210Z [[pipeline] predict session=coder-test-j5r1thnkc5 tenant=programmer-workflows-tenant-2026 scope=programmer-workflows-tenant-2026 turn=new_query]
+2026-10-12T14:41:25.689Z [[juicio] señales noop=0.000 energy=-0.921 top=0.882]
+2026-10-12T14:41:27.141Z [[juicio] re-rank top=run_test_suite(0.942),lint_and_format_code(0.340),inspect_runtime_logs(0.335),git_commit(0.334),git_status(0.328)]
+2026-10-12T14:41:27.142Z [[varianteC] scope=programmer-workflows-tenant-2026 régimen=AUTO margen=0.227 anaf=0.556 estado=neutral dec=ratify out=2]
+2026-10-12T14:41:27.143Z [[pipeline] predict session=coder-test-j5r1thnkc5 tenant=programmer-workflows-tenant-2026 turn=new_query confirm_hit=false recall=14 degraded=false in=73 out=2 out_tools=run_test_suite,lint_and_format_code model=gte emb_compute=0 emb_cached=0 complexity=simple 1977ms]
+✔ 5. Ejecución de tests: 'ejecuta la suite de pruebas unitarias con jest para verificar los cambios' (1988.1858ms)
+2026-10-12T14:41:27.228Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="lee el archivo config/database.ts para revisar la cadena de conexión"]
+2026-10-12T14:41:27.230Z [[pipeline] predict session=coder-test-1up044d7z26 tenant=programmer-workflows-tenant-2026 scope=programmer-workflows-tenant-2026 turn=new_query]
+2026-10-12T14:41:27.852Z [[juicio] señales noop=0.000 energy=-0.871 top=0.791]
+2026-10-12T14:41:29.656Z [[juicio] re-rank top=workspace_read_file(0.822),run_db_migration(0.325),inspect_runtime_logs(0.323),git_status(0.319),git_diff(0.312)]
+--
+==============================================================
+
+✖ BENCHMARK: Pre vs Post (Búsqueda Normal vs Búsqueda Inteligente con Prediction Server) (55415.7535ms)
+2026-10-12T14:41:12.385Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="noticias de tumbes hoy"]
+2026-10-12T14:41:12.388Z [[pipeline] predict session=test-session-3pesbb1p8ym tenant=search-comparison-tenant-2026 scope=search-comparison-tenant-2026 turn=new_query]
+2026-10-12T14:41:12.813Z [[juicio] señales noop=0.000 energy=-0.828 top=0.747]
+2026-10-12T14:41:13.498Z [[juicio] re-rank top=clima_tumbes(0.348),mitumbes_lugares(0.304),mitumbes_eventos(0.302),search_chat_history(0.293),web_search(0.292)]
+2026-10-12T14:41:13.500Z [[varianteC] scope=search-comparison-tenant-2026 régimen=AUTO margen=0.160 anaf=0.557 estado=neutral dec=ratify out=5]
+2026-10-12T14:41:13.501Z [[pipeline] predict session=test-session-3pesbb1p8ym tenant=search-comparison-tenant-2026 turn=new_query confirm_hit=false recall=10 degraded=false in=22 out=5 out_tools=clima_tumbes,mitumbes_lugares,mitumbes_eventos,search_chat_history,web_search model=gte emb_compute=0 emb_cached=0 complexity=simple 1212ms]
+2026-10-12T14:41:13.630Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="hace calor en tumbes hoy dia"]
+2026-10-12T14:41:13.631Z [[pipeline] predict session=test-session-ah2zypj65dl tenant=search-comparison-tenant-2026 scope=search-comparison-tenant-2026 turn=new_query]
+2026-10-12T14:41:14.099Z [[juicio] señales noop=0.000 energy=-0.836 top=0.781]
+2026-10-12T14:41:14.992Z [[juicio] re-rank top=clima_tumbes(0.317),mitumbes_lugares(0.309),mitumbes_eventos(0.304),search_chat_history(0.297),schedule_task(0.296)]
+2026-10-12T14:41:14.994Z [[varianteC] scope=search-comparison-tenant-2026 régimen=AUTO margen=0.217 anaf=0.557 estado=neutral dec=ratify out=5]
+2026-10-12T14:41:14.996Z [[pipeline] predict session=test-session-ah2zypj65dl tenant=search-comparison-tenant-2026 turn=new_query confirm_hit=false recall=10 degraded=false in=28 out=5 out_tools=clima_tumbes,mitumbes_lugares,mitumbes_eventos,search_chat_history,schedule_task model=gte emb_compute=0 emb_cached=0 complexity=simple 1490ms]
+2026-10-12T14:41:15.102Z [[classifier] sin plan pendiente en sesión → turn=new_query conf=1.00 text="lugares turisticos de tumbes"]
+2026-10-12T14:41:15.103Z [[pipeline] predict session=test-session-x3tg26d4r2m tenant=search-comparison-tenant-2026 scope=search-comparison-tenant-2026 turn=new_query]
+2026-10-12T14:41:15.565Z [[juicio] señales noop=0.000 energy=-0.855 top=0.826]
+2026-10-12T14:41:15.989Z [[juicio] re-rank top=mitumbes_lugares(0.914),clima_tumbes(0.524),mitumbes_eventos(0.317),web_search_extract(0.299),search_chat_history(0.294)]
+2026-10-12T14:41:15.991Z [[varianteC] scope=search-comparison-tenant-2026 régimen=AUTO margen=0.207 anaf=0.455 estado=neutral dec=ratify out=2]
+2026-10-12T14:41:15.992Z [[pipeline] predict session=test-session-x3tg26d4r2m tenant=search-comparison-tenant-2026 turn=new_query confirm_hit=false recall=10 degraded=false in=28 out=2 out_tools=mitumbes_lugares,clima_tumbes model=gte emb_compute=0 emb_cached=0 complexity=simple 991ms]
+--
+2026-10-12T14:41:17.338Z [[varianteC] scope=search-comparison-tenant-2026 régimen=AUTO margen=0.061 anaf=0.567 estado=neutral dec=ratify out=5]
+2026-10-12T14:41:17.339Z [[pipeline] predict session=test-session-qp70ttwzy6 tenant=search-comparison-tenant-2026 turn=new_query confirm_hit=false recall=10 degraded=false in=15 out=5 out_tools=mitumbes_lugares,mitumbes_eventos,schedule_task,search_chat_history,workspace_read_file model=gte emb_compute=0 emb_cached=0 complexity=simple 1339ms]
+✖ TEST UNITARIO: Inferencia Zero-Keywords (Usuario no usa palabras técnicas) (1357.3063ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 22
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104372.925
+
+✖ failing tests:
+
+test at tests\coding-programmer-workflows.test.ts:329:1
+✖ 3. Creación de nuevo módulo/servicio: 'crea un nuevo servicio payment.service.ts con métodos para procesar pagos con Stripe' (3093.2857ms)
+  AssertionError [ERR_ASSERTION]: Debe incluir workspace_write_file para crear el nuevo servicio, obtenido: run_test_suite, run_db_migration, lint_and_format_code, install_package_dependency, git_commit
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\coding-programmer-workflows.test.ts:333:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\search-intelligence-comparison.test.ts:246:1
+✖ BENCHMARK: Pre vs Post (Búsqueda Normal vs Búsqueda Inteligente con Prediction Server) (55415.7535ms)
+  AssertionError [ERR_ASSERTION]: La búsqueda inteligente debe alcanzar 100% de recall en Top-3 (obtenido 87.5%)
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\search-intelligence-comparison.test.ts:322:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\search-intelligence-comparison.test.ts:357:1
+✖ TEST UNITARIO: Inferencia Zero-Keywords (Usuario no usa palabras técnicas) (1357.3063ms)
+  AssertionError [ERR_ASSERTION]: Debe predecir herramienta de búsqueda web para consulta de entidad desconocida
+      at TestContext.<anonymous> (C:\Users\LENOVO\Desktop\ULTIMA DE 2026\remtk-prediction\tests\search-intelligence-comparison.test.ts:362:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
