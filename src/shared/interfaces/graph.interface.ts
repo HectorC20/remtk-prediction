@@ -6,7 +6,11 @@
  * sobre su firma) y las aristas codifican dependencias (PREREQUISITE),
  * co-ocurrencia (CO_OCCURRENCE) y exclusión mutua (MUTUALLY_EXCLUSIVE).
  */
-import type { PredictionResult, ToolDefinition } from "./domain.interface";
+import type {
+  FileCommandModeDecision,
+  PredictionResult,
+  ToolDefinition,
+} from "./domain.interface";
 
 export type EdgeType = "PREREQUISITE" | "CO_OCCURRENCE" | "MUTUALLY_EXCLUSIVE";
 
@@ -43,4 +47,5 @@ export interface GraphPredictionResult extends PredictionResult {
     edges: GraphEdge[];
     executionOrder: string[];
   };
+  fileCommandMode?: FileCommandModeDecision;
 }

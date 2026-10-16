@@ -70,6 +70,12 @@ const CANONICAL_DENIAL_PROBES = [
   "no tengo ninguna herramienta ni función disponible para realizar esta tarea",
 ];
 
+const CANONICAL_FILE_COMMAND_ARCHETYPE =
+  "Inspeccionar muestra estructural de archivo o dataset tabular en workspace y ejecutar comandos de filtrado, proyección, conteo o consulta sobre registros sin cargar todo el archivo en el contexto";
+
+const CANONICAL_SINGLE_CRUD_ARCHETYPE =
+  "Crear, actualizar o eliminar un registro individual específico o responder conversación directa";
+
 /** Acota un score al rango [0, 1]. */
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -83,6 +89,9 @@ export class PredictionOrchestrator {
   private readonly anchorCache = new Map<string, Float32Array>();
   /** Embeddings de los arquetipos de intención (carga perezosa, una sola vez). */
   private intentEmbs?: Float32Array[];
+  /** Embeddings cacheados para la decisión neuronal de modo comando de archivos. */
+  private fileCommandArchetypeEmb?: Float32Array;
+  private singleCrudArchetypeEmb?: Float32Array;
   /** Última predicción por sesión (para la señal implícita de reformulación, §8.2). */
   private readonly lastTurns = new Map<string, { prompt: string; tools: string[] }>();
 
@@ -831,7 +840,10 @@ export class PredictionOrchestrator {
     exclude?: string[],
     source?: "human" | "agent",
   ): Promise<GraphPredictionResult> {
-    if (pinnedNames.length > 0) return result;
+    if (pinnedNames.length > 0) {
+      const fileCommandMode = await this.resolveFileCommandMode(text, ctx, result);
+      return { ...result, fileCommandMode };
+    }
     const judged = await this.juicio.post({ scopeKey, text, ctx, result, exclude, source });
     if (judged.diag.abstained) trace.juicioAbstained = judged.diag.abstainReason;
     trace.juicioNoopScore = judged.diag.noopScore;
@@ -841,7 +853,85 @@ export class PredictionOrchestrator {
       reranker: judged.diag.rerankerApplied,
       specificity: judged.diag.specificityApplied,
     };
-    return judged.result;
+    const fileCommandMode = await this.resolveFileCommandMode(text, ctx, judged.result);
+    return { ...judged.result, fileCommandMode };
+  }
+
+  /**
+   * Decide de forma puramente vectorial y probabilística si el turno requiere el modo
+   * de muestreo e invocación de comandos sobre archivos/datasets (`fileCommandMode`),
+   * sin expresiones regulares ni listas de palabras clave (AGENT.md).
+   */
+  private async resolveFileCommandMode(
+    text: string,
+    ctx: JuicioContext,
+    result: GraphPredictionResult,
+  ): Promise<{
+    enabled: boolean;
+    confidence: number;
+    reason: "predicted_tool" | "latent_archetype" | "none";
+  }> {
+    const tools = result.tools ?? [];
+    const calibrated = result.calibratedScores ?? [];
+
+    for (let i = 0; i < tools.length; i++) {
+      const t = tools[i];
+      const calScore = typeof calibrated[i] === "number" ? calibrated[i] : (result.rankedScores?.[i] ?? 0);
+      if (calScore < 0.25) continue;
+      const isFileCmdTool =
+        t.name === "workspace_file_sample" ||
+        t.name === "workspace_file_command" ||
+        (Array.isArray(t.prerequisites) && t.prerequisites.includes("workspace_file_sample"));
+      if (isFileCmdTool) {
+        return {
+          enabled: true,
+          confidence: clamp01(calScore),
+          reason: "predicted_tool",
+        };
+      }
+    }
+
+    if (tools.length === 0 || ctx.allSpansNoop) {
+      return { enabled: false, confidence: 0, reason: "none" };
+    }
+
+    try {
+      if (!this.fileCommandArchetypeEmb || !this.singleCrudArchetypeEmb) {
+        const [fcRes, crudRes] = await Promise.all([
+          this.engine.embedPassage(CANONICAL_FILE_COMMAND_ARCHETYPE, this.engine.defaultSize, { high: false }),
+          this.engine.embedPassage(CANONICAL_SINGLE_CRUD_ARCHETYPE, this.engine.defaultSize, { high: false }),
+        ]);
+        this.fileCommandArchetypeEmb = fcRes.embedding;
+        this.singleCrudArchetypeEmb = crudRes.embedding;
+      }
+      const queryEmb =
+        ctx.uText ??
+        (await this.engine.embedQuery(text, this.engine.defaultSize, { high: true })).embedding;
+      const simFileCmd = EmbeddingEngineService.cosine(queryEmb, this.fileCommandArchetypeEmb);
+      const simCrud = EmbeddingEngineService.cosine(queryEmb, this.singleCrudArchetypeEmb);
+      const topCalibrated = typeof calibrated[0] === "number" ? calibrated[0] : 0.5;
+      const prominence = typeof ctx.prominence === "number" ? ctx.prominence : 0.08;
+
+      if (
+        simFileCmd >= 0.86 &&
+        simFileCmd - simCrud >= 0.025 &&
+        topCalibrated >= 0.25 &&
+        prominence >= 0.065
+      ) {
+        return {
+          enabled: true,
+          confidence: clamp01(simFileCmd),
+          reason: "latent_archetype",
+        };
+      }
+      return {
+        enabled: false,
+        confidence: clamp01(simFileCmd),
+        reason: "none",
+      };
+    } catch {
+      return { enabled: false, confidence: 0, reason: "none" };
+    }
   }
 
   /**

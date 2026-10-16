@@ -82,6 +82,12 @@ export interface PredictedContext {
   };
 }
 
+export interface FileCommandModeDecision {
+  enabled: boolean;
+  confidence: number;
+  reason: "predicted_tool" | "latent_archetype" | "none";
+}
+
 export interface PredictionResult {
   tools: ToolDefinition[];
   complexity: ToolComplexity;
@@ -89,6 +95,7 @@ export interface PredictionResult {
   rankedScores: number[];
   calibratedScores?: number[];
   context?: PredictedContext;
+  fileCommandMode?: FileCommandModeDecision;
 }
 
 export interface PredictionInput {
