@@ -11,6 +11,7 @@
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log } from "src/logger";
+import { stripUrlsForIntent } from "src/predict/keywords";
 import { skillThresholdsByModel } from "src/shared/constants/predict/embedding.constants";
 import { parseKeyRemtk, resolveScopeKey } from "src/shared/scope";
 import type {
@@ -198,7 +199,7 @@ export class SkillMemoryService {
     const { scopeKey } = parseKeyRemtk(input.keyRemtk, input.tenant, input.agentId);
     const pKey = this.partitionKey(scopeKey, input.sessionId);
 
-    const queryText = (input.text ?? "").trim();
+    const queryText = stripUrlsForIntent((input.text ?? "").trim());
     const queryEmb = await this.engine.embedQuery(queryText, this.engine.defaultSize, { high: true });
 
     const scopeSkills = this.skillsByScope.get(scopeKey);
@@ -356,14 +357,15 @@ export class SkillMemoryService {
     }
 
     return {
-      matchedSkill: bestSkill
-        ? {
-            id: bestSkill.id,
-            name: bestSkill.name,
-            confidence: bestSkillScore,
-            tools: bestSkill.tools,
-          }
-        : undefined,
+      matchedSkill:
+        skillGrounded && bestSkill
+          ? {
+              id: bestSkill.id,
+              name: bestSkill.name,
+              confidence: bestSkillScore,
+              tools: bestSkill.tools,
+            }
+          : undefined,
       resolvedEntity: matchedEntity
         ? {
             id: matchedEntity.id,

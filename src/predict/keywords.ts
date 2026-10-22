@@ -24,7 +24,27 @@ export const STOPWORDS = new Set([
   "was", "you", "our", "all", "its", "not", "can", "has", "have", "use", "using",
   "para", "una", "uno", "del", "los", "las", "que", "con", "por", "como",
   "pero", "mas", "des", "esta", "este", "eso", "sus",
+  "de", "la", "el", "en", "un", "al", "lo", "me", "mi", "tu", "su", "se",
+  "si", "no", "ya", "es", "ir", "va", "le", "ni", "os", "te", "ti", "yo",
+  "to", "in", "on", "at", "by", "of", "or", "as", "is", "it", "be", "do",
+  "go", "so", "up", "we", "he", "my", "us", "an", "am", "if",
 ]);
+
+/**
+ * Limpia o compacta URLs largas (`https?://\S+`) antes de embeber o partir en
+ * cláusulas para evitar que slugs/rutas de URL dominen el embedding o creen
+ * cláusulas espurias. Si el texto completo era solo una URL, conserva `"url"`.
+ */
+export function stripUrlsForIntent(text: string): string {
+  const raw = String(text ?? "");
+  if (!/https?:\/\/\S+/i.test(raw)) return raw;
+  const withoutUrls = raw
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim();
+  return withoutUrls.length > 0 ? withoutUrls : "url";
+}
 
 export function normalizeToken(raw: string): string {
   return raw
@@ -52,7 +72,8 @@ export function matchTokens(raw: string): string[] {
     .replace(/[\u0300-\u036f]/g, "");
   const out: string[] = [];
   for (const piece of folded.split(/[^\p{L}\p{N}]+/u)) {
-    if (piece.length < 3) continue;
+    if (piece.length < 2) continue;
+    if (piece.length === 2 && STOPWORDS.has(piece)) continue;
     if (piece.length > 4 && piece.endsWith("ies")) out.push(`${piece.slice(0, -3)}y`);
     else if (piece.length > 4 && piece.endsWith("es")) {
       // Plural ES tras consonante: `lugares`→`lugar`. Se emiten las dos
@@ -69,7 +90,7 @@ export function matchTokens(raw: string): string[] {
 
 /** Conjunto de tokens de match de un texto (consulta + keywords delegadas). */
 export function matchTokenSet(text: string): Set<string> {
-  return new Set(matchTokens(text));
+  return new Set(matchTokens(stripUrlsForIntent(text)));
 }
 
 /**
@@ -225,9 +246,10 @@ function isNameChar(ch: string): boolean {
  */
 export function extractQueryKeywords(prompt: string): string[] {
   const freq = new Map<string, number>();
-  for (const raw of prompt.split(/[^\p{L}\p{N}_-]+/u)) {
+  const cleaned = String(prompt ?? "").replace(/https?:\/\/\S+/gi, " ");
+  for (const raw of cleaned.split(/[^\p{L}\p{N}_-]+/u)) {
     const w = normalizeToken(raw);
-    if (w.length > 2 && !STOPWORDS.has(w)) {
+    if (w.length >= 2 && !STOPWORDS.has(w)) {
       freq.set(w, (freq.get(w) ?? 0) + 1);
     }
   }
@@ -258,7 +280,7 @@ export function toolKeywords(tool: ToolDefinition): string[] {
   for (const w of (tool.description ?? "").split(/\s+/)) sources.push(w);
   for (const raw of sources) {
     const w = normalizeToken(raw);
-    if (w.length > 2 && !STOPWORDS.has(w) && !seen.has(w)) {
+    if (w.length >= 2 && !STOPWORDS.has(w) && !seen.has(w)) {
       seen.add(w);
       out.push(w);
     }

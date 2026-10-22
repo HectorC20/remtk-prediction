@@ -28,7 +28,7 @@ import {
   intentDeTanda,
   isForeignFamily,
 } from "src/predict/services/rerank.service";
-import { matchTokenSet, nameAffinity } from "src/predict/keywords";
+import { matchTokenSet, nameAffinity, stripUrlsForIntent } from "src/predict/keywords";
 import { pivotThresholdsByModel } from "src/shared/constants/predict/embedding.constants";
 import { CalibrationService } from "src/predict/services/calibration.service";
 import { AbstencionService } from "./services/abstencion.service";
@@ -84,13 +84,14 @@ export class JuicioService {
     };
     if (!this.operative) return ctx;
 
-    const res = await this.engine.embedQuery(input.text, this.engine.defaultSize, { high: true });
+    const cleanText = stripUrlsForIntent(input.text);
+    const res = await this.engine.embedQuery(cleanText, this.engine.defaultSize, { high: true });
     if (res.model === "hash") return ctx;
     ctx.uText = res.embedding;
 
     // (2b) Atención por saliencia sobre tramos estructurales (textos extensos con relleno).
     if (input.scopeKey) {
-      await this.focusSalientSpans(input.scopeKey, input.text, ctx);
+      await this.focusSalientSpans(input.scopeKey, cleanText, ctx);
     }
 
     // (3) Proyección sobre la variedad de herramientas (Manifold Geometry) y puerta de coherencia.

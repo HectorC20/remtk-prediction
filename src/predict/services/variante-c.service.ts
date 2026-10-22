@@ -29,28 +29,9 @@
  */
 import { EmbeddingEngineService } from "src/embedding/embedding.service";
 import { log, warn } from "src/logger";
-import { toolNamesInText } from "src/predict/keywords";
+import { stripUrlsForIntent, toolNamesInText } from "src/predict/keywords";
 import type { ToolDefinition } from "src/shared/interfaces/domain.interface";
-import {
-  C_ANAF_TAU,
-  C_ANAPHORA_ARCH,
-  C_CLAUSE_SPLIT,
-  C_CONF_TAU,
-  C_CONFIRM_ARCH,
-  C_DELTA,
-  C_MARGIN,
-  C_RECALL_K,
-  C_REJECT_ARCH,
-  C_REJ_TAU,
-  C_TAU,
-  C_W1_AUTO,
-  C_W1_DEP,
-  C_W2_AUTO,
-  C_W2_DEP,
-  C_W3,
-  TOOL_MUTATION_ARCHETYPE,
-  TOOL_READ_ARCHETYPE,
-} from "src/shared/constants/predict";
+import { C_ANAF_TAU, C_ANAPHORA_ARCH, C_CLAUSE_SPLIT, C_CONF_TAU, C_CONFIRM_ARCH, C_DELTA, C_MARGIN, C_RECALL_K, C_REJECT_ARCH, C_REJ_TAU, C_TAU, C_W1_AUTO, C_W1_DEP, C_W2_AUTO, C_W2_DEP, C_W3, TOOL_MUTATION_ARCHETYPE, TOOL_READ_ARCHETYPE} from "src/shared/constants/predict";
 
 export type StateVerdict = "reject" | "confirm" | "neutral";
 export type CDecision = "ratify" | "abstain";
@@ -162,18 +143,21 @@ export class VarianteCService {
     const idx = this.indexes.get(scopeKey);
     if (!idx || idx.toolIndex.length === 0) return undefined;
 
+    const cleanCurrentText = stripUrlsForIntent(currentText);
+    const cleanCtxText = ctxText ? stripUrlsForIntent(ctxText) : undefined;
+
     const arch = await this.ensureArchetypes();
-    const nowRes = await this.engine.embedQuery(currentText, undefined, { high: true });
+    const nowRes = await this.engine.embedQuery(cleanCurrentText, undefined, { high: true });
     // Degradación en cascada (igual que juicio): con motor hash no hay geometría
     // real — el núcleo abstendría con cosenos sin sentido (fused < C_TAU) y se
     // comería el respaldo del pipeline. `undefined` ⇒ el llamador degrada.
     if (nowRes.model === "hash") return undefined;
     const nowVec = nowRes.embedding;
-    const nowClauses = await this.clauseTokenSets(currentText);
-    const ctxVec = ctxText
-      ? (await this.engine.embedQuery(ctxText, undefined, { high: true })).embedding
+    const nowClauses = await this.clauseTokenSets(cleanCurrentText);
+    const ctxVec = cleanCtxText
+      ? (await this.engine.embedQuery(cleanCtxText, undefined, { high: true })).embedding
       : undefined;
-    const ctxClauses = ctxText ? await this.clauseTokenSets(ctxText) : [];
+    const ctxClauses = cleanCtxText ? await this.clauseTokenSets(cleanCtxText) : [];
 
     const cNow = new Map<string, number>();
     const cCtx = new Map<string, number>();
