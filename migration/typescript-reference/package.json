@@ -1,0 +1,61 @@
+{
+  "name": "remtk-prediction",
+  "version": "0.0.1",
+  "description": "Tool Prediction: microservicio de inferencia y juicio MoE de ultra-baja memoria (< 88 MB) en Rust Nativo (Tokio + Axum + ort v2) en puertos 6776/6777/6775 y librería in-process en TypeScript.",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "models",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:rust": "cargo build --release --manifest-path rust-server/Cargo.toml",
+    "start": "cargo run --release --manifest-path rust-server/Cargo.toml",
+    "start:docker": "docker compose up -d",
+    "dev": "cargo run --manifest-path rust-server/Cargo.toml",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "prepublishOnly": "pnpm build",
+    "test": "tsx --test tests/rerank.test.ts tests/e2e.test.ts tests/graph.test.ts tests/learn-barrier.test.ts tests/mitumbes-barrier.test.ts tests/calibration-context.test.ts tests/spatial-predict.test.ts tests/intent-recognition.test.ts tests/complex-system-plan.test.ts tests/continuous-flow-intent.test.ts tests/web-file-generation.test.ts tests/catalog-inquiry.test.ts tests/predict-dag-cold-catalog.test.ts tests/predict-intent-context.test.ts tests/skill-memory-architecture.test.ts tests/skill-learning-sequential.test.ts",
+    "test:all": "tsx --test tests/rerank.test.ts tests/e2e.test.ts tests/graph.test.ts tests/learn-barrier.test.ts tests/mitumbes-barrier.test.ts tests/embed-model.test.ts tests/calibration-context.test.ts tests/spatial-predict.test.ts tests/intent-recognition.test.ts tests/complex-system-plan.test.ts tests/continuous-flow-intent.test.ts tests/web-file-generation.test.ts tests/catalog-inquiry.test.ts tests/predict-dag-cold-catalog.test.ts tests/predict-intent-context.test.ts tests/skill-memory-architecture.test.ts tests/skill-learning-sequential.test.ts",
+    "test:skills": "tsx --test tests/skill-memory-architecture.test.ts",
+    "test:memoria": "tsx --test tests/skill-learning-sequential.test.ts",
+    "test:dag": "tsx --test tests/predict-dag-cold-catalog.test.ts",
+    "test:context": "tsx --test tests/predict-intent-context.test.ts",
+    "test:spatial": "tsx --test tests/spatial-predict.test.ts",
+    "test:graph": "tsx --test tests/graph.test.ts",
+    "test:learn": "tsx --test tests/learn-barrier.test.ts",
+    "test:mitumbes": "tsx --test tests/mitumbes-barrier.test.ts",
+    "test:adjuntar": "tsx --test tests/mitumbes-adjuntar-noise-reproduction.test.ts",
+    "test:hero": "tsx --test tests/mitumbes-hero-configurar-reproduction.test.ts",
+    "test:model": "tsx --test tests/embed-model.test.ts",
+    "test:compare": "tsx --test tests/embed-compare.test.ts",
+    "test:arquitectura": "tsx --test tests/arquitectura-juicio-comparison.test.ts",
+    "test:varc-mitumbes": "tsx --test tests/mitumbes-variant-c-intent.test.ts",
+    "test:bge": "tsx --test tests/embed-bge.test.ts",
+    "test:qwen3": "tsx --test tests/embed-qwen3.test.ts",
+    "test:e2e": "tsx --test tests/e2e.test.ts",
+    "bench": "tsx bench/run.ts",
+    "bench:stress": "tsx bench/juicio-stress.ts",
+    "bench:intent": "tsx bench/intent-complex.ts",
+    "bench:stock": "tsx bench/stock-stress.ts"
+  },
+  "dependencies": {
+    "@huggingface/tokenizers": "^0.1.3",
+    "onnxruntime-node": "^1.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "7.0.2"
+  }
+}

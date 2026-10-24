@@ -1,33 +1,30 @@
-#
-dist/
-# DEPENDENCIAS
-node_modules/
+# Rust
+target/
 
+# Node / JS
+dist/
+node_modules/
+*.tsbuildinfo
+
+# Debug / Logs
 .dbg/
 bin/
-# Build
-dist/
-build/
-docs/
+runtime/
+*.log
+/training/
 # Environment
 .env
 .env.local
 .env.*.local
 
+# IDE
 .idea/
 .vscode/
 
-node_modules
-dist
+# Models
 /models/
-.git
-runtime
-*.log
-*.tsbuildinfo
-/docs/
+
 # Benchmark results
 bench/results/
-
-# Pruebas/scripts que exponen API keys reales hardcodeadas (no subir credenciales)
 scratch/test-real-environment.ts
 scratch/test-real-keyremtk-e2e.ts

@@ -1,0 +1,5 @@
+[build]
+# Flags de compilación para target nativo
+rustflags = [
+    "-C", "target-cpu=native",
+]

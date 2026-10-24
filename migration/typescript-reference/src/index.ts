@@ -1,0 +1,73 @@
+/**
+ * remtk-prediction — API pública de librería (in-process).
+ *
+ * Uso:
+ * ```ts
+ * import { createSystem, loadConfig } from "remtk-prediction";
+ *
+ * const system = await createSystem(loadConfig());
+ * const result = await system.orchestrator.predict({
+ *   sessionId: "s1",
+ *   tenant: "t1",
+ *   text: "envía un correo al equipo",
+ * });
+ * console.log(result.tools.map((t) => t.name));
+ * ```
+ *
+ * Para arrancar los servidores HTTP nativos usa `rust-server`
+ * (p. ej. `cargo run --release --manifest-path rust-server/Cargo.toml` o `docker compose up`).
+ */
+
+// Sistema completo (in-process, sin abrir puertos).
+export { createSystem, type System } from "./main";
+
+// Configuración.
+export { loadConfig, type AppConfig } from "./config";
+
+// Servicios núcleo reutilizables.
+export { EmbeddingEngineService } from "./embedding/embedding.service";
+export { QdrantService } from "./qdrant/qdrant-service";
+export { PredictionOrchestrator } from "./predict/orchestrator";
+export { TurnClassifier} from "./predict/turn-classifier";
+export { KeywordService, type KeywordReduceResult } from "./predict/services/keyword.service";
+export { ToolGraphCacheService } from "./predict/services/graph-cache.service";
+export { SessionStateCacheService } from "./predict/services/session-state-cache.service";
+export { RerankService, adaptiveThreshold, estimateComplexity, topologicalSort, type RerankResult, type GraphRerankResult } from "./predict/services/rerank.service";
+export { ConfirmationCache } from "./predict/services/confirm-cache.service";
+export { Debugger } from "./predict/helper/debugger.helper";
+export { MemoryCandidate, MemoryDefinition } from "src/shared/interfaces/index";
+export { SkillMemoryService } from "./predict/services/skill-memory.service";
+export { RemtkMemorySkillsAdapter, type RemtkMemoryAdapterConfig } from "./predict/services/remtk-memory-skills.adapter";
+export {
+  PlannerFastPathService,
+  decidePlannerFastPath,
+  type FastPathAction,
+  type FastPathInput,
+  type FastPathDecision,
+} from "./predict/services/planner-fast-path.service";
+export { parseKeyRemtk, resolveScopeKey, normalizeAgentId } from "./shared/scope";
+// Tipos del contrato.
+export type {
+  ToolDefinition,
+  ToolComplexity,
+  ScoredTool,
+  PredictionInput,
+  PredictionResult,
+  Trace,
+} from "./shared/interfaces/index";
+export type {
+  EdgeType,
+  GraphEdge,
+  ToolGraphNode,
+  TenantToolGraph,
+  GraphPredictionResult,
+} from "./shared/interfaces/index";
+export type {
+  SkillDefinition,
+  ParameterAnchor,
+  SessionEntityState,
+  SkillPredictInput,
+  SkillPredictResult,
+  GroundedParameterMatch,
+} from "./shared/interfaces/skill.interface";
+export type { ModelSize } from "./shared/constants/predict/version.constants";

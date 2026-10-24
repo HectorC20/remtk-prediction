@@ -1,0 +1,744 @@
+{
+  "baseline": 10,
+  "mejora": 15,
+  "total": 19,
+  "casos": [
+    {
+      "id": "negacion-borrador",
+      "esperado": [
+        "save_draft"
+      ],
+      "base": [
+        "save_draft",
+        "list_invoices",
+        "download_report"
+      ],
+      "mejora": [
+        "send_email"
+      ],
+      "okB": true,
+      "okM": false,
+      "r": {
+        "tools": [
+          "send_email"
+        ],
+        "clausulas": [
+          {
+            "texto": "No envíes el correo todavía",
+            "rol": "NIEGA",
+            "via": "pista",
+            "tools": [
+              "save_draft",
+              "list_invoices",
+              "download_report",
+              "get_weather"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "mejor guárdalo como borrador",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "save_draft",
+              "send_email"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [
+          "save_draft",
+          "list_invoices"
+        ],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "confirmacion-plan",
+      "esperado": [
+        "send_email"
+      ],
+      "base": [
+        "save_draft",
+        "download_report",
+        "list_invoices"
+      ],
+      "mejora": [
+        "save_draft",
+        "download_report",
+        "list_invoices"
+      ],
+      "okB": false,
+      "okM": false,
+      "r": {
+        "tools": [
+          "save_draft",
+          "download_report",
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "sí, hazlo",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "save_draft",
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "correferencia-tiempo",
+      "esperado": [
+        "get_weather"
+      ],
+      "base": [
+        "get_weather",
+        "get_exchange_rate"
+      ],
+      "mejora": [
+        "get_weather",
+        "get_exchange_rate"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "get_weather",
+          "get_exchange_rate"
+        ],
+        "clausulas": [
+          {
+            "texto": "¿y mañana?",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "get_weather",
+              "get_exchange_rate"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "cambio-tema",
+      "esperado": [
+        "get_exchange_rate"
+      ],
+      "base": [
+        "get_exchange_rate",
+        "get_weather"
+      ],
+      "mejora": [
+        "get_exchange_rate",
+        "get_weather"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "get_exchange_rate",
+          "get_weather"
+        ],
+        "clausulas": [
+          {
+            "texto": "ahora sí, ¿a cuánto está el dólar hoy?",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "get_exchange_rate",
+              "get_weather"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "cross-idioma",
+      "esperado": [
+        "send_email"
+      ],
+      "base": [
+        "download_report",
+        "list_invoices"
+      ],
+      "mejora": [
+        "download_report",
+        "list_invoices"
+      ],
+      "okB": false,
+      "okM": false,
+      "r": {
+        "tools": [
+          "download_report",
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "send the monthly report to my team by email",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "multi-intencion",
+      "esperado": [
+        "download_report",
+        "send_email"
+      ],
+      "base": [
+        "download_report",
+        "list_invoices",
+        "save_draft"
+      ],
+      "mejora": [
+        "download_report",
+        "send_email",
+        "list_invoices",
+        "save_draft"
+      ],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [
+          "download_report",
+          "send_email",
+          "list_invoices",
+          "save_draft"
+        ],
+        "clausulas": [
+          {
+            "texto": "descarga el reporte de ventas de ayer",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "envíamelo por correo",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "send_email",
+              "save_draft"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "meta-pregunta",
+      "esperado": [],
+      "base": [],
+      "mejora": [],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [],
+        "clausulas": [
+          {
+            "texto": "¿qué herramientas tienes disponibles?",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [],
+            "estado": "vacio"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "small-talk",
+      "esperado": [],
+      "base": [],
+      "mejora": [],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [],
+        "clausulas": [
+          {
+            "texto": "hola, ¿cómo estás?",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [],
+            "estado": "vacio"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "pronombre-contexto",
+      "esperado": [
+        "list_invoices"
+      ],
+      "base": [
+        "list_invoices",
+        "download_report"
+      ],
+      "mejora": [
+        "list_invoices"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "muéstrame la última otra vez",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "intencion-implicita",
+      "esperado": [
+        "download_report"
+      ],
+      "base": [
+        "download_report",
+        "list_invoices"
+      ],
+      "mejora": [
+        "download_report",
+        "list_invoices"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "download_report",
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "mi jefe me pide el balance de ventas de ayer, es urgente",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "rechazo-propuesta",
+      "esperado": [],
+      "base": [
+        "download_report",
+        "list_invoices"
+      ],
+      "mejora": [],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [],
+        "clausulas": [
+          {
+            "texto": "no, todavía no",
+            "rol": "NIEGA",
+            "via": "pista",
+            "tools": [],
+            "estado": "vacio"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "herramienta-explicita",
+      "esperado": [
+        "web_search"
+      ],
+      "base": [
+        "web_search"
+      ],
+      "mejora": [
+        "web_search"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "web_search"
+        ],
+        "clausulas": [
+          {
+            "texto": "usa web_search para buscar el precio del dólar en Perú",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "web_search"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "delegado"
+      }
+    },
+    {
+      "id": "auto-correccion-tiempo-real",
+      "esperado": [
+        "write_file"
+      ],
+      "base": [],
+      "mejora": [
+        "write_file",
+        "list_invoices"
+      ],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [
+          "write_file",
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "Genera una imagen para el flyer del evento",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "image_generate",
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "espera, no, no generes nada todavía",
+            "rol": "RETRACTA",
+            "via": "pista",
+            "tools": [],
+            "estado": "vacio"
+          },
+          {
+            "texto": "solo escribe un archivo con las notas de la reunión.",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "write_file",
+              "download_report",
+              "list_invoices",
+              "save_draft"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [
+          "image_generate",
+          "download_report"
+        ],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "ironia-pragmatica",
+      "esperado": [
+        "save_draft"
+      ],
+      "base": [],
+      "mejora": [
+        "save_draft",
+        "download_report"
+      ],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [
+          "save_draft",
+          "download_report"
+        ],
+        "clausulas": [
+          {
+            "texto": "Sí, claro, mándale el borrador sin revisar al cliente para que vea todos nuestros errores",
+            "rol": "IRONIA",
+            "via": "pista",
+            "tools": [],
+            "estado": "vacio"
+          },
+          {
+            "texto": "obviamente guárdalo para revisarlo mañana.",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "save_draft",
+              "download_report",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "secuestro-lexico-codigo",
+      "esperado": [
+        "get_exchange_rate"
+      ],
+      "base": [
+        "database_query"
+      ],
+      "mejora": [
+        "get_exchange_rate"
+      ],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [
+          "get_exchange_rate"
+        ],
+        "clausulas": [
+          {
+            "texto": "Estoy revisando este script en Python: [código].",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [],
+            "estado": "vacio"
+          },
+          {
+            "texto": "Ignora ese código",
+            "rol": "RETRACTA",
+            "via": "pista",
+            "tools": []
+          },
+          {
+            "texto": "lo que realmente necesito es saber a cuánto está el tipo de cambio del dólar hoy.",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "get_exchange_rate"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "doble-negacion-cruzada",
+      "esperado": [
+        "download_report",
+        "send_email"
+      ],
+      "base": [
+        "download_report",
+        "list_invoices",
+        "save_draft"
+      ],
+      "mejora": [
+        "download_report",
+        "save_draft"
+      ],
+      "okB": false,
+      "okM": false,
+      "r": {
+        "tools": [
+          "download_report",
+          "save_draft"
+        ],
+        "clausulas": [
+          {
+            "texto": "No dejes de enviarle el balance de ventas de ayer a mi jefe por correo",
+            "rol": "AFIRMA",
+            "via": "pista",
+            "tools": [
+              "download_report",
+              "save_draft",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "pero por favor no toques la lista de facturas ni consultes la base de datos.",
+            "rol": "NIEGA",
+            "via": "pista",
+            "tools": [
+              "list_invoices",
+              "database_query"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [
+          "list_invoices",
+          "database_query"
+        ],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "revocacion-post-propuesta",
+      "esperado": [],
+      "base": [],
+      "mejora": [],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [],
+        "clausulas": [
+          {
+            "texto": "Pensándolo bien",
+            "rol": "RETRACTA",
+            "via": "pista",
+            "tools": []
+          },
+          {
+            "texto": "mejor déjalo ahí, el cliente me acaba de decir que no podrá asistir.",
+            "rol": "NIEGA",
+            "via": "pista",
+            "tools": [],
+            "estado": "vacio"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "condicional-contrafactico",
+      "esperado": [
+        "get_exchange_rate"
+      ],
+      "base": [
+        "get_exchange_rate",
+        "list_invoices"
+      ],
+      "mejora": [
+        "get_exchange_rate",
+        "get_weather"
+      ],
+      "okB": true,
+      "okM": true,
+      "r": {
+        "tools": [
+          "get_exchange_rate",
+          "get_weather"
+        ],
+        "clausulas": [
+          {
+            "texto": "Si el dólar está a más de 3.80 soles envíale una alerta por correo a finanzas",
+            "rol": "CONDICION",
+            "via": "pista",
+            "tools": [
+              "get_exchange_rate",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "pero si está más bajo no hagas nada.",
+            "rol": "CONDICION",
+            "via": "pista",
+            "tools": [
+              "get_weather"
+            ],
+            "estado": "ambiguo"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    },
+    {
+      "id": "polisemia-dominio-cruzado",
+      "esperado": [
+        "image_generate",
+        "get_exchange_rate"
+      ],
+      "base": [
+        "web_search"
+      ],
+      "mejora": [
+        "image_generate",
+        "get_exchange_rate",
+        "download_report",
+        "list_invoices"
+      ],
+      "okB": false,
+      "okM": true,
+      "r": {
+        "tools": [
+          "image_generate",
+          "get_exchange_rate",
+          "download_report",
+          "list_invoices"
+        ],
+        "clausulas": [
+          {
+            "texto": "Genera una imagen con el fondo nuevo para la web",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "image_generate",
+              "download_report"
+            ],
+            "estado": "resuelto"
+          },
+          {
+            "texto": "y luego revisa el tipo de cambio para el fondo de inversiones.",
+            "rol": "AFIRMA",
+            "via": "defecto",
+            "tools": [
+              "get_exchange_rate",
+              "list_invoices"
+            ],
+            "estado": "resuelto"
+          }
+        ],
+        "excluidas": [],
+        "modo": "descompuesto"
+      }
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+[package]
+name = "remtk-prediction-server"
+version = "1.0.0"
+edition = "2021"
+authors = ["RemTK Platform Engineering"]
+description = "Microservicio de inferencia de ultra-baja memoria (< 90 MB) y juicio MoE unificado en Rust"
+
+[dependencies]
+# Runtime Asíncrono y Servidor HTTP Axum / Tower
+tokio = { version = "1.40", features = ["full"] }
+axum = { version = "0.7", features = ["macros", "tokio"] }
+tower = { version = "0.5", features = ["util", "timeout", "limit"] }
+tower-http = { version = "0.5", features = ["trace", "cors", "timeout"] }
+
+# Motor de Inferencia ONNX Runtime (v2.0 fijando api-20 para ONNX Runtime 1.20.1)
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "ndarray", "api-20"] }
+
+# Tokenización Hugging Face Nativa en Rust
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+
+# Álgebra de Tensores y Flotantes de Media Precisión
+ndarray = { version = "0.16", features = ["serde"] }
+half = { version = "2.4", features = ["num-traits", "serde"] }
+
+# Estructuras Concurrentes de Alta Densidad en Memoria
+dashmap = { version = "6.1", features = ["serde"] }
+
+# Serialización y Manejo Tipado de Errores
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+dotenvy = "0.15"
+
+# Observabilidad, Logs Estructurados y Trazas
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Asignadores Globales de Memoria de Ultra-Baja Fragmentación
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
+
+[target.'cfg(target_env = "msvc")'.dependencies]
+mimalloc = { version = "0.1", default-features = false }
+
+# Perfilado Opcional en Modo Diagnóstico
+[dependencies.dhat]
+version = "0.3"
+optional = true
+
+[features]
+default = []
+dhat-heap = ["dep:dhat"]
+
+# -----------------------------------------------------------------------------
+# PERFILES DE COMPILACIÓN (PROFILES)
+# -----------------------------------------------------------------------------
+
+# Perfil Release: Máxima Optimización, Mínima RAM y Mínimo Binario
+[profile.release]
+opt-level = 3              # Nivel máximo de optimización y vectorización
+lto = "fat"                # Link-Time Optimization a través de todas las crates
+codegen-units = 1          # Permite optimizaciones inter-procedurales globales
+panic = "abort"            # Elimina código de unwinding (-25% tamaño binario)
+strip = true               # Elimina símbolos y tablas de debug del binario ELF/PE
+overflow-checks = false    # Máxima velocidad en operaciones aritméticas
+incremental = false        # Desactiva compilación incremental para mejor optimización

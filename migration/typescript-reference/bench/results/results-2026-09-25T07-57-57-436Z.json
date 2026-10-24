@@ -1,0 +1,185 @@
+{
+  "summary": {
+    "remtkMode": "small+graph+juicio",
+    "remtk": {
+      "total": 12,
+      "pass": 5,
+      "errors": 0,
+      "avgLatencyMs": 98
+    },
+    "jev": {
+      "total": 0,
+      "pass": 0,
+      "errors": 0,
+      "avgLatencyMs": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "negacion-borrador",
+      "why": "La negación invierte la acción: 'correo' + 'envíes' atraen léxicamente a send_email, pero la intención es NO enviar.",
+      "expected": [
+        "save_draft"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 189,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "confirmacion-plan",
+      "why": "'sí, hazlo' no tiene señal léxica: la herramienta correcta vive en el turno anterior.",
+      "expected": [
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [
+          "save_draft",
+          "download_report",
+          "send_email"
+        ],
+        "pass": false,
+        "latencyMs": 191,
+        "detail": "save_draft,download_report,send_email,summarize_document,read_file,web_search,image_generate,create_calendar_event,write_file,scrape_url,list_invoices,send_whatsapp,get_weather,database_query,translate_text,calculate,get_exchange_rate"
+      }
+    },
+    {
+      "id": "correferencia-tiempo",
+      "why": "'¿y mañana?' es anafórico: solo con el historial se sabe que sigue hablando del clima.",
+      "expected": [
+        "get_weather"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 65,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "cambio-tema",
+      "why": "Cambio de tema explícito: el historial de correo NO debe arrastrar send_email.",
+      "expected": [
+        "get_exchange_rate"
+      ],
+      "remtk": {
+        "picked": [
+          "get_exchange_rate",
+          "list_invoices",
+          "save_draft"
+        ],
+        "pass": true,
+        "latencyMs": 218,
+        "detail": "get_exchange_rate,list_invoices,save_draft,download_report,web_search,send_email,read_file,write_file,database_query,send_whatsapp,create_calendar_event,get_weather,image_generate,calculate,scrape_url,summarize_document"
+      }
+    },
+    {
+      "id": "cross-idioma",
+      "why": "La petición viene en inglés y el catálogo está en español.",
+      "expected": [
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 53,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "multi-intencion",
+      "why": "Dos acciones encadenadas en un solo turno: descargar Y enviar.",
+      "expected": [
+        "download_report",
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 67,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "meta-pregunta",
+      "why": "Pregunta sobre capacidades: no debe disparar ninguna herramienta.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 28,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "small-talk",
+      "why": "Saludo puro: no debe disparar ninguna herramienta.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 48,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "pronombre-contexto",
+      "why": "'muéstrame la última otra vez' solo se resuelve con el historial (facturas).",
+      "expected": [
+        "list_invoices"
+      ],
+      "remtk": {
+        "picked": [
+          "save_draft",
+          "list_invoices",
+          "get_weather"
+        ],
+        "pass": false,
+        "latencyMs": 142,
+        "detail": "save_draft,list_invoices,get_weather,get_exchange_rate,download_report,web_search,read_file,write_file,calculate,database_query,image_generate,send_email,create_calendar_event,scrape_url"
+      }
+    },
+    {
+      "id": "intencion-implicita",
+      "why": "No hay verbo del catálogo: 'mi jefe necesita el balance' implica descargar el reporte.",
+      "expected": [
+        "download_report"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 56,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "rechazo-propuesta",
+      "why": "Rechazo de una propuesta: no debe disparar la herramienta propuesta ni ninguna.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 44,
+        "detail": "(vacío)"
+      }
+    },
+    {
+      "id": "herramienta-explicita",
+      "why": "El usuario nombra la herramienta literalmente: debe respetarse la orden.",
+      "expected": [
+        "web_search"
+      ],
+      "remtk": {
+        "picked": [
+          "web_search",
+          "get_exchange_rate"
+        ],
+        "pass": true,
+        "latencyMs": 80,
+        "detail": "web_search,get_exchange_rate"
+      }
+    }
+  ]
+}

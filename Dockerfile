@@ -1,47 +1,68 @@
-# node:22-slim (glibc) — onnxruntime-node y @huggingface/tokenizers publican
-# binarios glibc y NO cargan en Alpine (musl): "ld-linux-x86-64.so.2" ausente.
-FROM node:22-slim AS builder
+# ==============================================================================
+# remtk-prediction — Servidor de Inferencia y Juicio de Herramientas en Rust Nativo
+# Reemplazo de alta eficiencia (< 88 MB RSS) para la antigua arquitectura NestJS
+# ==============================================================================
+
+# ==============================================================================
+# STAGE 1: Builder (Compilación de Rust y Linkeo con ONNX Runtime)
+# ==============================================================================
+FROM rust:bookworm AS builder
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+# Instalar herramientas necesarias
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    tar \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g pnpm@9.15.9
+# Descargar la biblioteca compartida oficial de Microsoft ONNX Runtime v1.20.1
+ENV ORT_VERSION=1.20.1
+RUN curl -sSL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz" \
+    | tar -xz --strip-components=1 -C /usr/local/
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY Cargo.toml ./
+COPY .cargo .cargo
+COPY src src
 
-COPY tsconfig.json ./
-COPY src ./src
-RUN pnpm build
+ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-FROM node:22-slim
+# Compilar en modo release con LTO y optimizaciones AVX2
+RUN cargo build --release
+
+# Strip del binario principal para remover símbolos de depuración
+RUN strip /app/target/release/remtk-prediction-server
+
+# ==============================================================================
+# STAGE 2: Runtime Ultraligero (Debian Bookworm Slim - < 45 MB)
+# ==============================================================================
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
-RUN npm install -g pnpm@9.15.9
-
-# libgomp1: OpenMP de ONNX Runtime (multi-hilo) sobre glibc.
-# ca-certificates: evita el warning de telemetría de ORT ("No readable CA
-# bundle was found") — sin él, ORT no puede validar HTTPS para telemetría.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgomp1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY scripts/ensure-onnx-models.mjs ./scripts/ensure-onnx-models.mjs
+# Copiar bibliotecas de ONNX Runtime
+COPY --from=builder /usr/local/lib/libonnxruntime* /usr/local/lib/
 
-# Modelos ONNX: bind mount ./models:/app/models (nunca en la imagen)
-ENV ONNX_MODELS_PATH=/app/models
-ENV NODE_ENV=production
-# Resuelve los alias de import "src/*" del tsconfig en el JS compilado (CJS).
-ENV NODE_PATH=/app/dist
+# Copiar el binario compilado nativo en Rust
+COPY --from=builder /app/target/release/remtk-prediction-server /app/remtk-server
+
+# Variables de entorno canónicas
+ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV PORT_PREDICT=6776
+ENV PORT_EMBED=6777
+ENV PORT_QDRANT=6775
+ENV MODELS_PATH=/app/models
+ENV RUST_LOG=info
 
 EXPOSE 6776 6777 6775
 
-# Descarga los modelos ONNX (idempotente, no bloqueante) y arranca el servidor.
-CMD ["sh", "-c", "node scripts/ensure-onnx-models.mjs && node dist/src/server.js"]
+ENTRYPOINT ["/app/remtk-server"]

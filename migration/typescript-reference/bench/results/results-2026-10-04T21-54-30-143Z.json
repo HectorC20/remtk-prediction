@@ -1,0 +1,476 @@
+{
+  "summary": {
+    "remtkMode": "gte+graph+juicio",
+    "remtk": {
+      "total": 19,
+      "pass": 11,
+      "errors": 0,
+      "avgLatencyMs": 749
+    },
+    "jev": {
+      "total": 19,
+      "pass": 18,
+      "errors": 0,
+      "avgLatencyMs": 570
+    }
+  },
+  "cases": [
+    {
+      "id": "negacion-borrador",
+      "why": "La negación invierte la acción: 'correo' + 'envíes' atraen léxicamente a send_email, pero la intención es NO enviar.",
+      "expected": [
+        "save_draft"
+      ],
+      "remtk": {
+        "picked": [
+          "save_draft",
+          "list_invoices",
+          "download_report"
+        ],
+        "pass": true,
+        "latencyMs": 1173,
+        "detail": "save_draft,list_invoices,download_report"
+      },
+      "jev": {
+        "picked": [
+          "save_draft"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 1095,
+        "detail": "save_draft (conf 1)"
+      }
+    },
+    {
+      "id": "confirmacion-plan",
+      "why": "'sí, hazlo' no tiene señal léxica: la herramienta correcta vive en el turno anterior.",
+      "expected": [
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [
+          "save_draft",
+          "download_report",
+          "list_invoices"
+        ],
+        "pass": false,
+        "latencyMs": 680,
+        "detail": "save_draft,download_report,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "send_email"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 398,
+        "detail": "send_email (conf 1)"
+      }
+    },
+    {
+      "id": "correferencia-tiempo",
+      "why": "'¿y mañana?' es anafórico: solo con el historial se sabe que sigue hablando del clima.",
+      "expected": [
+        "get_weather"
+      ],
+      "remtk": {
+        "picked": [
+          "get_weather",
+          "get_exchange_rate"
+        ],
+        "pass": true,
+        "latencyMs": 90,
+        "detail": "get_weather,get_exchange_rate"
+      },
+      "jev": {
+        "picked": [
+          "get_weather"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 534,
+        "detail": "get_weather (conf 1)"
+      }
+    },
+    {
+      "id": "cambio-tema",
+      "why": "Cambio de tema explícito: el historial de correo NO debe arrastrar send_email.",
+      "expected": [
+        "get_exchange_rate"
+      ],
+      "remtk": {
+        "picked": [
+          "get_exchange_rate",
+          "get_weather"
+        ],
+        "pass": true,
+        "latencyMs": 741,
+        "detail": "get_exchange_rate,get_weather"
+      },
+      "jev": {
+        "picked": [
+          "get_exchange_rate"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 822,
+        "detail": "get_exchange_rate (conf 0.97)"
+      }
+    },
+    {
+      "id": "cross-idioma",
+      "why": "La petición viene en inglés y el catálogo está en español.",
+      "expected": [
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [
+          "download_report",
+          "list_invoices"
+        ],
+        "pass": false,
+        "latencyMs": 706,
+        "detail": "download_report,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "send_email"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 412,
+        "detail": "send_email (conf 1)"
+      }
+    },
+    {
+      "id": "multi-intencion",
+      "why": "Dos acciones encadenadas en un solo turno: descargar Y enviar.",
+      "expected": [
+        "download_report",
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [
+          "download_report",
+          "list_invoices",
+          "save_draft"
+        ],
+        "pass": false,
+        "latencyMs": 932,
+        "detail": "download_report,list_invoices,save_draft"
+      },
+      "jev": {
+        "picked": [
+          "download_report"
+        ],
+        "pass": true,
+        "partial": true,
+        "latencyMs": 463,
+        "detail": "download_report (conf 0.92)"
+      }
+    },
+    {
+      "id": "meta-pregunta",
+      "why": "Pregunta sobre capacidades: no debe disparar ninguna herramienta.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 89,
+        "detail": "(vacío)"
+      },
+      "jev": {
+        "picked": [
+          "__none__"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 525,
+        "detail": "__none__ (conf 1)"
+      }
+    },
+    {
+      "id": "small-talk",
+      "why": "Saludo puro: no debe disparar ninguna herramienta.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 191,
+        "detail": "(vacío)"
+      },
+      "jev": {
+        "picked": [
+          "__none__"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 439,
+        "detail": "__none__ (conf 1)"
+      }
+    },
+    {
+      "id": "pronombre-contexto",
+      "why": "'muéstrame la última otra vez' solo se resuelve con el historial (facturas).",
+      "expected": [
+        "list_invoices"
+      ],
+      "remtk": {
+        "picked": [
+          "list_invoices",
+          "download_report"
+        ],
+        "pass": true,
+        "latencyMs": 162,
+        "detail": "list_invoices,download_report"
+      },
+      "jev": {
+        "picked": [
+          "list_invoices"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 487,
+        "detail": "list_invoices (conf 0.74)"
+      }
+    },
+    {
+      "id": "intencion-implicita",
+      "why": "No hay verbo del catálogo: 'mi jefe necesita el balance' implica descargar el reporte.",
+      "expected": [
+        "download_report"
+      ],
+      "remtk": {
+        "picked": [
+          "download_report",
+          "list_invoices"
+        ],
+        "pass": true,
+        "latencyMs": 1117,
+        "detail": "download_report,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "download_report"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 488,
+        "detail": "download_report (conf 0.99)"
+      }
+    },
+    {
+      "id": "rechazo-propuesta",
+      "why": "Rechazo de una propuesta: no debe disparar la herramienta propuesta ni ninguna.",
+      "expected": [],
+      "remtk": {
+        "picked": [
+          "download_report",
+          "list_invoices"
+        ],
+        "pass": false,
+        "latencyMs": 144,
+        "detail": "download_report,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "__none__"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 477,
+        "detail": "__none__ (conf 1)"
+      }
+    },
+    {
+      "id": "herramienta-explicita",
+      "why": "El usuario nombra la herramienta literalmente: debe respetarse la orden.",
+      "expected": [
+        "web_search"
+      ],
+      "remtk": {
+        "picked": [
+          "web_search"
+        ],
+        "pass": true,
+        "latencyMs": 235,
+        "detail": "web_search"
+      },
+      "jev": {
+        "picked": [
+          "get_exchange_rate"
+        ],
+        "pass": false,
+        "partial": false,
+        "latencyMs": 398,
+        "detail": "get_exchange_rate (conf 0.63)"
+      }
+    },
+    {
+      "id": "auto-correccion-tiempo-real",
+      "why": "El usuario cambia de opinión a mitad de frase: empieza pidiendo generar imagen, pero la orden final es solo escribir un archivo.",
+      "expected": [
+        "write_file"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 551,
+        "detail": "(vacío)"
+      },
+      "jev": {
+        "picked": [
+          "write_file"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 459,
+        "detail": "write_file (conf 0.99)"
+      }
+    },
+    {
+      "id": "ironia-pragmatica",
+      "why": "El tono irónico formula una acción que en realidad se prohíbe explícitamente.",
+      "expected": [
+        "save_draft"
+      ],
+      "remtk": {
+        "picked": [],
+        "pass": false,
+        "latencyMs": 363,
+        "detail": "(vacío)"
+      },
+      "jev": {
+        "picked": [
+          "save_draft"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 1245,
+        "detail": "save_draft (conf 0.82)"
+      }
+    },
+    {
+      "id": "secuestro-lexico-codigo",
+      "why": "Bloque de código con términos críticos que compiten con una consulta simple al final.",
+      "expected": [
+        "get_exchange_rate"
+      ],
+      "remtk": {
+        "picked": [
+          "get_exchange_rate",
+          "list_invoices"
+        ],
+        "pass": true,
+        "latencyMs": 2273,
+        "detail": "get_exchange_rate,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "get_exchange_rate"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 441,
+        "detail": "get_exchange_rate (conf 0.99)"
+      }
+    },
+    {
+      "id": "doble-negacion-cruzada",
+      "why": "'No dejes de...' es una orden afirmativa enfática, mientras que la segunda parte es una exclusión estricta.",
+      "expected": [
+        "download_report",
+        "send_email"
+      ],
+      "remtk": {
+        "picked": [
+          "download_report",
+          "list_invoices",
+          "save_draft"
+        ],
+        "pass": false,
+        "latencyMs": 1563,
+        "detail": "download_report,list_invoices,save_draft"
+      },
+      "jev": {
+        "picked": [
+          "send_email"
+        ],
+        "pass": true,
+        "partial": true,
+        "latencyMs": 442,
+        "detail": "send_email (conf 0.68)"
+      }
+    },
+    {
+      "id": "revocacion-post-propuesta",
+      "why": "El usuario rechaza una propuesta previa con lenguaje educado y vacilante.",
+      "expected": [],
+      "remtk": {
+        "picked": [],
+        "pass": true,
+        "latencyMs": 523,
+        "detail": "(vacío)"
+      },
+      "jev": {
+        "picked": [
+          "__none__"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 426,
+        "detail": "__none__ (conf 0.96)"
+      }
+    },
+    {
+      "id": "condicional-contrafactico",
+      "why": "La acción futura depende de un resultado que el asistente primero debe inspeccionar.",
+      "expected": [
+        "get_exchange_rate"
+      ],
+      "remtk": {
+        "picked": [
+          "get_exchange_rate",
+          "list_invoices"
+        ],
+        "pass": true,
+        "latencyMs": 1509,
+        "detail": "get_exchange_rate,list_invoices"
+      },
+      "jev": {
+        "picked": [
+          "get_exchange_rate"
+        ],
+        "pass": true,
+        "partial": false,
+        "latencyMs": 783,
+        "detail": "get_exchange_rate (conf 0.81)"
+      }
+    },
+    {
+      "id": "polisemia-dominio-cruzado",
+      "why": "La palabra 'fondo' se usa con dos significados totalmente distintos en la misma orden.",
+      "expected": [
+        "image_generate",
+        "get_exchange_rate"
+      ],
+      "remtk": {
+        "picked": [
+          "web_search"
+        ],
+        "pass": false,
+        "latencyMs": 1190,
+        "detail": "web_search"
+      },
+      "jev": {
+        "picked": [
+          "image_generate"
+        ],
+        "pass": true,
+        "partial": true,
+        "latencyMs": 494,
+        "detail": "image_generate (conf 0.86)"
+      }
+    }
+  ]
+}
