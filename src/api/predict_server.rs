@@ -9,6 +9,7 @@ use tracing::info;
 use crate::api::state::AppState;
 use crate::shared::dto::*;
 use crate::shared::error::AppError;
+use crate::shared::logger::preview_text;
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
@@ -44,12 +45,29 @@ async fn predict_handler(
     State(state): State<AppState>,
     Json(payload): Json<PredictRequest>,
 ) -> Result<Json<PredictResponse>, AppError> {
+    let t0 = std::time::Instant::now();
+    let tenant = payload.tenant.clone();
+    let session_id = payload.session_id.clone();
+    let prompt_preview = preview_text(&payload.text, 90);
     let prediction_service = state.prediction.clone();
 
     let response = tokio::task::spawn_blocking(move || {
         prediction_service.predict(&payload)
     })
     .await??;
+
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    tracing::info!(
+        target: "http_trace",
+        "[http:predict] status=200 tenant={} session={} elapsed={:.2}ms tools_out={} complexity={} nli={:?} prompt=\"{}\"",
+        tenant,
+        session_id,
+        elapsed_ms,
+        response.tools.len(),
+        response.complexity,
+        response.estado_nli,
+        prompt_preview
+    );
 
     Ok(Json(response))
 }
@@ -59,7 +77,18 @@ async fn spatial_predict_handler(
     State(state): State<AppState>,
     Json(payload): Json<SpatialPredictDto>,
 ) -> Result<Json<VisualToolPayload>, AppError> {
+    let t0 = std::time::Instant::now();
+    let query_preview = preview_text(&payload.query, 80);
     let result = state.spatial.predict(&payload)?;
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    tracing::info!(
+        target: "http_trace",
+        "[http:spatial_predict] status=200 elapsed={:.2}ms tool={} conf={:.2} query=\"{}\"",
+        elapsed_ms,
+        result.tool,
+        result.confidence,
+        query_preview
+    );
     Ok(Json(result))
 }
 
@@ -68,7 +97,16 @@ async fn fast_path_route_handler(
     State(state): State<AppState>,
     Json(input): Json<FastPathInput>,
 ) -> Json<FastPathDecision> {
+    let t0 = std::time::Instant::now();
     let decision = state.prediction.decide_fast_path(&input);
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    tracing::info!(
+        target: "http_trace",
+        "[http:predict_route] status=200 elapsed={:.2}ms action={} skip_planner={}",
+        elapsed_ms,
+        decision.action,
+        decision.skip_planner
+    );
     Json(decision)
 }
 
@@ -164,11 +202,31 @@ async fn history_regime_handler(
     State(state): State<AppState>,
     Json(payload): Json<HistoryRegimeRequest>,
 ) -> Result<Json<HistoryRegimeResponse>, AppError> {
+    let t0 = std::time::Instant::now();
+    let tenant = payload.tenant.clone();
+    let session_id = payload.session_id.clone();
+    let history_len = payload.history.len();
+    let prompt_preview = preview_text(&payload.prompt, 80);
     let prediction_service = state.prediction.clone();
     let response = tokio::task::spawn_blocking(move || {
         prediction_service.evaluate_history_regime(&payload)
     })
     .await??;
+
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    tracing::info!(
+        target: "http_trace",
+        "[http:history_regime] status=200 tenant={:?} session={:?} elapsed={:.2}ms regime={} anaphora={} topic_shift={:.3} history_in={} selected_out={} prompt=\"{}\"",
+        tenant,
+        session_id,
+        elapsed_ms,
+        response.regime,
+        response.anaphora_detected,
+        response.topic_shift,
+        history_len,
+        response.selected_indices.len(),
+        prompt_preview
+    );
 
     Ok(Json(response))
 }

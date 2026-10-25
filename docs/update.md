@@ -6,6 +6,24 @@ y la documentación técnica que lo describe.
 
 ---
 
+## 2026-10-25 · feat(logger,docs): subsistema de observabilidad estructurada en Rust y diagnóstico forense de cron jobs
+
+Implementación del módulo transversal de logging estructurado en Rust nativo (`src/shared/logger/mod.rs`), instrumentación completa del pipeline de predicción y documentación forense de selección de herramientas `scheduler`. Ver [configuracion.md](configuracion.md), [operacion.md](operacion.md), [arquitectura.md](arquitectura.md) y [diagnostico-fallo-cron-jobs.md](diagnostico-fallo-cron-jobs.md).
+
+- **Subsistema `src/shared/logger/mod.rs`**:
+  - `LoggerConfig::from_env()`: soporte para `LOGS_DIR` (default `logs`), `LOG_TO_FILE` (`true`), `LOG_FORMAT` (`text` | `json`) y `RUST_LOG` (`info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info`).
+  - `DualMakeWriter` y `DualWriter`: multiplexación `io::Write` que emite simultáneamente en `stdout` y en archivos rotativos diarios `logs/prediction-YYYY-MM-DD.log` (cálculo de fecha UTC sin dependencias externas mediante algoritmo civil de Howard Hinnant).
+  - Utilidades `preview_text()` (recorte seguro en fronteras de carácter UTF-8) y `format_scored_slice()`.
+- **Instrumentación Estructurada del Pipeline**:
+  - `[trace:recall]` (`src/support/registry/tool_cache.rs`): tamaño del catálogo, términos tokenizados y candidatos léxicos iniciales.
+  - `[trace:moe]` (`src/core/inference/moe.rs`): estado NLI dominante (`TRANSICION`, `CONTINUACION`, `CORRECCION`, `ABANDONO`), probabilidades por clase, probabilidad de abstención frente a umbral, `topic_shift` y pesos de los 6 expertos.
+  - `[profile:predict]` y `[trace:predict]` (`src/core/prediction/service.rs`): desglose de latencias por sub-etapa, herramientas ganadoras (`selected`), `top_candidates` con scores y `filtered_out` (herramientas descartadas con sus scores), además de alertas `WARN` ante `COLD_CATALOG`.
+  - `[trace:route]`, `[trace:memory_judge]`, `[trace:qdrant_search]`, `[trace:spatial]` y `[http:*]` (`src/api/predict_server.rs`).
+- **Diagnóstico Forense (`docs/diagnostico-fallo-cron-jobs.md`)**:
+  - Investigación empírica de la sesión `df08bb63-cf1e-41c1-9a2b-8c68100ed00c` documentando por qué `schedule_task` (`0.8336`, posición #16) y `schedule_list` (`0.8373`, posición #4) quedaron bajo el piso `adaptive_min_score = 0.84` y cómo interactuaron con `PlannerV8Service` y `AimcpV8Service`.
+
+---
+
 ## 2026-10-22 · docs: actualización exhaustiva de la estructura y arquitectura
 
 Actualización completa de la documentación estructural en [`docs/arquitectura.md`](arquitectura.md) y [`README.md`](../README.md) reflejando el estado actual del repositorio:

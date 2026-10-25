@@ -150,6 +150,25 @@ impl MoeStagesExecutor {
             active_experts = vec![0.0; 6];
         }
 
+        tracing::info!(
+            target: "prediction_trace",
+            "[trace:moe] tools_evaluated={} nli_dominant={} nli_probs=[TRANS={:.3}, CONT={:.3}, CORR={:.3}, ABAN={:.3}] abstencion_prob={:.4} (threshold={:.2}, abstain={}) topic_shift={:.4} experts={:?}",
+            ranked_scores.len(),
+            estado_dominante,
+            estado_probs[0],
+            estado_probs[1],
+            estado_probs[2],
+            estado_probs[3],
+            abstencion_prob,
+            self.abstencion_threshold,
+            debe_abstenerse,
+            topic_shift_score,
+            active_experts
+                .iter()
+                .map(|v| (v * 1000.0).round() / 1000.0)
+                .collect::<Vec<f32>>()
+        );
+
         Ok(MoeDecisionOutput {
             ranked_scores,
             estado_probs,

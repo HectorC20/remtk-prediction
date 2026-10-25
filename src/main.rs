@@ -25,6 +25,7 @@ use remtk_prediction_server::core::embedding::EmbeddingService;
 use remtk_prediction_server::core::inference::InferenceEngine;
 use remtk_prediction_server::core::prediction::PredictionService;
 use remtk_prediction_server::shared::config::AppConfig;
+use remtk_prediction_server::shared::logger::init_logger;
 use remtk_prediction_server::support::qdrant::QdrantService;
 use remtk_prediction_server::support::registry::TenantCache;
 use remtk_prediction_server::support::spatial::SpatialService;
@@ -34,17 +35,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 0. Cargar variables de entorno desde .env si existe
     dotenvy::dotenv().ok();
 
-    // 1. Inicializar observabilidad estructurada con tracing
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,remtk_prediction_server=debug".into()),
-        )
-        .init();
+    // 1. Inicializar observabilidad estructurada dual (consola + archivo rotativo diario en logs/)
+    let log_cfg = init_logger();
 
     info!("============================================================");
     info!("🚀 Iniciando remtk-prediction (Monolito Modular en Rust Nativo)");
     info!("============================================================");
+    info!(
+        "boot logger: dir={} file_enabled={} json_format={} filter=\"{}\"",
+        log_cfg.logs_dir.display(),
+        log_cfg.file_logging_enabled,
+        log_cfg.json_format,
+        log_cfg.env_filter
+    );
 
     // 2. Cargar configuración desde variables de entorno
     let config = Arc::new(AppConfig::from_env());

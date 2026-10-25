@@ -43,10 +43,14 @@ services:
       ONNX_MODEL_SIZE: small
       QDRANT_ENABLED: "true"
       QDRANT_URL: http://qdrant:6333
-      RUST_LOG: info
+      LOGS_DIR: /app/logs
+      LOG_TO_FILE: "true"
+      RUST_LOG: info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info
     volumes:
       # Modelos ONNX: bind mount de solo lectura para mmap compartido
       - ./models:/app/models:ro
+      # Archivos de log rotativos diarios (prediction-YYYY-MM-DD.log)
+      - ./logs:/app/logs
     deploy:
       resources:
         limits:

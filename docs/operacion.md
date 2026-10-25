@@ -132,23 +132,28 @@ docker run --rm -p 6776:6776 -p 6777:6777 -p 6775:6775 \
 
 `.dockerignore` excluye `node_modules`, `dist`, `models`, `tests`, `.git` y logs.
 
-## Logs y observabilidad
+## Logs y observabilidad (`src/shared/logger/mod.rs`)
 
-- Logger compacto con timestamp ISO: `2026-09-05T12:00:00.000Z [tag] mensaje`.
-- Cada línea se **persiste además en un archivo diario**
-  `logs/prediction-YYYY-MM-DD.log` (carpeta `LOGS_DIR` o `<cwd>/logs`, mejor
-  esfuerzo: si no puede escribir, sigue solo en consola). Ver
-  [configuracion.md](configuracion.md).
-- Tags principales: `[boot]`, `[embed]`, `[classifier]`, `[keywords]`, `[graph]`,
-  `[rerank]`, `[rerank:graph]`, `[recall]`, `[memory]`, `[tools]`, `[pipeline]`,
-  `[qdrant]`.
-- `GET http://localhost:6776/debug` expone:
-  - estado del engine (`size`, `modelPath` — `hash` si degradó),
-  - estadísticas acumuladas (tenants, confirmGets/Hits/Sets, embeddings
-    recomputados vs cacheados),
-  - las últimas 20 trazas de predicción (latencia, turno, recall, modelo, etc.).
-- En `dist/src/server.js` está el entry de producción; el paquete publica `dist`,
-  `models`, `README` y `LICENSE`.
+El servidor en Rust nativo incorpora un subsistema de observabilidad estructurada basado en `tracing` y `tracing-subscriber` (`init_logger()`):
+
+- **Escritura Dual (`DualMakeWriter` / `DualWriter`)**: cada evento de log se emite simultáneamente a `stdout` (para inspección con `docker logs remtk_prediction_rust`) y al archivo rotativo diario `logs/prediction-YYYY-MM-DD.log` (directorio configurable vía `LOGS_DIR`, activo por defecto con `LOG_TO_FILE=true`).
+- **Rotación Diaria sin Dependencias Pesadas**: `RotatingFileState` calcula la fecha UTC actual (`YYYY-MM-DD`) mediante el algoritmo civil de Howard Hinnant y rota automáticamente el descriptor de archivo al cambiar de día.
+- **Formato y Filtros (`RUST_LOG` y `LOG_FORMAT`)**:
+  - Por defecto usa el filtro `info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info`.
+  - Si se define `LOG_FORMAT=json`, emite objetos JSON estructurados por línea.
+- **Trazas Estructuradas del Pipeline**:
+  - `[trace:recall]` (`target: "prediction_trace"`): tamaño del catálogo del tenant, términos tokenizados de la consulta, cantidad de coincidencias léxicas no nulas y top-5 herramientas léxicas.
+  - `[trace:moe]` (`target: "prediction_trace"`): cantidad de herramientas evaluadas, estado NLI dominante (`TRANSICION`, `CONTINUACION`, `CORRECCION`, `ABANDONO`), vector de probabilidades NLI, `abstencion_prob` frente a `threshold`, `topic_shift` y pesos de activación de los 6 expertos.
+  - `[profile:predict]` (`target: "profiler"`): latencia total y desglose por sub-etapa (`recall`, `q_emb`, `query_tokens`, `ctx_tokens`, `assemble`, `moe`), tamaño del catálogo, candidatas evaluadas y herramientas ganadoras.
+  - `[trace:predict]` (`target: "prediction_trace"`): consulta e `keywords`, `min_score`, `gap_thresh`, lista `selected` de herramientas ganadoras, `top_candidates` con sus scores exactos y `filtered_out` con las herramientas descartadas por umbral o tope. Si el tenant no tiene herramientas indexadas en memoria, emite un `WARN` con `status=COLD_CATALOG`.
+  - `[trace:route]`, `[trace:memory_judge]`, `[trace:spatial]`, `[trace:qdrant_search]`: trazas detalladas de decisiones Fast-Path, juicio de memoria, predicción espacial y búsquedas en catálogo.
+  - `[http:predict]`, `[http:spatial_predict]`, `[http:predict_route]`, `[http:history_regime]` (`target: "http_trace"`): trazas de transporte HTTP con código de estado, latencia extremo a extremo y resumen de respuesta.
+- `GET http://localhost:6776/debug` (o `:6876/debug` en contenedor host) expone:
+  - `status`: `"healthy"`,
+  - `memory_rss_mb`: estimación de memoria RSS del proceso y tensores FP16,
+  - `active_tenants`: cantidad de tenants con catálogo cargado en `DashMap`,
+  - `total_cached_tools`: total de herramientas indexadas en memoria,
+  - `onnx_runtime_version`: `"1.20.1"`.
 
 ## Degradación esperada (comportamiento, no error)
 

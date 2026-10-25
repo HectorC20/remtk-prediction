@@ -111,6 +111,24 @@ impl ToolRegistry {
 
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         let effective_limit = limit.min(self.tools.len());
+        let nonzero_matches = scored.iter().filter(|(_, s)| *s > 0.0).count();
+        let top_lexical: Vec<String> = scored
+            .iter()
+            .take(5)
+            .filter(|(_, s)| *s > 0.0)
+            .map(|(idx, s)| format!("{}({:.1})", self.tools[*idx].metadata.name, s))
+            .collect();
+
+        tracing::info!(
+            target: "prediction_trace",
+            "[trace:recall] catalog_size={} terms={:?} nonzero_lexical={} limit={} top_lexical=[{}]",
+            self.tools.len(),
+            query_terms,
+            nonzero_matches,
+            effective_limit,
+            top_lexical.join(", ")
+        );
+
         scored.iter().take(effective_limit).map(|(idx, _)| *idx).collect()
     }
 }

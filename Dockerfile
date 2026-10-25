@@ -61,7 +61,9 @@ ENV PORT_PREDICT=6776
 ENV PORT_EMBED=6777
 ENV PORT_QDRANT=6775
 ENV MODELS_PATH=/app/models
-ENV RUST_LOG=info
+ENV LOGS_DIR=/app/logs
+ENV LOG_TO_FILE=true
+ENV RUST_LOG=info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info
 
 EXPOSE 6776 6777 6775
 

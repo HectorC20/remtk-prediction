@@ -104,23 +104,39 @@ Para arrancar los servidores HTTP: `node dist/src/server.js` (o `import "remtk-p
 
 ## Estructura del proyecto
 
-El repositorio organiza su código y recursos de forma modular. Para un desglose exhaustivo de dependencias y mapa detallado de ficheros, consulta [`docs/arquitectura.md`](docs/arquitectura.md).
+El repositorio organiza su código bajo el patrón de **Monolito Modular en Rust Nativo** (`api/`, `core/`, `support/`, `shared/`). Para un desglose exhaustivo de dependencias y mapa detallado de ficheros, consulta [`docs/arquitectura.md`](docs/arquitectura.md).
 
 ```
 remtk-prediction/
-├── src/            # Núcleo del servicio TypeScript (librería in-process y 3 listeners HTTP)
-│   ├── embedding/  # Motor ONNX (e5-small por defecto, e5-large a demanda) y API 6777
-│   ├── juicio/     # Capa cognitiva de juicio neuronal (NLI de estado, abstención, MaxSim, cross-encoder)
-│   ├── predict/    # Pipeline de predicción, enrutador DAG topológico, orquestador y API 6776
-│   ├── qdrant/     # Integración vectorial BM25 sparse con Qdrant y API 6775
-│   └── shared/     # Interfaces tipadas, constantes por subsistema, diccionarios y multitenancy
-├── bench/          # Batería de benchmarks de estrés, latencia y análisis empírico
-├── docs/           # Documentación técnica exhaustiva por subsistema
-├── models/         # Modelos de lenguaje ONNX locales optimizados INT8 y tokenizers
-├── scripts/        # Automatizaciones de ciclo de vida (Docker Qdrant, modelos ONNX) y métricas
-├── tests/          # Suite exhaustiva de tests unitarios, grafos DAG, E2E y escenarios adversariales
-├── logs/           # Registro diario de logs en ejecución (prediction-YYYY-MM-DD.log)
-└── AGENT.md        # Directiva arquitectónica obligatoria (razonamiento denso, prohibición de parches léxicos)
+├── src/                  # Monolito Modular en Rust Nativo (Tokio + Axum + ort v2)
+│   ├── main.rs           # Bootstrap concurrente (init_logger + 3 listeners TCP: 6776, 6777, 6775)
+│   ├── lib.rs            # Raíz de módulos del crate remtk-prediction-server
+│   ├── api/              # Capa de transporte HTTP (Axum) y trazabilidad [http:*]
+│   │   ├── predict_server.rs  # Puerto 6776 (/predict, /spatial/predict, /predict/route, /history/regime, /tools...)
+│   │   ├── embed_server.rs    # Puerto 6777 (/embed, /models, /health)
+│   │   ├── qdrant_server.rs   # Puerto 6775 (/tools/upsert, /tools/search, /status...)
+│   │   └── state.rs           # AppState compartido (Arc)
+│   ├── core/             # Dominio central e inferencia matemática pura (sin dependencias HTTP)
+│   │   ├── embedding/    # EmbeddingService (multilingual-e5-small 384d, L2 norm, [profile:embed])
+│   │   ├── inference/    # InferenceEngine (ort v2 mmap), MoE 3 etapas ([trace:moe]) y E5Tokenizer
+│   │   └── prediction/   # PredictionService, umbral adaptativo, Fast-Path y trazas ([trace:predict], [trace:route])
+│   ├── support/          # Capacidades de soporte e infraestructura en memoria
+│   │   ├── registry/     # TenantCache (DashMap), tensores FP16 y recall léxico ([trace:recall])
+│   │   ├── qdrant/       # QdrantService ([profile:qdrant_upsert], [trace:qdrant_search])
+│   │   └── spatial/      # SpatialService ([trace:spatial])
+│   └── shared/           # Capa transversal: config, logger dual, DTOs Serde, errores y tensores SIMD
+│       ├── config/       # AppConfig tipado desde variables de entorno
+│       ├── logger/       # LoggerConfig + DualMakeWriter (stdout + logs/prediction-YYYY-MM-DD.log)
+│       ├── dto/          # Contratos JSON Serde 1:1
+│       ├── error/        # AppError (thiserror)
+│       └── tensor/       # Operaciones vectoriales SIMD (cosine, L2, FP16 <-> FP32)
+├── docs/                 # Documentación técnica exhaustiva y diagnósticos forenses
+├── migration/            # Especificación arquitectónica y skill operativo de la migración a Rust
+├── models/               # Modelos ONNX locales optimizados (multilingual-e5-small-onnx, remtk-juicio-moe-int8)
+├── scripts/              # Automatizaciones de ciclo de vida y evaluación
+├── training/             # Pipelines de destilación y exportación ONNX del cabezal MoE
+├── logs/                 # Registro rotativo diario de logs en ejecución (prediction-YYYY-MM-DD.log)
+└── AGENT.md              # Directiva arquitectónica obligatoria (razonamiento denso, prohibición de parches léxicos)
 ```
 
 ---
@@ -129,24 +145,26 @@ remtk-prediction/
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `PORT_PREDICT` | `6776` | Puerto de predicción |
-| `PORT_EMBED` | `6777` | Puerto de modelos |
-| `PORT_QDRANT` | `6775` | Puerto Qdrant |
-| `ONNX_ENABLED` | `true` | Cargar modelos ONNX (si `false` usa fallback hash) |
-| `ONNX_MODELS_PATH` | `./models` → `../models` | Carpeta de los modelos |
-| `ONNX_ADAPTIVE_MIN_TOOLS` | `2` | Mínimo de tools del umbral adaptativo |
-| `ONNX_ADAPTIVE_MAX_TOOLS` | `30` | Máximo de tools del umbral adaptativo |
-| `ONNX_ADAPTIVE_GAP_THRESHOLD` | `0.03` | Gap natural para cortar el ranking (escala de coseno e5-small) |
-| `ONNX_ADAPTIVE_MIN_SCORE` | `0.8` | Score mínimo aceptado (coseno semántico) |
-| `KEYWORD_BOOST` | `0.15` | Refuerzo sumado por confirm léxica de Qdrant (BM25, normalizada) |
-| `KEYWORD_TOP_K` | `20` | Tamaño del top-K tras la reducción cross-idioma (capa 2) |
-| `QDRANT_ENABLED` | `true` | Habilitar recall BM25 en Qdrant |
-| `QDRANT_URL` | `http://localhost:6333` | URL del Qdrant |
-| `QDRANT_API_KEY` | *(vacío)* | API key opcional |
-| `RECALL_LIMIT` | `50` | Límite de recall por consulta |
-| `PREDICT_WARMUP_WAIT_MS` | `15000` | Espera máxima de `/predict` al warm-up en vuelo de un catálogo recién registrado (rango `0-60000`; `0` → degrada de inmediato a la ruta plana) |
-| `MAX_CATEGORIES` | `60` | Tope de **categorías** (`group`) que alimentan el decisor de herramientas (etapa A) |
-| `MAX_OUTPUT_TOOLS` | `150` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo (rango `0-150`; `0` → nunca devolver herramientas) |
+| `PORT_PREDICT` | `6776` (o `6876` en contenedor host) | Puerto HTTP de predicción y juicio MoE |
+| `PORT_EMBED` | `6777` (o `6877` en contenedor host) | Puerto HTTP de modelos de embeddings |
+| `PORT_QDRANT` | `6775` (o `6875` en contenedor host) | Puerto HTTP de indexado y recall Qdrant |
+| `MODELS_PATH` / `ONNX_MODELS_PATH` | `models` | Ruta a la carpeta con los modelos ONNX (`multilingual-e5-small-onnx`, `remtk-juicio-moe-int8`) |
+| `ONNX_MODEL_SIZE` | `small` | Tamaño del modelo de embeddings (`small`, 384 dimensiones) |
+| `ONNX_INTRA_OP_THREADS` | `4` | Hilos intra-op de ONNX Runtime (SIMD AVX2) |
+| `ONNX_INTER_OP_THREADS` | `1` | Hilos inter-op de ONNX Runtime |
+| `ONNX_ADAPTIVE_MIN_SCORE` | `0.84` | Piso mínimo de relevancia para herramientas ganadoras (`src/shared/config/mod.rs`) |
+| `ONNX_ADAPTIVE_GAP_THRESHOLD` | `0.03` | Brecha natural (`gap`) para cortar el ranking adaptativo |
+| `ABSTENCION_THRESHOLD` | `0.52` | Umbral de probabilidad de abstención del cabezal MoE para retorno nulo (`0 tools`) |
+| `KEYWORD_BOOST` | `0.05` | Refuerzo por coincidencia de keywords internas |
+| `NAME_AFFINITY_BOOST` | `0.08` | Refuerzo por afinidad léxica en el nombre de la herramienta (tope `0.15`) |
+| `FAMILY_GATE_PENALTY` | `0.15` | Penalización por familia o namespace ajeno |
+| `RECALL_LIMIT` | `20` | Límite máximo de herramientas candidatas recuperadas en la fase de recall |
+| `MAX_OUTPUT_TOOLS` | `8` | Tope máximo de herramientas devueltas tras el umbral adaptativo |
+| `MAX_CATEGORIES` | `6` | Tope máximo de categorías activas evaluadas en el juicio |
+| `LOGS_DIR` | `logs` | Directorio donde `DualMakeWriter` persiste los logs rotativos diarios `prediction-YYYY-MM-DD.log` |
+| `LOG_TO_FILE` | `true` | Habilita/deshabilita la escritura simultánea en archivo rotativo diario (`false` o `0` para solo consola) |
+| `LOG_FORMAT` | `text` | Formato de salida del logger (`json` para JSON estructurado línea por línea; texto compacto por defecto) |
+| `RUST_LOG` | `info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info` | Filtro `EnvFilter` por nivel y target (`prediction_trace`, `http_trace`, `profiler`, `remtk_prediction_server`) |
 
 > Las colecciones de Qdrant (`mcp_tools`, `tool_keywords`, `query_synonyms`,
 > `contextual_memories`) son **constantes fijas** del código

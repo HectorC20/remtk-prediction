@@ -45,12 +45,55 @@ Si en el futuro una prueba o caso de uso no selecciona la herramienta adecuada:
 
 1. **NO añadas un `if (query.includes(...))`**.
 2. **NO crees un array de keywords**.
-3. **Inspecciona las representaciones**:
-   - ¿Está el esquema de entrada (`inputSchema`) definiendo claramente las propiedades requeridas?
-   - ¿Tienen las herramientas descripciones semánticas ricas que expliquen su rol funcional?
-   - ¿Están declaradas las aristas `prerequisites` o `conflicts` en el grafo $G=(V, E)$?
-   - ¿La profundidad de candidatos ($K$) de Fase 1 es suficiente para el tamaño del catálogo?
-   - ¿El Cross-Encoder de Fase 2 está calibrado para ponderar adecuadamente la atención cruzada?
+3. **Inspecciona las representaciones y trazas estructuradas (`src/shared/logger/`)**:
+   - Revisa en consola o en el archivo rotativo diario `logs/prediction-YYYY-MM-DD.log` las trazas por etapa:
+     - `[trace:recall]`: tamaño del catálogo, términos tokenizados y candidatos léxicos iniciales (`ToolRegistry::retrieve_candidates`).
+     - `[trace:moe]`: estado NLI dominante (`TRANSICION`, `CONTINUACION`, `CORRECCION`, `ABANDONO`), probabilidades por clase, probabilidad de abstención (`abstencion_prob` vs `threshold`), `topic_shift` y pesos de los 6 expertos.
+     - `[trace:predict]`: herramientas ganadoras (`selected`), `top_candidates` con sus scores exactos y `filtered_out` (herramientas descartadas por el piso `adaptive_min_score` o el corte `max_output_tools` / `gap_threshold`).
+     - `[profile:predict]` y `[http:predict]`: desglose de latencias por sub-etapa (`recall`, `q_emb`, `query_tokens`, `ctx_tokens`, `assemble`, `moe`).
+   - ¿Está el esquema de entrada (`inputSchema`) definiendo claramente las propiedades requeridas y está su vocabulario funcional reflejado en `description` e `intentSummary`?
+   - ¿Tienen las herramientas descripciones semánticas ricas que expliquen su rol funcional sin depender de términos únicamente escondidos en propiedades internas del schema?
+   - ¿Están declaradas las aristas `prerequisites` o `conflicts` en el grafo $G=(V, E)$ y las clausuras de familia correspondientes?
+   - ¿La profundidad de candidatos ($K$) de Fase 1 (`RECALL_LIMIT`) es suficiente para el tamaño del catálogo?
+   - ¿El cabezal MoE (`remtk-juicio-moe-int8`) de Fase 2 está calibrado e integrado en el score final de ranking?
+
+---
+
+## 4. 📁 Estructura Modular Canónica (Rust Nativo)
+
+```
+remtk-prediction/
+├── src/
+│   ├── main.rs                          # Bootstrap Tokio, init_logger() y 3 listeners Axum (6776/6777/6775)
+│   ├── lib.rs                           # Raíz de librería del monolito modular
+│   ├── api/                             # Capa de transporte HTTP (Axum) y trazas [http:*]
+│   │   ├── mod.rs
+│   │   ├── state.rs                     # AppState compartido (Arc)
+│   │   ├── predict_server.rs            # Puerto 6776 (/predict, /spatial/predict, /predict/route, /history/regime, /tools...)
+│   │   ├── embed_server.rs              # Puerto 6777 (/embed, /models, /health)
+│   │   └── qdrant_server.rs             # Puerto 6775 (/tools/upsert, /tools/search, /status...)
+│   ├── core/                            # Dominio central e inferencia matemática pura (sin dependencias HTTP)
+│   │   ├── embedding/service.rs         # EmbeddingService (e5-small 384d, L2 norm, [profile:embed])
+│   │   ├── inference/
+│   │   │   ├── engine.rs                # InferenceEngine (sesiones ort v2 con mmap)
+│   │   │   ├── moe.rs                   # Cabezal MoE 3 etapas y trazas [trace:moe]
+│   │   │   └── tokenizer.rs             # E5Tokenizer (prefijos query: / passage:)
+│   │   └── prediction/service.rs        # PredictionService, umbral adaptativo, Fast-Path y trazas [trace:predict]
+│   ├── support/                         # Capacidades de soporte e infraestructura en memoria
+│   │   ├── registry/tool_cache.rs       # TenantCache (DashMap), tensores FP16 y recall [trace:recall]
+│   │   ├── qdrant/qdrant_service.rs     # QdrantService ([profile:qdrant_upsert], [trace:qdrant_search])
+│   │   └── spatial/spatial_service.rs   # SpatialService ([trace:spatial])
+│   └── shared/                          # Capa transversal (Config, Logger, DTOs, Errores, Tensores)
+│       ├── config/mod.rs                # AppConfig desde variables de entorno
+│       ├── logger/mod.rs                # LoggerConfig, DualMakeWriter (stdout + logs/prediction-YYYY-MM-DD.log)
+│       ├── dto/mod.rs                   # Contratos Serde 1:1
+│       ├── error/mod.rs                 # AppError (thiserror -> Axum IntoResponse)
+│       └── tensor/mod.rs                # Operaciones SIMD (cosine, L2, FP16 <-> FP32)
+├── docs/                                # Documentación técnica y diagnósticos forenses
+├── logs/                                # Logs rotativos diarios (prediction-YYYY-MM-DD.log)
+├── migration/                           # Especificación de arquitectura Rust y guías operativas
+└── models/                              # Modelos ONNX (multilingual-e5-small-onnx, remtk-juicio-moe-int8)
+```
 
 ---
 

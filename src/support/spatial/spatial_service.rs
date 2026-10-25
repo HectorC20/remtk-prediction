@@ -2,6 +2,7 @@ use std::time::Instant;
 use serde_json::json;
 use crate::shared::dto::{SpatialPredictDto, VisualToolPayload};
 use crate::shared::error::AppError;
+use crate::shared::logger::preview_text;
 
 /// Servicio de soporte para predicción sobre lienzo espacial interactivo.
 pub struct SpatialService;
@@ -33,11 +34,23 @@ impl SpatialService {
             ("spatial_inspect_canvas", json!({"query": payload.query}), 0.85f32)
         };
 
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        tracing::info!(
+            target: "prediction_trace",
+            "[trace:spatial] tool={} confidence={:.2} elapsed={}ms cursor={:?} selected_id={:?} query=\"{}\"",
+            tool,
+            conf,
+            elapsed_ms,
+            payload.cursor,
+            payload.selected_id,
+            preview_text(&payload.query, 90)
+        );
+
         Ok(VisualToolPayload {
             tool: tool.to_string(),
             parameters: params,
             confidence: conf,
-            execution_time_ms: start.elapsed().as_millis() as u64,
+            execution_time_ms: elapsed_ms,
         })
     }
 }

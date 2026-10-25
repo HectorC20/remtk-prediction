@@ -36,9 +36,10 @@ estado de sesión), manteniendo el fallback plano por keywords.
 | [qdrant.md](qdrant.md) | Integración con Qdrant: colecciones, BM25 sparse (djb2 client-side), IDs uuidv5, sinónimos, RAKE y blend 60/40. |
 | [api-http.md](api-http.md) | Referencia de endpoints HTTP de los puertos 6776, 6777 y 6775. |
 | [entrenamiento-prediccion.md](entrenamiento-prediccion.md) | **Propuesta**: capa de aprendizaje léxico incremental por canal (scope), disparada al registrar herramientas y aislada por usuario. |
-| [configuracion.md](configuracion.md) | Variables de entorno, valores por defecto y resolución de la ruta de modelos. |
-| [operacion.md](operacion.md) | Arranque, uso como librería, Docker, tests, logs y observabilidad. |
-| [update.md](update.md) | Registro de las actualizaciones recientes (refactor NestJS, grafo topológico, logging a archivo). |
+| [configuracion.md](configuracion.md) | Variables de entorno (`AppConfig` y `LoggerConfig`), targets `RUST_LOG` y resolución de modelos. |
+| [operacion.md](operacion.md) | Arranque, Docker, tests, logger dual (`src/shared/logger/mod.rs`) y trazas de observabilidad (`[trace:*]`, `[profile:*]`, `[http:*]`). |
+| [diagnostico-fallo-cron-jobs.md](diagnostico-fallo-cron-jobs.md) | **Diagnóstico forense**: análisis de causa raíz de fallos de predicción en herramientas `scheduler` (`schedule_task` y `schedule_list`) y planificador V8. |
+| [update.md](update.md) | Registro de las actualizaciones recientes (logger estructurado en Rust, diagnóstico forense de cron jobs, monolito modular). |
 
 ## En 30 segundos
 

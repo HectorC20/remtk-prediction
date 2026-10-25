@@ -29,6 +29,7 @@ flowchart TD
 
     subgraph SharedLayer["Capa Transversal (shared/)"]
         Config["shared/config/\n• AppConfig"]
+        Logger["shared/logger/\n• LoggerConfig + DualMakeWriter"]
         Error["shared/error/\n• AppError (thiserror)"]
         Tensor["shared/tensor/\n• Utilidades Zero-Copy"]
         DTO["shared/dto/\n• Contratos Serde"]
@@ -77,6 +78,7 @@ Provee servicios que apoyan al dominio central, gestionando la memoria física y
 
 ### 2.3. `shared/`: Tipos Transversales y Contratos
 * **`shared/config/`:** `AppConfig` fuertemente tipado con lectura desde variables de entorno y fallbacks idénticos a los del entorno TypeScript.
+* **`shared/logger/`:** `LoggerConfig`, `DualMakeWriter` y `DualWriter` basados en `tracing-subscriber` para escritura simultánea en `stdout` y archivo rotativo diario (`logs/prediction-YYYY-MM-DD.log`), con filtros por target (`prediction_trace`, `http_trace`, `profiler`, `remtk_prediction_server`).
 * **`shared/error/`:** `AppError` gobernado por `thiserror` con conversión limpia a códigos HTTP y JSON estándar.
 * **`shared/tensor/`:** Funciones de vectorización SIMD para normalización L2, similitud coseno y conversiones FP16 $\leftrightarrow$ FP32.
 * **`shared/dto/`:** Estructuras Serde de entrada y salida para todos los contratos JSON.

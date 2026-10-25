@@ -20,6 +20,7 @@ Antes de ejecutar cualquier comando o cambio de código, consulta los documentos
 | **Gestión Zero-Copy** | `migration/architecture/arquitectura_02_gestion_memoria_y_zero_copy.md` | ArrayView, DashMap multi-tenant y compresión FP16. |
 | **Pipeline MoE** | `migration/architecture/arquitectura_03_pipeline_moe_y_e5.md` | Pipeline 2 llamadas: e5-small tokens + MoE de 3 etapas. |
 | **Contratos HTTP** | `migration/architecture/arquitectura_04_contratos_http_y_serializacion.md` | DTOs Serde, manejo de errores thiserror y Json handlers. |
+| **Monolito Modular** | `migration/architecture/arquitectura_05_monolito_modular.md` | Estructura `api/`, `core/`, `support/`, `shared/` y logger dual (`shared/logger/mod.rs`). |
 | **Cargo y rustc** | `migration/guide/guia_01_cargo_setup_y_optimizaciones.md` | Cargo.toml, fat LTO, codegen-units=1 y flags AVX2. |
 | **Docker Ultraligero** | `migration/guide/guia_02_despliegue_docker_ultraligero.md` | Imagen distroless (< 45 MB), no-root y docker-compose. |
 
@@ -65,8 +66,10 @@ Antes de ejecutar cualquier comando o cambio de código, consulta los documentos
 - [ ] Implementar la función de ensamblado de tensores de candidatas (`assemble_candidate_tensor`) y medir en benchmark que tome menos de $0.05\text{ ms}$.
 - [ ] Inicializar el `Arc<DashMap<TenantId, Arc<ToolRegistry>>>` global en `AppState`.
 
-### Paso 4: Construcción del Servidor Axum Multi-Puerto
-- [ ] Configurar el router del Puerto 6776 (`/predict`, `/spatial/predict`, `/predict/route`, `/tools`, `/health`).
+### Paso 4: Construcción del Servidor Axum Multi-Puerto y Observabilidad Dual
+- [ ] Inicializar `init_logger()` (`src/shared/logger/mod.rs`) con `DualMakeWriter` para emitir logs simultáneamente en `stdout` y en archivos rotativos diarios (`logs/prediction-YYYY-MM-DD.log`).
+- [ ] Configurar `RUST_LOG="info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info"` para activar las trazas `[trace:recall]`, `[trace:moe]`, `[trace:predict]`, `[trace:route]`, `[trace:spatial]`, `[trace:qdrant_search]` y `[http:*]`.
+- [ ] Configurar el router del Puerto 6776 (`/predict`, `/spatial/predict`, `/predict/route`, `/history/regime`, `/tools`, `/health`).
 - [ ] Configurar el router del Puerto 6777 (`/embed`, `/models`, `/health`).
 - [ ] Configurar el router del Puerto 6775 (`/tools/upsert`, `/tools/search`, `/health`, `/status`).
 - [ ] Probar el arranque concurrente con `tokio::select!` y verificar que los tres puertos escuchen peticiones en paralelo.

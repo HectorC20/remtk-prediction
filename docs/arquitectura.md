@@ -83,24 +83,88 @@ cfg ──► EmbeddingEngineService ──────────┐
 
 ---
 
-## Estructura global del repositorio
+## Estructura global del repositorio (Monolito Modular en Rust Nativo)
 
-El repositorio se divide en módulos funcionales y directorios de soporte:
+El repositorio está estructurado como un **Monolito Modular en Rust Nativo** (`Tokio` + `Axum` + `ort v2` + `tokenizers`), conservando la referencia histórica de migración en `migration/`:
 
 ```
 remtk-prediction/
-├── bench/         # Benchmarks de rendimiento, precisión de intención y pruebas de estrés
-├── docs/          # Documentación técnica exhaustiva por subsistema
-├── models/        # Modelos neuronales ONNX (e5-small, e5-large) y tokenizers
-├── scripts/       # Automatizaciones de verificación de infraestructura, docker y métricas
-├── src/           # Código fuente modular en TypeScript (librería y servidor)
-├── tests/         # Batería de pruebas unitarias, grafos DAG, e2e, calibración y casos adversariales
-├── logs/          # Archivos de log diarios generados en runtime (prediction-YYYY-MM-DD.log)
-├── AGENT.md       # Directiva arquitectónica obligatoria (prohibición de parches léxicos)
-├── package.json   # Dependencias, scripts de prueba/benchmark y metadatos
-├── tsconfig.json  # Configuración del compilador TypeScript
-└── README.md      # Resumen general del servicio, arranque, contratos HTTP y uso como librería
+├── src/                  # Código fuente modular en Rust (api, core, support, shared)
+├── docs/                 # Documentación técnica exhaustiva y diagnósticos forenses
+├── migration/            # Especificación arquitectónica, planes y guías operativas de Rust
+├── models/               # Modelos neuronales ONNX (multilingual-e5-small-onnx, remtk-juicio-moe-int8)
+├── scripts/              # Automatizaciones de verificación de infraestructura y evaluación
+├── training/             # Pipelines de destilación y exportación del modelo MoE
+├── logs/                 # Archivos de log rotativos diarios en runtime (prediction-YYYY-MM-DD.log)
+├── AGENT.md              # Directiva arquitectónica obligatoria (prohibición de parches léxicos)
+├── Cargo.toml            # Manifiesto de dependencias y perfil release (fat LTO)
+├── Dockerfile            # Build multi-stage (rust:bookworm -> debian:bookworm-slim + libonnxruntime 1.20.1)
+├── docker-compose.yml    # Orquestación de Qdrant y contenedor Rust
+└── README.md             # Resumen general del servicio, arranque y contratos HTTP
 ```
+
+### Mapa detallado del Monolito Modular en Rust (`src/`)
+
+```
+src/
+├── main.rs                    # Bootstrap Tokio, init_logger() y arranque concurrente de 3 puertos (6776, 6777, 6775)
+├── lib.rs                     # Raíz de librería del crate remtk-prediction-server
+│
+├── api/                       # Capa de Transporte HTTP (Axum + Tower) y trazabilidad [http:*]
+│   ├── mod.rs                 # Constructores de routers y stack de middlewares (TraceLayer, CorsLayer)
+│   ├── state.rs               # AppState compartido mediante punteros atómicos Arc
+│   ├── predict_server.rs      # Puerto 6776 (/predict, /spatial/predict, /predict/route, /history/regime, /tools, /debug...)
+│   ├── embed_server.rs        # Puerto 6777 (/embed, /models, /health)
+│   └── qdrant_server.rs       # Puerto 6775 (/tools/upsert, /tools/search, /tools/count, /tools/synonyms, /status, /health)
+│
+├── core/                      # Dominio Central e Inferencia Matemática Pura (cero dependencias HTTP)
+│   ├── mod.rs
+│   ├── embedding/
+│   │   ├── mod.rs
+│   │   └── service.rs         # EmbeddingService: inferencia e5-small (384d), mean-pooling + L2 y [profile:embed]
+│   ├── inference/
+│   │   ├── mod.rs
+│   │   ├── engine.rs          # InferenceEngine: sesiones ort v2 respaldadas por mmap (e5-small + MoE INT8)
+│   │   ├── moe.rs             # Cabezal decisor MoE de 3 etapas (NLI, 6 expertos, abstención) y [trace:moe]
+│   │   └── tokenizer.rs       # E5Tokenizer con disciplina estricta de prefijos "query: " y "passage: "
+│   └── prediction/
+│       ├── mod.rs
+│       └── service.rs         # PredictionService: orquestación de recall, MoE, umbral adaptativo, Fast-Path,
+│                              # evaluación de régimen de historial y trazas [profile:predict], [trace:predict], [trace:route]
+│
+├── support/                   # Capacidades de Soporte e Infraestructura en Memoria
+│   ├── mod.rs
+│   ├── registry/
+│   │   ├── mod.rs
+│   │   └── tool_cache.rs      # TenantCache (DashMap), almacenamiento de tokens en FP16 (half::f16),
+│   │                          # ensamblado Zero-Copy Array3<f32> y recall léxico con [trace:recall]
+│   ├── qdrant/
+│   │   ├── mod.rs
+│   │   └── qdrant_service.rs  # QdrantService: indexación de herramientas ([profile:qdrant_upsert]) y búsqueda ([trace:qdrant_search])
+│   └── spatial/
+│       ├── mod.rs
+│       └── spatial_service.rs # SpatialService: predicción de coordenadas e interacciones visuales ([trace:spatial])
+│
+└── shared/                    # Capa Transversal: Configuración, Observabilidad, Contratos, Errores y Tensores
+    ├── mod.rs
+    ├── config/
+    │   └── mod.rs             # AppConfig: lectura tipada de variables de entorno y umbrales matemáticos
+    ├── logger/
+    │   └── mod.rs             # LoggerConfig, DualMakeWriter / DualWriter (stdout + rotación diaria en logs/prediction-YYYY-MM-DD.log),
+    │                          # preview_text() y format_scored_slice()
+    ├── dto/
+    │   └── mod.rs             # Estructuras Serde de entrada/salida compatibles 1:1 con los clientes HTTP
+    ├── error/
+    │   └── mod.rs             # AppError (thiserror) con conversión directa a respuestas HTTP de Axum
+    └── tensor/
+        └── mod.rs             # Funciones vectorizadas SIMD (similitud coseno, normalización L2, conversiones FP16/FP32)
+```
+
+---
+
+## Referencia Histórica (Arquitectura TypeScript Previa)
+
+El desglose inferior documenta la topología original en TypeScript a partir de la cual se diseñó la paridad 1:1 del servidor Rust:
 
 | Directorio | Propósito y Contenido |
 |---|---|

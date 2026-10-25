@@ -9,6 +9,7 @@ use crate::shared::dto::{
     JudgeMemoryResponse, PredictRequest, PredictResponse, RankedToolScore,
 };
 use crate::shared::error::AppError;
+use crate::shared::logger::{format_scored_slice, preview_text};
 use crate::shared::tensor::cosine_similarity_normalized;
 use crate::support::registry::TenantCache;
 
@@ -48,6 +49,13 @@ impl PredictionService {
         let registry = match registry_guard {
             Some(ref r) => r.clone(),
             None => {
+                tracing::warn!(
+                    target: "prediction_trace",
+                    "[trace:predict] tenant={} session={} status=COLD_CATALOG prompt=\"{}\"",
+                    payload.tenant,
+                    payload.session_id,
+                    preview_text(&payload.text, 100)
+                );
                 // Catálogo frío / no registrado
                 return Ok(PredictResponse {
                     tools: vec![],
@@ -61,6 +69,13 @@ impl PredictionService {
         };
 
         if registry.count() == 0 {
+            tracing::warn!(
+                target: "prediction_trace",
+                "[trace:predict] tenant={} session={} status=EMPTY_CATALOG prompt=\"{}\"",
+                payload.tenant,
+                payload.session_id,
+                preview_text(&payload.text, 100)
+            );
             return Ok(PredictResponse {
                 tools: vec![],
                 complexity: "empty_catalog".to_string(),
@@ -172,10 +187,26 @@ impl PredictionService {
 
         let total_elapsed = t_start.elapsed();
 
+        let top_candidates: Vec<(String, f32)> = ranked
+            .iter()
+            .take(8)
+            .map(|r| (r.name.clone(), r.score))
+            .collect();
+
+        let winning_set: std::collections::HashSet<&str> =
+            winning_tools.iter().map(|s| s.as_str()).collect();
+        let filtered_out: Vec<(String, f32)> = ranked
+            .iter()
+            .filter(|r| !winning_set.contains(r.name.as_str()))
+            .take(8)
+            .map(|r| (r.name.clone(), r.score))
+            .collect();
+
         tracing::info!(
             target: "profiler",
-            "[profile:predict] tenant={} total={:.2}ms (recall={:.2}ms q_emb={:.2}ms query_tokens={:.2}ms ctx_tokens={:.2}ms assemble={:.2}ms moe={:.2}ms) candidates={} winning={} nli={}",
+            "[profile:predict] tenant={} session={} total={:.2}ms (recall={:.2}ms q_emb={:.2}ms query_tokens={:.2}ms ctx_tokens={:.2}ms assemble={:.2}ms moe={:.2}ms) catalog={} candidates={} winning={} nli={} topic_shift={:.3} abstain={}",
             payload.tenant,
+            payload.session_id,
             total_elapsed.as_secs_f64() * 1000.0,
             d_recall.as_secs_f64() * 1000.0,
             d_query_emb.as_secs_f64() * 1000.0,
@@ -183,9 +214,26 @@ impl PredictionService {
             d_ctx_tokens.as_secs_f64() * 1000.0,
             d_assemble.as_secs_f64() * 1000.0,
             d_moe.as_secs_f64() * 1000.0,
+            registry.count(),
             candidate_indices.len(),
             winning_tools.len(),
-            moe_output.estado_dominante
+            moe_output.estado_dominante,
+            moe_output.topic_shift_score,
+            moe_output.debe_abstenerse
+        );
+
+        tracing::info!(
+            target: "prediction_trace",
+            "[trace:predict] session={} source={} prompt=\"{}\" keywords={:?} min_score={:.2} gap_thresh={:.2} selected={:?} top_candidates={} filtered_out={}",
+            payload.session_id,
+            payload.source,
+            preview_text(&payload.text, 120),
+            payload.keywords,
+            self.config.adaptive_min_score,
+            self.config.adaptive_gap_threshold,
+            winning_tools,
+            format_scored_slice(&top_candidates, 8),
+            format_scored_slice(&filtered_out, 8)
         );
 
         Ok(PredictResponse {
@@ -246,7 +294,7 @@ impl PredictionService {
         let has_plan = input.has_pending_plan.unwrap_or(false);
         let tokens_saved = input.average_planner_tokens.unwrap_or(2500);
 
-        if input.tools.is_empty() && !has_plan {
+        let decision = if input.tools.is_empty() && !has_plan {
             FastPathDecision {
                 action: "DIRECT_CHAT".to_string(),
                 skip_planner: true,
@@ -278,7 +326,20 @@ impl PredictionService {
                 direct_tool: None,
                 suggested_chat_context: None,
             }
-        }
+        };
+
+        tracing::info!(
+            target: "prediction_trace",
+            "[trace:route] action={} skip_planner={} tools_count={} direct_tool={:?} tokens_saved={} prompt=\"{}\"",
+            decision.action,
+            decision.skip_planner,
+            input.tools.len(),
+            decision.direct_tool,
+            decision.estimated_tokens_saved,
+            preview_text(&input.text, 100)
+        );
+
+        decision
     }
 
     /// POST /interest: Score semántico de interés del turno contra anclas y arquetipo comercial.
@@ -401,6 +462,13 @@ impl PredictionService {
         }
 
         let is_noise = max_score >= 0.82;
+        tracing::debug!(
+            target: "prediction_trace",
+            "[trace:memory_judge] is_noise={} noise_score={:.4} text=\"{}\"",
+            is_noise,
+            max_score,
+            preview_text(clean_text, 80)
+        );
         Ok(JudgeMemoryResponse {
             is_noise,
             noise_score: max_score,

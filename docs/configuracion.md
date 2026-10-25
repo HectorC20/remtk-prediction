@@ -1,36 +1,52 @@
 # Configuración
 
-Toda la configuración se lee de **variables de entorno** en `src/config.ts`
-(`loadConfig(env?)`). Si una variable falta o está vacía, se usa su **default**.
-Los helpers `int/float/bool` validan y caen al default si el valor no es numérico
-/ booleano válido.
+Toda la configuración del servidor en Rust nativo se lee desde **variables de entorno** en Dos estructuras complementarias al arrancar (`src/main.rs`):
 
-## Variables y valores por defecto
+1. **`LoggerConfig::from_env()` (`src/shared/logger/mod.rs`)**: configura la observabilidad estructurada dual (`stdout` + archivo rotativo diario `logs/prediction-YYYY-MM-DD.log`).
+2. **`AppConfig::from_env()` (`src/shared/config/mod.rs`)**: carga y valida con fallbacks tipados los puertos TCP, rutas de modelos ONNX, hilos de inferencia y umbrales matemáticos del pipeline.
 
-| Variable | Default | Descripción |
+## 1. Variables de Entorno de Negocio e Inferencia (`AppConfig`)
+
+| Variable | Default (`AppConfig`) | Descripción |
 |---|---|---|
-| `PORT_PREDICT` (o `PORT`) | `6776` | Puerto del API de predicción. |
-| `PORT_EMBED` | `6777` | Puerto del API de modelos. |
-| `PORT_QDRANT` | `6775` | Puerto del API de Qdrant. |
-| `ONNX_ENABLED` | `true` | Cargar modelos ONNX. `false` → fallback hash siempre. |
-| `ONNX_MODELS_PATH` | resolución automática | Carpeta con los modelos ONNX (ver árbol abajo). |
-| `KEYWORD_BOOST` | `0.15` | Refuerzo sumado por confirmación léxica BM25 en la fusión (capa 3). |
-| `KEYWORD_TOP_K` | `20` | Tamaño del top-K tras la reducción cross-idioma (capa 2). |
-| `ONNX_ADAPTIVE_MIN_TOOLS` | `2` | Mínimo de tools garantizadas por el umbral adaptativo. |
-| `ONNX_ADAPTIVE_MAX_TOOLS` | `30` | Techo de exploración del gap adaptativo. |
-| `ONNX_ADAPTIVE_GAP_THRESHOLD` | `0.03` | Gap natural para cortar el ranking (escala coseno e5-small). |
-| `ONNX_ADAPTIVE_MIN_SCORE` | `0.8` | Piso de relevancia: si el mejor coseno no lo supera → 0 tools. |
-| `QDRANT_ENABLED` | `true` | Habilitar la capa Qdrant (recall BM25). |
-| `QDRANT_URL` | `http://localhost:6333` | URL del Qdrant externo. |
-| `QDRANT_API_KEY` | *(vacío)* | API key opcional (cabecera `api-key`). |
-| `RECALL_LIMIT` | `50` | Límite de recall BM25 usado por el orquestador en `/predict`. |
-| `PREDICT_WARMUP_WAIT_MS` | `15000` | Tiempo máximo que `/predict` espera el warm-up en vuelo (embeddings + grafo) de un catálogo recién registrado antes de degradar a la ruta plana. Rango permitido `0–60000`; `0` → nunca espera. El consumidor bien comportado llama `GET /tools/ready` después de `POST /tools`, que no tiene esta cota. |
-| `MAX_OUTPUT_TOOLS` | `50` | *(Opcional)* Tope final de tools de salida tras el umbral adaptativo. Rango permitido `0–50`; `0` → nunca devolver herramientas. |
-| `LOGS_DIR` | `<cwd>/logs` | *(Opcional)* Carpeta de logs diarios `prediction-YYYY-MM-DD.log`. **No pasa por `loadConfig`**: el logger la lee directo en `src/logger.ts`. |
+| `PORT_PREDICT` | `6776` (`6876` en contenedor host) | Puerto HTTP del servicio de predicción de herramientas y juicio MoE. |
+| `PORT_EMBED` | `6777` (`6877` en contenedor host) | Puerto HTTP del servicio de embeddings vectoriales (`e5-small`). |
+| `PORT_QDRANT` | `6775` (`6875` en contenedor host) | Puerto HTTP del servicio de recall e indexación de catálogo. |
+| `MODELS_PATH` / `ONNX_MODELS_PATH` | `models` (o `../models`) | Ruta al directorio que contiene `multilingual-e5-small-onnx` y `remtk-juicio-moe-int8`. |
+| `ONNX_MODEL_SIZE` | `small` | Tamaño del modelo ONNX por defecto (`small`, 384 dimensiones). |
+| `ONNX_INTRA_OP_THREADS` | `4` | Hilos intra-op de ONNX Runtime para aceleración SIMD AVX2. |
+| `ONNX_INTER_OP_THREADS` | `1` | Hilos inter-op de ONNX Runtime. |
+| `ONNX_ADAPTIVE_MIN_SCORE` | `0.84` | Piso mínimo de relevancia (`adaptive_min_score`): ninguna herramienta con score inferior es seleccionada. |
+| `ONNX_ADAPTIVE_GAP_THRESHOLD` | `0.03` | Umbral de brecha natural (`gap_threshold`) entre candidatos sucesivos. |
+| `ABSTENCION_THRESHOLD` | `0.52` | Umbral de probabilidad de abstención del cabezal MoE para retorno nulo (`0 tools`). |
+| `KEYWORD_BOOST` | `0.05` | Refuerzo por coincidencia de palabras clave internas. |
+| `NAME_AFFINITY_BOOST` | `0.08` | Refuerzo por afinidad léxica en el nombre de la herramienta (con tope acumulado de `0.15`). |
+| `FAMILY_GATE_PENALTY` | `0.15` | Penalización por familia o namespace ajeno. |
+| `RECALL_LIMIT` | `20` | Límite máximo de candidatas recuperadas en la fase de recall (`ToolRegistry::retrieve_candidates`). |
+| `MAX_OUTPUT_TOOLS` | `8` | Tope máximo de herramientas devueltas en la respuesta final de `/predict`. |
+| `MAX_CATEGORIES` | `6` | Tope máximo de categorías activas evaluadas en el juicio. |
 
-> **Colecciones de Qdrant fijas.** Los nombres `mcp_tools`, `tool_keywords`,
-> `query_synonyms` y `contextual_memories` ya **no** son configurables por
-> entorno: viven como constantes en `shared/constants/qdrant/general.constant.ts`.
+---
+
+## 2. Variables de Observabilidad y Logger Dual (`LoggerConfig`)
+
+Definidas en `src/shared/logger/mod.rs` e inicializadas mediante `init_logger()` al inicio de `src/main.rs`:
+
+| Variable | Default (`LoggerConfig`) | Descripción |
+|---|---|---|
+| `LOGS_DIR` | `logs` (`/app/logs` en Docker) | Directorio donde `DualMakeWriter` crea y rota automáticamente el archivo diario `prediction-YYYY-MM-DD.log` (fecha UTC calculada con el algoritmo civil de Howard Hinnant). |
+| `LOG_TO_FILE` | `true` | Habilita la escritura simultánea en archivo rotativo diario además de `stdout`. Desactivar con `false` o `0`. |
+| `LOG_FORMAT` | `text` | Formato de salida: texto estructurado legible por defecto, o JSON línea por línea si `LOG_FORMAT=json`. |
+| `RUST_LOG` | `info,remtk_prediction_server=debug,profiler=info,prediction_trace=info,http_trace=info` | Filtro `tracing_subscriber::EnvFilter` por nivel y target de instrumentación. |
+
+### Targets de Trazabilidad (`RUST_LOG`)
+
+| Target | Nivel | Prefijos Emitidos | Propósito |
+|---|---|---|---|
+| `prediction_trace` | `INFO` / `WARN` | `[trace:recall]`, `[trace:moe]`, `[trace:predict]`, `[trace:route]`, `[trace:memory_judge]`, `[trace:qdrant_search]`, `[trace:spatial]` | Trazabilidad forense de cada etapa del pipeline: términos de recall, probabilidades NLI/abstención/expertos del MoE, herramientas seleccionadas (`selected`), `top_candidates` y herramientas descartadas (`filtered_out`) con sus scores exactos, así como alertas `COLD_CATALOG`. |
+| `profiler` | `INFO` | `[profile:predict]`, `[profile:embed]`, `[profile:qdrant_upsert]`, `[profile:interest]`, `[profile:history_regime]` | Desglose milimétrico de tiempos de cómputo en CPU (`recall`, `q_emb`, `query_tokens`, `ctx_tokens`, `assemble`, `moe`). |
+| `http_trace` | `INFO` | `[http:predict]`, `[http:spatial_predict]`, `[http:predict_route]`, `[http:history_regime]` | Resumen de entrada/salida HTTP en la capa Axum (`status`, `tenant`, `session`, `elapsed`, `tools_out`, `complexity`, `nli`). |
+| `remtk_prediction_server` | `INFO` / `DEBUG` | `boot ...`, `API Predict: Registradas ...` | Eventos de ciclo de vida del servidor, carga `mmap` de sesiones ONNX y apagado elegante (`SIGINT`/`SIGTERM`). |
 
 ### Capa de juicio (opcional)
 
