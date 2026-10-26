@@ -39,10 +39,10 @@ impl InferenceEngine {
         let e5_tokenizer_file = models_dir.join("multilingual-e5-small-onnx/tokenizer.json");
         let moe_quantized = models_dir.join("remtk-juicio-moe-int8/model_quantized.onnx");
         let moe_fp32 = models_dir.join("remtk-juicio-moe-int8/model_fp32.onnx");
-        let moe_model_file = if moe_fp32.exists() {
-            moe_fp32
-        } else {
+        let moe_model_file = if moe_quantized.exists() {
             moe_quantized
+        } else {
+            moe_fp32
         };
 
         info!("InferenceEngine: Cargando tokenizer desde {}", e5_tokenizer_file.display());
