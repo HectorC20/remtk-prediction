@@ -86,11 +86,16 @@ impl PredictionService {
             });
         }
 
-        // 1. Fase de Recall: Selección de candidatas (acotada por recall_limit)
         let t_start = std::time::Instant::now();
 
+        // 1. Extracción de embedding semántico de la consulta (Bi-Encoder E5)
         let t0 = std::time::Instant::now();
-        let candidate_indices = registry.retrieve_candidates(&payload.text, self.config.recall_limit);
+        let query_emb = self.engine.embed_vector(&format!("query: {}", payload.text))?;
+        let d_query_emb = t0.elapsed();
+
+        // 2. Fase de Recall Semántico Densa (Vectorial en memoria sobre catálogo de embeddings L2)
+        let t0 = std::time::Instant::now();
+        let candidate_indices = registry.retrieve_candidates_semantic(&query_emb, self.config.recall_limit);
         let d_recall = t0.elapsed();
 
         if candidate_indices.is_empty() {
@@ -103,11 +108,6 @@ impl PredictionService {
                 estado_nli: Some("TRANSICION".to_string()),
             });
         }
-
-        // 2. Extracción de embedding semántico de la consulta
-        let t0 = std::time::Instant::now();
-        let query_emb = self.engine.embed_vector(&format!("query: {}", payload.text))?;
-        let d_query_emb = t0.elapsed();
 
         // 3. Extracción de tokens de consulta (1, q_len, 384)
         let t0 = std::time::Instant::now();
@@ -135,32 +135,20 @@ impl PredictionService {
         )?;
         let d_moe = t0.elapsed();
 
-        // 7. Fusión semántica E5 + afinidad léxica por nombre
+        // 7. Fusión semántica E5 (Bi-Encoder) + Juicio Neuronal MoE (Reranker)
         let mut ranked = Vec::new();
         for (i, &tool_idx) in candidate_indices.iter().enumerate() {
             if tool_idx < registry.tools.len() {
                 let tool = &registry.tools[tool_idx];
                 let sem_sim = cosine_similarity_normalized(&query_emb, &tool.embedding);
+                let moe_score = if i < moe_output.ranked_scores.len() {
+                    moe_output.ranked_scores[i]
+                } else {
+                    sem_sim
+                };
 
-                let mut name_boost = 0.0f32;
-                let tool_name_lower = tool.metadata.name.to_lowercase();
-
-                // Afinidad léxica por keywords
-                for kw in &payload.keywords {
-                    if !kw.is_empty() && tool_name_lower.contains(&kw.to_lowercase()) {
-                        name_boost += self.config.name_affinity_boost;
-                    }
-                }
-                // Afinidad léxica por palabras del prompt
-                for term in payload.text.to_lowercase().split_whitespace() {
-                    let clean = term.trim_matches(|c: char| !c.is_alphanumeric());
-                    if clean.len() > 3 && tool_name_lower.contains(clean) {
-                        name_boost += self.config.name_affinity_boost * 0.75;
-                    }
-                }
-                name_boost = name_boost.min(0.15);
-
-                let final_score = (sem_sim + name_boost).clamp(0.0, 1.0);
+                // Fusión ponderada pura: 50% similitud semántica global + 50% juicio fino del modelo
+                let final_score = (0.5 * sem_sim + 0.5 * moe_score).clamp(0.0, 1.0);
                 ranked.push(RankedToolScore {
                     name: tool.metadata.name.clone(),
                     score: final_score,
@@ -172,18 +160,19 @@ impl PredictionService {
         // Ordenar candidatos por score descendente
         ranked.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
-        // 8. Filtrado por umbral adaptativo con corte por gap natural y abstención
-        let winning_tools = if moe_output.debe_abstenerse {
-            vec![]
+        // 8. Filtrado por umbral adaptativo (abstención eleva umbral dinámico en vez de silenciar a ciegas)
+        let effective_min_score = if moe_output.debe_abstenerse {
+            (self.config.adaptive_min_score + 0.08).min(0.88)
         } else {
-            Self::adaptive_threshold(
-                &ranked,
-                1,
-                self.config.max_output_tools,
-                self.config.adaptive_gap_threshold,
-                self.config.adaptive_min_score,
-            )
+            0.72
         };
+        let winning_tools = Self::adaptive_threshold(
+            &ranked,
+            1,
+            self.config.max_output_tools,
+            self.config.adaptive_gap_threshold,
+            effective_min_score,
+        );
 
         let total_elapsed = t_start.elapsed();
 

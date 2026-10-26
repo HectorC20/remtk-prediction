@@ -8,6 +8,7 @@ use crate::core::inference::engine::{InferenceEngine, EMBED_DIM};
 use crate::core::inference::tokenizer::DEFAULT_MAX_TOOL_LEN;
 use crate::shared::dto::ToolDefinitionDto;
 use crate::shared::error::AppError;
+use crate::shared::tensor::cosine_similarity_normalized;
 
 /// Herramienta cacheada en memoria con tensor en precisión FP16 (73.7 KB) y embedding de referencia E5.
 #[derive(Clone)]
@@ -64,6 +65,27 @@ impl ToolRegistry {
         }
 
         tensor
+    }
+
+    /// Búsqueda semántica densa vectorial sobre el catálogo para fase de recall (Bi-Encoder E5).
+    pub fn retrieve_candidates_semantic(&self, query_emb: &[f32], limit: usize) -> Vec<usize> {
+        if self.tools.is_empty() {
+            return Vec::new();
+        }
+
+        let mut scored: Vec<(usize, f32)> = self
+            .tools
+            .iter()
+            .enumerate()
+            .map(|(idx, tool)| {
+                let sim = cosine_similarity_normalized(query_emb, &tool.embedding);
+                (idx, sim)
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let effective_limit = limit.min(self.tools.len());
+        scored.iter().take(effective_limit).map(|(idx, _)| *idx).collect()
     }
 
     /// Búsqueda y filtrado rápido léxico sobre el catálogo para fase de recall.
