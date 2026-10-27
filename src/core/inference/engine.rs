@@ -37,9 +37,13 @@ impl InferenceEngine {
         let models_dir = &config.models_path;
         let e5_model_file = models_dir.join("multilingual-e5-small-onnx/model.onnx");
         let e5_tokenizer_file = models_dir.join("multilingual-e5-small-onnx/tokenizer.json");
+        let jev_quantized = models_dir.join("remtk-juicio-jev-moe-int8/model_quantized.onnx");
         let moe_quantized = models_dir.join("remtk-juicio-moe-int8/model_quantized.onnx");
         let moe_fp32 = models_dir.join("remtk-juicio-moe-int8/model_fp32.onnx");
-        let moe_model_file = if moe_quantized.exists() {
+        let moe_model_file = if jev_quantized.exists() {
+            info!("InferenceEngine: Detectado modelo JEV MoE en {}", jev_quantized.display());
+            jev_quantized
+        } else if moe_quantized.exists() {
             moe_quantized
         } else {
             moe_fp32
@@ -79,22 +83,22 @@ impl InferenceEngine {
         })
     }
 
-    /// Extrae el tensor de tokens de consulta (1, seq_len, 384).
+    /// Extrae el tensor de tokens de consulta (1, seq_len, 384) normalizado L2 por token con máscara aplicada.
     pub fn extract_query_tokens(&self, text: &str, max_len: usize) -> Result<Array3<f32>, AppError> {
         let tokenized = self.tokenizer.encode_query(text, max_len)?;
-        self.run_e5_tokens(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)
+        self.run_e5_tokens_normalized(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)
     }
 
-    /// Extrae el tensor de tokens de contexto histórico o intentContext.
+    /// Extrae el tensor de tokens de contexto histórico o intentContext normalizado L2 por token.
     pub fn extract_context_tokens(&self, text: &str, max_len: usize) -> Result<Array3<f32>, AppError> {
-        let tokenized = self.tokenizer.encode_query(text, max_len)?;
-        self.run_e5_tokens(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)
+        let tokenized = self.tokenizer.encode_passage(text, max_len)?;
+        self.run_e5_tokens_normalized(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)
     }
 
-    /// Extrae los tokens de una herramienta para su pre-cálculo en caché.
+    /// Extrae los tokens de una herramienta normalizados L2 por token para su pre-cálculo en caché.
     pub fn extract_tool_tokens(&self, text: &str, max_len: usize) -> Result<Array2<f32>, AppError> {
         let tokenized = self.tokenizer.encode_passage(text, max_len)?;
-        let tokens_3d = self.run_e5_tokens(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)?;
+        let tokens_3d = self.run_e5_tokens_normalized(&tokenized.input_ids, &tokenized.attention_mask, tokenized.seq_len)?;
         
         let seq_len = tokenized.seq_len;
         let mut result = Array2::<f32>::zeros((seq_len, EMBED_DIM));
@@ -104,6 +108,35 @@ impl InferenceEngine {
             }
         }
         Ok(result)
+    }
+
+    /// Ejecuta e5-small y normaliza cada token individualmente con L2 + máscara de atención (estándar JEV MoE).
+    pub fn run_e5_tokens_normalized(
+        &self,
+        input_ids: &Array2<i64>,
+        attention_mask: &Array2<i64>,
+        seq_len: usize,
+    ) -> Result<Array3<f32>, AppError> {
+        let mut array = self.run_e5_tokens(input_ids, attention_mask, seq_len)?;
+        for i in 0..seq_len {
+            let mask_val = attention_mask[[0, i]] as f32;
+            if mask_val > 0.0 {
+                let mut norm_sq = 0.0f32;
+                for d in 0..EMBED_DIM {
+                    let v = array[[0, i, d]];
+                    norm_sq += v * v;
+                }
+                let norm = norm_sq.sqrt().max(1e-12);
+                for d in 0..EMBED_DIM {
+                    array[[0, i, d]] = (array[[0, i, d]] / norm) * mask_val;
+                }
+            } else {
+                for d in 0..EMBED_DIM {
+                    array[[0, i, d]] = 0.0;
+                }
+            }
+        }
+        Ok(array)
     }
 
     /// Ejecuta el cabezal MoE recibiendo tensores 3D en formato Zero-Copy ArrayView3.

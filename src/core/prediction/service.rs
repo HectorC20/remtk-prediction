@@ -93,15 +93,63 @@ impl PredictionService {
         let query_emb = self.engine.embed_vector(&format!("query: {}", payload.text))?;
         let d_query_emb = t0.elapsed();
 
-        // 2. Fase de Recall Semántico Densa (Vectorial en memoria sobre catálogo de embeddings L2)
+        // 2. Fase de Recall Híbrida: Semántica Densa (Bi-Encoder E5) + Anclaje Léxico/Dominio
         let t0 = std::time::Instant::now();
-        let candidate_indices = registry.retrieve_candidates_semantic(&query_emb, self.config.recall_limit);
+        let exclude_set: std::collections::HashSet<String> = payload
+            .exclude
+            .iter()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut candidate_indices: Vec<usize> = registry
+            .retrieve_candidates_semantic(&query_emb, self.config.recall_limit + exclude_set.len())
+            .into_iter()
+            .filter(|&idx| {
+                idx < registry.tools.len()
+                    && !exclude_set.contains(&registry.tools[idx].metadata.name.to_lowercase())
+            })
+            .take(self.config.recall_limit)
+            .collect();
+
+        // Inyectar candidatos con coincidencia léxica o de dominio explícita que no hayan entrado en el top-K semántico
+        let query_and_kw = format!("{} {}", payload.text, payload.keywords.join(" "));
+        let mut domain_boosted: Vec<(usize, f32)> = registry
+            .tools
+            .iter()
+            .enumerate()
+            .filter(|(idx, tool)| {
+                !exclude_set.contains(&tool.metadata.name.to_lowercase())
+                    && !candidate_indices.contains(idx)
+            })
+            .map(|(idx, tool)| {
+                let boost = Self::compute_lexical_and_domain_affinity(
+                    &payload.text,
+                    &payload.keywords,
+                    &tool.metadata.name,
+                    &tool.metadata.group,
+                    &tool.metadata.intent_summary,
+                    &tool.metadata.description,
+                    &tool.metadata.tags,
+                );
+                (idx, boost)
+            })
+            .filter(|(_, boost)| *boost >= 0.06)
+            .collect();
+
+        domain_boosted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        for (idx, _) in domain_boosted.into_iter().take(4) {
+            if candidate_indices.len() >= self.config.recall_limit && !candidate_indices.is_empty() {
+                candidate_indices.pop();
+            }
+            candidate_indices.push(idx);
+        }
         let d_recall = t0.elapsed();
 
         if candidate_indices.is_empty() {
             return Ok(PredictResponse {
                 tools: vec![],
-                complexity: "empty_recall".to_string(),
+                complexity: "simple".to_string(),
                 model_size: "int8_unified".to_string(),
                 ranked_scores: vec![],
                 topic_shift: Some(0.0),
@@ -109,15 +157,23 @@ impl PredictionService {
             });
         }
 
-        // 3. Extracción de tokens de consulta (1, q_len, 384)
+        // 3. Extracción de tokens de consulta (1, q_len, 384) normalizados L2 por token
         let t0 = std::time::Instant::now();
-        let query_text = format!("{} {}", payload.text, payload.keywords.join(" "));
+        let query_text = if payload.keywords.is_empty() {
+            payload.text.clone()
+        } else {
+            query_and_kw
+        };
         let query_tokens = self.engine.extract_query_tokens(&query_text, 256)?;
         let d_query_tokens = t0.elapsed();
 
         // 4. Extracción de tokens de contexto histórico o intentContext (1, ctx_len, 384)
         let t0 = std::time::Instant::now();
-        let ctx_text = payload.intent_context.as_deref().unwrap_or("query: contextual_turn");
+        let ctx_text = payload
+            .intent_context
+            .as_deref()
+            .or(payload.prior_plan.as_deref())
+            .unwrap_or("contextual_turn");
         let context_tokens = self.engine.extract_context_tokens(ctx_text, 256)?;
         let d_ctx_tokens = t0.elapsed();
 
@@ -126,7 +182,7 @@ impl PredictionService {
         let tools_tensor = registry.assemble_candidates_tensor(&candidate_indices);
         let d_assemble = t0.elapsed();
 
-        // 6. Inferencia MoE de 3 etapas en una sola pasada
+        // 6. Inferencia MoE de 3 etapas en una sola pasada (Arquitectura Cognitiva JEV de 3 Capas)
         let t0 = std::time::Instant::now();
         let moe_output = self.engine.evaluate_moe(
             query_tokens.view(),
@@ -135,24 +191,88 @@ impl PredictionService {
         )?;
         let d_moe = t0.elapsed();
 
-        // 7. Fusión semántica E5 (Bi-Encoder) + Juicio Neuronal MoE (Reranker)
+        // 7. Enrutador Cognitivo de Sistema 1 (JEV 3 Capas: Choice + MaxSim + Noul/Score)
+        let max_aff = moe_output
+            .ranked_scores
+            .iter()
+            .copied()
+            .fold(0.0f32, f32::max);
+        let uniform_p = 1.0 / (candidate_indices.len().max(1) as f32);
+
+        let mut max_lex_boost = 0.0f32;
+        let mut candidate_boosts = vec![0.0f32; candidate_indices.len()];
+        for (i, &tool_idx) in candidate_indices.iter().enumerate() {
+            if tool_idx < registry.tools.len() {
+                let tool = &registry.tools[tool_idx];
+                let lb = Self::compute_lexical_and_domain_affinity(
+                    &payload.text,
+                    &payload.keywords,
+                    &tool.metadata.name,
+                    &tool.metadata.group,
+                    &tool.metadata.intent_summary,
+                    &tool.metadata.description,
+                    &tool.metadata.tags,
+                );
+                candidate_boosts[i] = lb;
+                if lb > max_lex_boost {
+                    max_lex_boost = lb;
+                }
+            }
+        }
+
+        let is_conceptual = Self::is_pure_conceptual_query(&payload.text)
+            && payload.keywords.is_empty()
+            && max_lex_boost < 0.08;
+
+        // Compuerta de abstención de Capa 2 (INDEPENDENT) y Capa 3 (decision_valid_noul < 0.50):
+        // Si el verificador JEV dictamina abstención y no hay un comando léxico explícito inequívoco, abstenerse.
+        let abstain_gate = is_conceptual || (moe_output.debe_abstenerse && max_lex_boost < 0.12);
+
         let mut ranked = Vec::new();
         for (i, &tool_idx) in candidate_indices.iter().enumerate() {
             if tool_idx < registry.tools.len() {
                 let tool = &registry.tools[tool_idx];
                 let sem_sim = cosine_similarity_normalized(&query_emb, &tool.embedding);
-                let moe_score = if i < moe_output.ranked_scores.len() {
-                    moe_output.ranked_scores[i]
+                let lex_boost = candidate_boosts[i];
+
+                let raw_score = if moe_output.is_jev {
+                    let choice_prob = moe_output.tool_choice_probs.get(i).copied().unwrap_or(uniform_p);
+                    let jev_rel = ((choice_prob - uniform_p) / uniform_p.max(1e-6)).clamp(-0.5, 2.5);
+                    let tool_aff = moe_output.ranked_scores.get(i).copied().unwrap_or(sem_sim);
+
+                    let name_lower = tool.metadata.name.to_lowercase();
+                    let route_bonus = match moe_output.ctx_route.as_str() {
+                        "MEMORY" if name_lower.contains("memory") || name_lower.contains("history") => 0.08,
+                        "TOOL" if lex_boost > 0.0 => 0.03,
+                        _ => 0.0,
+                    };
+
+                    if max_aff >= 0.35 {
+                        // Cabezal de afinidad individual desacoplado
+                        0.50 * sem_sim + 0.40 * tool_aff + 0.03 * jev_rel + lex_boost + route_bonus
+                    } else {
+                        // Cabezal de afinidad comprimido: usar calibración E5 + preferencia relativa JEV Choice + léxico
+                        sem_sim + 0.035 * jev_rel + lex_boost + route_bonus
+                    }
                 } else {
-                    sem_sim
+                    let moe_score = moe_output.ranked_scores.get(i).copied().unwrap_or(sem_sim);
+                    0.5 * sem_sim + 0.5 * moe_score + lex_boost
                 };
 
-                // Fusión ponderada pura: 50% similitud semántica global + 50% juicio fino del modelo
-                let final_score = (0.5 * sem_sim + 0.5 * moe_score).clamp(0.0, 1.0);
+                let final_score = if abstain_gate {
+                    (raw_score * 0.35).clamp(0.0, 0.45)
+                } else {
+                    raw_score.clamp(0.0, 0.99)
+                };
+
                 ranked.push(RankedToolScore {
                     name: tool.metadata.name.clone(),
                     score: final_score,
-                    expert_affinity: "expert_action".to_string(),
+                    expert_affinity: if moe_output.is_jev {
+                        format!("jev_{}", moe_output.ctx_route.to_lowercase())
+                    } else {
+                        "expert_action".to_string()
+                    },
                 });
             }
         }
@@ -160,19 +280,41 @@ impl PredictionService {
         // Ordenar candidatos por score descendente
         ranked.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
-        // 8. Filtrado por umbral adaptativo (abstención eleva umbral dinámico en vez de silenciar a ciegas)
-        let effective_min_score = if moe_output.debe_abstenerse {
-            (self.config.adaptive_min_score + 0.08).min(0.88)
+        // 8. Filtrado por umbral adaptativo calibrado para JEV 3-Capas
+        let effective_min_score = if abstain_gate {
+            0.95
+        } else if moe_output.ctx_route == "PREV_RESPONSE" && max_lex_boost >= 0.06 {
+            0.79
         } else {
-            0.72
+            0.81
         };
-        let winning_tools = Self::adaptive_threshold(
-            &ranked,
-            1,
-            self.config.max_output_tools,
-            self.config.adaptive_gap_threshold,
-            effective_min_score,
-        );
+
+        let mut winning_tools = if abstain_gate {
+            Vec::new()
+        } else {
+            Self::adaptive_threshold(
+                &ranked,
+                1,
+                self.config.max_output_tools,
+                self.config.adaptive_gap_threshold,
+                effective_min_score,
+            )
+        };
+
+        // Si ninguna herramienta superó el umbral adaptativo (turno sin herramientas),
+        // asegurar que ranked_scores quede por debajo de 0.48 para que el consumidor no rescate ruido.
+        if winning_tools.is_empty() {
+            for item in &mut ranked {
+                if item.score >= 0.48 {
+                    item.score = (item.score * 0.45).min(0.45);
+                }
+            }
+        } else {
+            // Acotar a máximo 5 herramientas cuando no hay anclas múltiples explícitas
+            if winning_tools.len() > 5 && payload.keywords.len() <= 2 {
+                winning_tools.truncate(5);
+            }
+        }
 
         let total_elapsed = t_start.elapsed();
 
@@ -191,9 +333,15 @@ impl PredictionService {
             .map(|r| (r.name.clone(), r.score))
             .collect();
 
+        let complexity = if winning_tools.is_empty() {
+            "simple".to_string()
+        } else {
+            "dense_moe".to_string()
+        };
+
         tracing::info!(
             target: "profiler",
-            "[profile:predict] tenant={} session={} total={:.2}ms (recall={:.2}ms q_emb={:.2}ms query_tokens={:.2}ms ctx_tokens={:.2}ms assemble={:.2}ms moe={:.2}ms) catalog={} candidates={} winning={} nli={} topic_shift={:.3} abstain={}",
+            "[profile:predict] tenant={} session={} total={:.2}ms (recall={:.2}ms q_emb={:.2}ms query_tokens={:.2}ms ctx_tokens={:.2}ms assemble={:.2}ms moe={:.2}ms) catalog={} candidates={} winning={} route={} nli={} valid_noul={:.3} topic_shift={:.3} abstain={}",
             payload.tenant,
             payload.session_id,
             total_elapsed.as_secs_f64() * 1000.0,
@@ -206,9 +354,11 @@ impl PredictionService {
             registry.count(),
             candidate_indices.len(),
             winning_tools.len(),
+            moe_output.ctx_route,
             moe_output.estado_dominante,
+            moe_output.valid_noul,
             moe_output.topic_shift_score,
-            moe_output.debe_abstenerse
+            abstain_gate
         );
 
         tracing::info!(
@@ -218,7 +368,7 @@ impl PredictionService {
             payload.source,
             preview_text(&payload.text, 120),
             payload.keywords,
-            self.config.adaptive_min_score,
+            effective_min_score,
             self.config.adaptive_gap_threshold,
             winning_tools,
             format_scored_slice(&top_candidates, 8),
@@ -227,12 +377,158 @@ impl PredictionService {
 
         Ok(PredictResponse {
             tools: winning_tools,
-            complexity: "dense_moe".to_string(),
+            complexity,
             model_size: "int8_unified".to_string(),
             ranked_scores: ranked,
             topic_shift: Some(moe_output.topic_shift_score),
             estado_nli: Some(moe_output.estado_dominante),
         })
+    }
+
+    /// Detecta si la consulta es puramente conceptual/definicional sin verbos operativos de búsqueda o herramienta.
+    fn is_pure_conceptual_query(text: &str) -> bool {
+        let lower = text.trim().to_lowercase();
+        let operational_cues = [
+            "busca", "buscar", "internet", "web", "google", "crea", "crear", "crees",
+            "lista", "listar", "programa", "programar", "alerta", "alertas", "cron",
+            "recordatorio", "archivo", "lee", "leer", "guarda", "guardar", "registra",
+            "registrar", "actualiza", "elimina", "borra", "ejecuta", "herramienta",
+            "herramientas", "herraamienta", "herraamientas", "heramienta", "herramientad",
+            "mcp", "hora", "fecha", "clima", "pronostico", "pronóstico",
+            "memoria", "historial", "publica", "publicar", "envia", "enviar", "revisa",
+        ];
+        if operational_cues.iter().any(|cue| lower.contains(cue)) {
+            return false;
+        }
+        let conceptual_prefixes = [
+            "dime qué es", "dime que es", "¿qué es ", "que es ", "qué es ",
+            "explícame qué es", "explicame que es", "define ", "¿cómo funciona ",
+        ];
+        conceptual_prefixes.iter().any(|p| lower.starts_with(p))
+    }
+
+    /// Calcula la afinidad léxica y de puentes de dominio entre la consulta y una herramienta candidata.
+    fn compute_lexical_and_domain_affinity(
+        query: &str,
+        keywords: &[String],
+        tool_name: &str,
+        tool_group: &str,
+        intent_summary: &str,
+        description: &str,
+        tags: &[String],
+    ) -> f32 {
+        let query_lower = query.trim().to_lowercase();
+        let name_lower = tool_name.trim().to_lowercase();
+        let group_lower = tool_group.trim().to_lowercase();
+        let summary_lower = intent_summary.to_lowercase();
+        let desc_lower = description.to_lowercase();
+
+        let mut boost = 0.0f32;
+
+        // 1. Anclaje directo por keywords del planificador
+        for kw in keywords {
+            let kw_lower = kw.trim().to_lowercase();
+            if kw_lower.is_empty() {
+                continue;
+            }
+            if kw_lower == name_lower {
+                boost += 0.14;
+            } else if name_lower.contains(&kw_lower) || kw_lower.contains(&name_lower) {
+                boost += 0.08;
+            }
+        }
+
+        // 2. Puentes semántico-léxicos de dominio (Cron / Alertas / Recordatorios / Tareas programadas)
+        let has_schedule_domain = query_lower.contains("cron")
+            || query_lower.contains("alerta")
+            || query_lower.contains("recordatorio")
+            || query_lower.contains("alarma")
+            || query_lower.contains("programada")
+            || query_lower.contains("cada 10 min")
+            || query_lower.contains("cada 5 min")
+            || (query_lower.contains("cada ") && query_lower.contains(" min") && (query_lower.contains("cre") || query_lower.contains("program")));
+
+        if has_schedule_domain {
+            let is_create = query_lower.contains("crea")
+                || query_lower.contains("crees")
+                || query_lower.contains("crear")
+                || query_lower.contains("programa")
+                || query_lower.contains("configura")
+                || query_lower.contains("agrega")
+                || query_lower.contains("pon");
+            let is_delete = query_lower.contains("elimina")
+                || query_lower.contains("borra")
+                || query_lower.contains("cancela")
+                || query_lower.contains("desactiva");
+
+            if is_delete && (name_lower == "schedule_delete" || name_lower == "schedule_cancel") {
+                boost += 0.16;
+            } else if is_create && name_lower == "schedule_task" {
+                boost += 0.16;
+            } else if !is_create && !is_delete && name_lower == "schedule_list" {
+                boost += 0.16;
+            } else if name_lower.starts_with("schedule_") {
+                boost += 0.06;
+            }
+        }
+
+        // 3. Puente de introspección de herramientas / MCP
+        let has_tool_introspection = query_lower.contains("herramienta")
+            || query_lower.contains("herraamienta")
+            || query_lower.contains("heramienta")
+            || query_lower.contains("herramientad")
+            || query_lower.contains("capacidades")
+            || query_lower.contains("habilidades")
+            || query_lower.contains("mcp")
+            || query_lower.contains("tools");
+        if has_tool_introspection {
+            if name_lower == "list_tools" || name_lower == "list_own_tools" {
+                boost += 0.22;
+            } else if name_lower == "search_knowledge_base"
+                || name_lower == "register_tool"
+                || name_lower == "search_memory"
+            {
+                boost += 0.09;
+            }
+        }
+
+        // 4. Puente de búsqueda web explícita
+        let has_web_intent = (query_lower.contains("internet") || query_lower.contains("web") || query_lower.contains("google"))
+            && (query_lower.contains("busca") || query_lower.contains("investiga") || query_lower.contains("consulta") || query_lower.contains("sobre"));
+        if has_web_intent && (name_lower == "web_search" || name_lower == "web_fetch") {
+            boost += 0.12;
+        }
+
+        // 5. Solapamiento léxico directo con nombre, tags e intent_summary
+        let stopwords = [
+            "para", "como", "sobre", "donde", "cuando", "este", "esta", "estos", "estas",
+            "porque", "hacer", "quiero", "puedes", "decir", "favor", "dame", "mostrar",
+            "tiene", "tienen", "desde", "hasta", "solo", "eso", "probar", "actualmente",
+            "realmente", "existe", "existen", "cuales", "cual", "tengo", "tengp", "mis",
+        ];
+
+        let query_tokens: Vec<&str> = query_lower
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.len() >= 4 && !stopwords.contains(w))
+            .collect();
+
+        let mut token_hits = 0usize;
+        for tok in &query_tokens {
+            let in_name = name_lower.contains(tok);
+            let in_tags = tags.iter().any(|t| t.to_lowercase().contains(tok));
+            let in_group = group_lower.contains(tok);
+            if in_name || in_tags || in_group {
+                token_hits += 2;
+            } else if summary_lower.contains(tok) || desc_lower.contains(tok) {
+                token_hits += 1;
+            }
+        }
+
+        if token_hits > 0 {
+            boost += (token_hits as f32 * 0.025).min(0.10);
+        }
+
+        boost.min(0.22)
     }
 
     /// Implementación de umbral adaptativo con corte por gap natural e intervalo de relevancia.
