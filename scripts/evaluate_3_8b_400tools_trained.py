@@ -1005,6 +1005,15 @@ def run_jev_decision_calibrated(
     route_idx = int(np.argmax(ctx_probs))
     route_name = CONTEXT_ROUTE_LABELS[route_idx]
 
+    # Resolución determinista de ruta anafórica
+    q_words = query.strip().split()
+    is_anaphoric = len(q_words) <= 7 and any(
+        w.lower() in ("si", "dale", "ok", "adelante", "hacelo", "procede", "confirmo", "ciérralo", "cierralo", "no", "espera", "va")
+        for w in q_words
+    )
+    if is_anaphoric and context.strip():
+        route_name = "PREV_RESPONSE"
+
     noul_prob = float(out["decision_valid_noul"][0, 0].float().cpu().item())
     qual_score = float(out["decision_quality_score"][0, 0].float().cpu().item())
 

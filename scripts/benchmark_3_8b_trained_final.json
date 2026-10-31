@@ -1,11 +1,11 @@
 {
   "total_cases": 47,
-  "top1_accuracy": 61.702127659574465,
-  "top3_accuracy": 78.72340425531915,
-  "tool_accuracy": 60.526315789473685,
-  "abstention_accuracy": 66.66666666666666,
-  "avg_latency_ms": 6357.953972339214,
-  "p95_latency_ms": 6610.885899998539,
+  "top1_accuracy": 59.57446808510638,
+  "top3_accuracy": 70.2127659574468,
+  "tool_accuracy": 55.26315789473685,
+  "abstention_accuracy": 77.77777777777779,
+  "avg_latency_ms": 6559.454342552852,
+  "p95_latency_ms": 7060.939140003755,
   "results": [
     {
       "id": 1,
@@ -13,17 +13,17 @@
       "context": "",
       "expected_tool": "agenda_book_appointment",
       "expected_decision": "agenda_book_appointment",
-      "predicted_tool": "search_memory",
+      "predicted_tool": "agenda_book_appointment",
       "predicted_top3": [
-        "search_memory",
         "agenda_book_appointment",
-        "cron_add_job"
+        "search_memory",
+        "iam_list_stale_keys"
       ],
       "route": "TOOL",
-      "noul": 0.5028257369995117,
-      "decision": "EXECUTE -> search_memory",
-      "latency_ms": 7452.03390000097,
-      "pass": false
+      "noul": 0.9706624746322632,
+      "decision": "EXECUTE -> agenda_book_appointment",
+      "latency_ms": 9174.05920001329,
+      "pass": true
     },
     {
       "id": 2,
@@ -34,13 +34,13 @@
       "predicted_tool": "agenda_check_availability",
       "predicted_top3": [
         "agenda_check_availability",
-        "search_knowledge_base",
-        "cron_remove_job"
+        "iam_list_stale_keys",
+        "ask_questions"
       ],
       "route": "TOOL",
-      "noul": 0.9685750603675842,
+      "noul": 0.9632871747016907,
       "decision": "EXECUTE -> agenda_check_availability",
-      "latency_ms": 6796.480500008329,
+      "latency_ms": 7720.328299998073,
       "pass": true
     },
     {
@@ -49,16 +49,16 @@
       "context": "",
       "expected_tool": "agenda_cancel",
       "expected_decision": "agenda_cancel",
-      "predicted_tool": "ch_activity_cancel",
+      "predicted_tool": "security_scan_vulnerabilities",
       "predicted_top3": [
-        "ch_activity_cancel",
+        "security_scan_vulnerabilities",
         "agenda_cancel",
-        "payment_cancel_subscription"
+        "security_detect_brute_force"
       ],
       "route": "TOOL",
-      "noul": 0.4590258300304413,
+      "noul": 0.2482067495584488,
       "decision": "ABSTAIN",
-      "latency_ms": 6580.554200001643,
+      "latency_ms": 7187.787000002572,
       "pass": false
     },
     {
@@ -67,17 +67,17 @@
       "context": "",
       "expected_tool": "agenda_get_client_appointments",
       "expected_decision": "agenda_get_client_appointments",
-      "predicted_tool": "agenda_get_client_appointments",
+      "predicted_tool": "security_detect_brute_force",
       "predicted_top3": [
-        "agenda_get_client_appointments",
-        "ch_activity_cancel",
-        "get_current_datetime"
+        "security_detect_brute_force",
+        "security_inspect_open_ports",
+        "search_memory"
       ],
       "route": "TOOL",
-      "noul": 0.389516144990921,
+      "noul": 0.0545780174434185,
       "decision": "ABSTAIN",
-      "latency_ms": 6537.727999995695,
-      "pass": true
+      "latency_ms": 6680.6049999722745,
+      "pass": false
     },
     {
       "id": 5,
@@ -85,16 +85,16 @@
       "context": "",
       "expected_tool": "agenda_reschedule",
       "expected_decision": "agenda_reschedule",
-      "predicted_tool": "debt_collection_reminder_send",
+      "predicted_tool": "task_resume",
       "predicted_top3": [
-        "debt_collection_reminder_send",
-        "process_order_request_review",
-        "cron_remove_job"
+        "task_resume",
+        "sentry_resolve_issue",
+        "sys_workspace_query"
       ],
       "route": "TOOL",
-      "noul": 0.15063165128231049,
+      "noul": 0.05096004903316498,
       "decision": "ABSTAIN",
-      "latency_ms": 6492.03409999609,
+      "latency_ms": 6624.648099998012,
       "pass": false
     },
     {
@@ -106,13 +106,13 @@
       "predicted_tool": "agenda_get_today_summary",
       "predicted_top3": [
         "agenda_get_today_summary",
-        "agent_memory_summarize",
-        "cron_add_job"
+        "db_manage_indexes",
+        "iot_drone_emergency_return"
       ],
       "route": "TOOL",
-      "noul": 0.9428775310516357,
+      "noul": 0.6683943867683411,
       "decision": "EXECUTE -> agenda_get_today_summary",
-      "latency_ms": 6612.365199995111,
+      "latency_ms": 6680.016700003762,
       "pass": true
     },
     {
@@ -121,17 +121,17 @@
       "context": "",
       "expected_tool": "am_list_agents",
       "expected_decision": "am_list_agents",
-      "predicted_tool": "am_list_agents",
+      "predicted_tool": "am_delegate_to_agent",
       "predicted_top3": [
+        "am_delegate_to_agent",
         "am_list_agents",
-        "knowledge_add",
-        "agent_tool_schema_introspect"
+        "iam_list_stale_keys"
       ],
       "route": "TOOL",
-      "noul": 0.8376133441925049,
-      "decision": "EXECUTE -> am_list_agents",
-      "latency_ms": 6464.302799999132,
-      "pass": true
+      "noul": 0.8152405619621277,
+      "decision": "EXECUTE -> am_delegate_to_agent",
+      "latency_ms": 6465.613700012909,
+      "pass": false
     },
     {
       "id": 8,
@@ -139,17 +139,17 @@
       "context": "",
       "expected_tool": "am_delegate_to_agent",
       "expected_decision": "am_delegate_to_agent",
-      "predicted_tool": "payment_create_subscription",
+      "predicted_tool": "am_delegate_to_agent",
       "predicted_top3": [
-        "payment_create_subscription",
-        "accounting_post_journal_entry",
-        "knowledge_add"
+        "am_delegate_to_agent",
+        "accounting_get_income_statement",
+        "schedule_task"
       ],
       "route": "TOOL",
-      "noul": 0.16963326930999756,
+      "noul": 0.28054630756378174,
       "decision": "ABSTAIN",
-      "latency_ms": 6418.113199993968,
-      "pass": false
+      "latency_ms": 6573.714900005143,
+      "pass": true
     },
     {
       "id": 9,
@@ -157,17 +157,17 @@
       "context": "",
       "expected_tool": "am_agent_broadcast",
       "expected_decision": "am_agent_broadcast",
-      "predicted_tool": "am_agent_broadcast",
+      "predicted_tool": "security_inspect_open_ports",
       "predicted_top3": [
-        "am_agent_broadcast",
-        "alert_create_rule",
-        "agent_fallback_route_trigger"
+        "security_inspect_open_ports",
+        "security_detect_brute_force",
+        "security_incident_report_create"
       ],
       "route": "TOOL",
-      "noul": 0.894140899181366,
-      "decision": "EXECUTE -> am_agent_broadcast",
-      "latency_ms": 6308.340399991721,
-      "pass": true
+      "noul": 0.09564468264579773,
+      "decision": "ABSTAIN",
+      "latency_ms": 6411.925899999915,
+      "pass": false
     },
     {
       "id": 10,
@@ -175,17 +175,17 @@
       "context": "",
       "expected_tool": "am_get_agent_result",
       "expected_decision": "am_get_agent_result",
-      "predicted_tool": "am_get_agent_result",
+      "predicted_tool": "am_delegate_to_agent",
       "predicted_top3": [
+        "am_delegate_to_agent",
         "am_get_agent_result",
-        "db_vacuum_analyze",
-        "agent_trace_execution_span"
+        "db_vacuum_analyze"
       ],
       "route": "TOOL",
-      "noul": 0.8391088247299194,
-      "decision": "EXECUTE -> am_get_agent_result",
-      "latency_ms": 6356.498699999065,
-      "pass": true
+      "noul": 0.818630576133728,
+      "decision": "EXECUTE -> am_delegate_to_agent",
+      "latency_ms": 6362.072299991269,
+      "pass": false
     },
     {
       "id": 11,
@@ -193,17 +193,17 @@
       "context": "",
       "expected_tool": "db_execute_sql",
       "expected_decision": "db_execute_sql",
-      "predicted_tool": "metrics_query_prometheus",
+      "predicted_tool": "db_execute_sql",
       "predicted_top3": [
-        "metrics_query_prometheus",
         "db_execute_sql",
-        "search_memory"
+        "search_memory",
+        "iam_list_stale_keys"
       ],
       "route": "TOOL",
-      "noul": 0.5672577023506165,
-      "decision": "EXECUTE -> metrics_query_prometheus",
-      "latency_ms": 6374.886499994318,
-      "pass": false
+      "noul": 0.7400962114334106,
+      "decision": "EXECUTE -> db_execute_sql",
+      "latency_ms": 6478.130299976328,
+      "pass": true
     },
     {
       "id": 12,
@@ -211,17 +211,17 @@
       "context": "",
       "expected_tool": "mongodb_aggregate_pipeline",
       "expected_decision": "mongodb_aggregate_pipeline",
-      "predicted_tool": "task_resume",
+      "predicted_tool": "mongodb_aggregate_pipeline",
       "predicted_top3": [
-        "task_resume",
-        "am_get_agent_result",
-        "mongodb_aggregate_pipeline"
+        "mongodb_aggregate_pipeline",
+        "ch_activities_pending",
+        "iam_list_stale_keys"
       ],
       "route": "TOOL",
-      "noul": 0.06058160588145256,
+      "noul": 0.2913723587989807,
       "decision": "ABSTAIN",
-      "latency_ms": 6235.312700009672,
-      "pass": false
+      "latency_ms": 6610.184399993159,
+      "pass": true
     },
     {
       "id": 13,
@@ -232,13 +232,13 @@
       "predicted_tool": "aws_s3_upload_file",
       "predicted_top3": [
         "aws_s3_upload_file",
-        "aws_s3_generate_presigned_url",
-        "gcp_cloud_storage_bucket_sync"
+        "search_memory",
+        "google_drive_upload_document"
       ],
       "route": "TOOL",
-      "noul": 0.9745308756828308,
+      "noul": 0.9713777899742126,
       "decision": "EXECUTE -> aws_s3_upload_file",
-      "latency_ms": 6607.434200006537,
+      "latency_ms": 6458.537800004706,
       "pass": true
     },
     {
@@ -247,17 +247,17 @@
       "context": "",
       "expected_tool": "redis_cache_invalidate",
       "expected_decision": "redis_cache_invalidate",
-      "predicted_tool": "redis_cache_invalidate",
+      "predicted_tool": "load_balancer_drain_target",
       "predicted_top3": [
-        "redis_cache_invalidate",
-        "cron_remove_job",
-        "data_retention_purge_expired"
+        "load_balancer_drain_target",
+        "docker_prune_system",
+        "redis_cache_get"
       ],
       "route": "TOOL",
-      "noul": 0.43601569533348083,
+      "noul": 0.049445804208517075,
       "decision": "ABSTAIN",
-      "latency_ms": 6391.528400010429,
-      "pass": true
+      "latency_ms": 6451.550300000235,
+      "pass": false
     },
     {
       "id": 15,
@@ -265,16 +265,16 @@
       "context": "",
       "expected_tool": "db_manage_indexes",
       "expected_decision": "db_manage_indexes",
-      "predicted_tool": "email_read_inbox_imap",
+      "predicted_tool": "elasticsearch_update_mapping",
       "predicted_top3": [
-        "email_read_inbox_imap",
-        "db_manage_indexes",
-        "document_generate"
+        "elasticsearch_update_mapping",
+        "search_memory",
+        "consultar_insights_pagina"
       ],
       "route": "TOOL",
-      "noul": 0.6886176466941833,
-      "decision": "EXECUTE -> email_read_inbox_imap",
-      "latency_ms": 6418.927799997618,
+      "noul": 0.9618034362792969,
+      "decision": "EXECUTE -> elasticsearch_update_mapping",
+      "latency_ms": 6420.450100005837,
       "pass": false
     },
     {
@@ -283,16 +283,16 @@
       "context": "",
       "expected_tool": "k8s_deploy_pod",
       "expected_decision": "k8s_deploy_pod",
-      "predicted_tool": "k8s_scale_deployment",
+      "predicted_tool": "docker_push_registry",
       "predicted_top3": [
-        "k8s_scale_deployment",
-        "k8s_deploy_pod",
-        "gcp_gke_cluster_resize"
+        "docker_push_registry",
+        "docker_prune_system",
+        "env_var_set_secret"
       ],
       "route": "TOOL",
-      "noul": 0.4233646094799042,
+      "noul": 0.06240745261311531,
       "decision": "ABSTAIN",
-      "latency_ms": 6510.108799993759,
+      "latency_ms": 6323.668400000315,
       "pass": false
     },
     {
@@ -305,12 +305,12 @@
       "predicted_top3": [
         "aws_ec2_start_instance",
         "aws_ec2_stop_instance",
-        "vector_db_insert_embeddings"
+        "etl_start_job"
       ],
       "route": "TOOL",
-      "noul": 0.9337923526763916,
+      "noul": 0.6981731653213501,
       "decision": "EXECUTE -> aws_ec2_start_instance",
-      "latency_ms": 6392.234700004337,
+      "latency_ms": 6295.955900015542,
       "pass": true
     },
     {
@@ -319,16 +319,16 @@
       "context": "",
       "expected_tool": "k8s_restart_rollout",
       "expected_decision": "k8s_restart_rollout",
-      "predicted_tool": "knowledge_update",
+      "predicted_tool": "redis_cache_set",
       "predicted_top3": [
-        "knowledge_update",
-        "aws_cloudfront_invalidate",
-        "alert_create_rule"
+        "redis_cache_set",
+        "k8s_restart_rollout",
+        "server_reboot_safe"
       ],
       "route": "TOOL",
-      "noul": 0.038246359676122665,
+      "noul": 0.05161425843834877,
       "decision": "ABSTAIN",
-      "latency_ms": 6298.879099995247,
+      "latency_ms": 6399.635899986606,
       "pass": false
     },
     {
@@ -340,13 +340,13 @@
       "predicted_tool": "cloudflare_waf_block_ip",
       "predicted_top3": [
         "cloudflare_waf_block_ip",
-        "security_detect_brute_force",
-        "aws_cloudfront_invalidate"
+        "iam_list_stale_keys",
+        "ch_test"
       ],
       "route": "TOOL",
-      "noul": 0.9364767074584961,
+      "noul": 0.6880959868431091,
       "decision": "EXECUTE -> cloudflare_waf_block_ip",
-      "latency_ms": 6182.85840000317,
+      "latency_ms": 6517.742099997122,
       "pass": true
     },
     {
@@ -355,16 +355,16 @@
       "context": "",
       "expected_tool": "airflow_trigger_dag",
       "expected_decision": "airflow_trigger_dag",
-      "predicted_tool": "glue_catalog_crawl_table",
+      "predicted_tool": "k8s_restart_rollout",
       "predicted_top3": [
-        "glue_catalog_crawl_table",
-        "airflow_trigger_dag",
-        "process_kill_by_pid"
+        "k8s_restart_rollout",
+        "db_rollback_migration",
+        "gcp_cloud_run_deploy"
       ],
       "route": "TOOL",
-      "noul": 0.10754676163196564,
+      "noul": 0.16476474702358246,
       "decision": "ABSTAIN",
-      "latency_ms": 6376.382099988405,
+      "latency_ms": 6445.034400006989,
       "pass": false
     },
     {
@@ -376,13 +376,13 @@
       "predicted_tool": "payment_create_charge",
       "predicted_top3": [
         "payment_create_charge",
-        "card_issuing_create_virtual",
-        "payment_capture_authorization"
+        "git_merge_pull_request",
+        "card_issuing_create_virtual"
       ],
       "route": "TOOL",
-      "noul": 0.7638837099075317,
+      "noul": 0.9401099681854248,
       "decision": "EXECUTE -> payment_create_charge",
-      "latency_ms": 6032.482800001162,
+      "latency_ms": 6287.113500002306,
       "pass": true
     },
     {
@@ -391,17 +391,17 @@
       "context": "",
       "expected_tool": "invoice_mark_as_paid",
       "expected_decision": "invoice_mark_as_paid",
-      "predicted_tool": "debt_collection_reminder_send",
+      "predicted_tool": "invoice_mark_as_paid",
       "predicted_top3": [
-        "debt_collection_reminder_send",
         "invoice_mark_as_paid",
-        "accounting_reconcile_bank_feed"
+        "consultar_insights_pagina",
+        "accounting_get_balance_sheet"
       ],
       "route": "TOOL",
-      "noul": 0.700314462184906,
-      "decision": "EXECUTE -> debt_collection_reminder_send",
-      "latency_ms": 6267.290899995714,
-      "pass": false
+      "noul": 0.8534613251686096,
+      "decision": "EXECUTE -> invoice_mark_as_paid",
+      "latency_ms": 6276.711700018495,
+      "pass": true
     },
     {
       "id": 23,
@@ -412,13 +412,13 @@
       "predicted_tool": "accounting_close_fiscal_period",
       "predicted_top3": [
         "accounting_close_fiscal_period",
-        "accounting_post_journal_entry",
-        "invoice_void_cancel"
+        "metrics_query_prometheus",
+        "schedule_update"
       ],
       "route": "TOOL",
-      "noul": 0.9655508399009705,
-      "decision": "EXECUTE -> accounting_close_fiscal_period",
-      "latency_ms": 6221.254999996745,
+      "noul": 0.34764885902404785,
+      "decision": "ABSTAIN",
+      "latency_ms": 6358.751899999334,
       "pass": true
     },
     {
@@ -430,13 +430,13 @@
       "predicted_tool": "accounting_get_balance_sheet",
       "predicted_top3": [
         "accounting_get_balance_sheet",
-        "data_lake_create_external_table",
-        "invoice_generate_pdf"
+        "db_manage_indexes",
+        "load_balancer_health_check"
       ],
       "route": "TOOL",
-      "noul": 0.9726568460464478,
+      "noul": 0.949655294418335,
       "decision": "EXECUTE -> accounting_get_balance_sheet",
-      "latency_ms": 6327.448099997127,
+      "latency_ms": 6463.097999978345,
       "pass": true
     },
     {
@@ -445,16 +445,16 @@
       "context": "",
       "expected_tool": "ch_whatsapp_twilio",
       "expected_decision": "ch_whatsapp_twilio",
-      "predicted_tool": "redis_pubsub_publish",
+      "predicted_tool": "search_memory",
       "predicted_top3": [
-        "redis_pubsub_publish",
-        "invoice_send_by_email",
-        "email_send_smtp"
+        "search_memory",
+        "ch_list",
+        "ch_create_draft"
       ],
       "route": "TOOL",
-      "noul": 0.6888044476509094,
-      "decision": "EXECUTE -> redis_pubsub_publish",
-      "latency_ms": 6336.29779999319,
+      "noul": 0.10258505493402481,
+      "decision": "ABSTAIN",
+      "latency_ms": 6296.212400018703,
       "pass": false
     },
     {
@@ -463,17 +463,17 @@
       "context": "",
       "expected_tool": "alert_send_slack_channel",
       "expected_decision": "alert_send_slack_channel",
-      "predicted_tool": "alert_send_slack_channel",
+      "predicted_tool": "slack_create_channel",
       "predicted_top3": [
-        "alert_send_slack_channel",
         "slack_create_channel",
-        "am_agent_broadcast"
+        "iam_list_stale_keys",
+        "alert_send_slack_channel"
       ],
       "route": "TOOL",
-      "noul": 0.8660064935684204,
-      "decision": "EXECUTE -> alert_send_slack_channel",
-      "latency_ms": 6357.135699989158,
-      "pass": true
+      "noul": 0.34422338008880615,
+      "decision": "ABSTAIN",
+      "latency_ms": 6532.651299989084,
+      "pass": false
     },
     {
       "id": 27,
@@ -481,17 +481,17 @@
       "context": "",
       "expected_tool": "email_send_smtp",
       "expected_decision": "email_send_smtp",
-      "predicted_tool": "email_send_smtp",
+      "predicted_tool": "transfer_to_human",
       "predicted_top3": [
-        "email_send_smtp",
-        "invoice_send_by_email",
-        "moderation_check_safety"
+        "transfer_to_human",
+        "document_generate",
+        "ch_activities_pending"
       ],
       "route": "TOOL",
-      "noul": 0.9575850963592529,
-      "decision": "EXECUTE -> email_send_smtp",
-      "latency_ms": 6260.774700000184,
-      "pass": true
+      "noul": 0.07857503741979599,
+      "decision": "ABSTAIN",
+      "latency_ms": 6314.5281999895815,
+      "pass": false
     },
     {
       "id": 28,
@@ -502,13 +502,13 @@
       "predicted_tool": "alert_send_pagerduty",
       "predicted_top3": [
         "alert_send_pagerduty",
-        "sentry_resolve_issue",
-        "security_incident_report_create"
+        "data_quality_detect_anomalies",
+        "consultar_insights_pagina"
       ],
       "route": "TOOL",
-      "noul": 0.9515807628631592,
+      "noul": 0.9870429039001465,
       "decision": "EXECUTE -> alert_send_pagerduty",
-      "latency_ms": 6291.5265999909025,
+      "latency_ms": 6223.799600003986,
       "pass": true
     },
     {
@@ -517,17 +517,17 @@
       "context": "",
       "expected_tool": "workspace_insert_in_file",
       "expected_decision": "workspace_insert_in_file",
-      "predicted_tool": "workspace_insert_in_file",
+      "predicted_tool": "profiler_take_heap_snapshot",
       "predicted_top3": [
-        "workspace_insert_in_file",
-        "db_manage_indexes",
-        "db_table_schema_inspect"
+        "profiler_take_heap_snapshot",
+        "redis_cache_set",
+        "git_commit_staged_changes"
       ],
       "route": "TOOL",
-      "noul": 0.09466101229190826,
+      "noul": 0.0329710878431797,
       "decision": "ABSTAIN",
-      "latency_ms": 6390.29660000233,
-      "pass": true
+      "latency_ms": 6746.680800017202,
+      "pass": false
     },
     {
       "id": 30,
@@ -535,16 +535,16 @@
       "context": "",
       "expected_tool": "workspace_file_info",
       "expected_decision": "workspace_file_info",
-      "predicted_tool": "logs_count_exceptions_by_type",
+      "predicted_tool": "security_scan_vulnerabilities",
       "predicted_top3": [
-        "logs_count_exceptions_by_type",
-        "security_detect_data_leak",
-        "security_audit_sudo_access"
+        "security_scan_vulnerabilities",
+        "security_audit_sudo_access",
+        "list_own_tools"
       ],
       "route": "TOOL",
-      "noul": 0.8570324778556824,
-      "decision": "EXECUTE -> logs_count_exceptions_by_type",
-      "latency_ms": 6137.249299994437,
+      "noul": 0.06743142753839493,
+      "decision": "ABSTAIN",
+      "latency_ms": 6764.96080000652,
       "pass": false
     },
     {
@@ -553,16 +553,16 @@
       "context": "",
       "expected_tool": "workspace_list",
       "expected_decision": "workspace_list",
-      "predicted_tool": "gcp_cloud_storage_bucket_sync",
+      "predicted_tool": "document_generate",
       "predicted_top3": [
-        "gcp_cloud_storage_bucket_sync",
-        "file_batch_rename",
-        "dynamodb_batch_write"
+        "document_generate",
+        "ch_activities_pending",
+        "search_memory"
       ],
       "route": "TOOL",
-      "noul": 0.18429189920425415,
+      "noul": 0.05508572235703468,
       "decision": "ABSTAIN",
-      "latency_ms": 6210.766699994565,
+      "latency_ms": 6718.6113000207115,
       "pass": false
     },
     {
@@ -574,13 +574,13 @@
       "predicted_tool": "agenda_book_appointment",
       "predicted_top3": [
         "agenda_book_appointment",
-        "am_get_agent_result",
-        "am_reply_to_agent"
+        "agenda_reschedule",
+        "request_reservation"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.9505835771560669,
+      "noul": 0.9626888632774353,
       "decision": "EXECUTE -> agenda_book_appointment",
-      "latency_ms": 5981.193800005713,
+      "latency_ms": 6524.817099998472,
       "pass": true
     },
     {
@@ -589,17 +589,17 @@
       "context": "Asistente: Tengo listo el comando para desplegar k8s_deploy_pod en producción.",
       "expected_tool": "k8s_deploy_pod",
       "expected_decision": "k8s_deploy_pod",
-      "predicted_tool": "k8s_drain_node",
+      "predicted_tool": "k8s_deploy_pod",
       "predicted_top3": [
-        "k8s_drain_node",
-        "spark_submit_job",
-        "k8s_scale_deployment"
+        "k8s_deploy_pod",
+        "sandbox_run_command",
+        "cron_add_job"
       ],
-      "route": "TOOL",
-      "noul": 0.6703722476959229,
-      "decision": "EXECUTE -> k8s_drain_node",
-      "latency_ms": 5958.472599988454,
-      "pass": false
+      "route": "PREV_RESPONSE",
+      "noul": 0.9907537698745728,
+      "decision": "EXECUTE -> k8s_deploy_pod",
+      "latency_ms": 6561.064599984093,
+      "pass": true
     },
     {
       "id": 34,
@@ -610,13 +610,13 @@
       "predicted_tool": "payment_create_charge",
       "predicted_top3": [
         "payment_create_charge",
-        "debt_collection_reminder_send",
-        "payment_create_subscription"
+        "invoice_mark_as_paid",
+        "payment_get_payment_methods"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.26226791739463806,
-      "decision": "ABSTAIN",
-      "latency_ms": 6421.491500004777,
+      "noul": 0.9555884003639221,
+      "decision": "EXECUTE -> payment_create_charge",
+      "latency_ms": 6538.8958000112325,
       "pass": true
     },
     {
@@ -628,13 +628,13 @@
       "predicted_tool": "accounting_close_fiscal_period",
       "predicted_top3": [
         "accounting_close_fiscal_period",
-        "crypto_estimate_gas_fee",
-        "accounting_reconcile_bank_feed"
+        "cron_add_job",
+        "consultar_insights_pagina"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.9914319515228271,
+      "noul": 0.9892394542694092,
       "decision": "EXECUTE -> accounting_close_fiscal_period",
-      "latency_ms": 6151.093700013007,
+      "latency_ms": 6580.431999987923,
       "pass": true
     },
     {
@@ -647,12 +647,12 @@
       "predicted_top3": [
         "agenda_book_appointment",
         "db_execute_sql",
-        "db_restore_snapshot"
+        "sandbox_run_command"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.9934567809104919,
+      "noul": 0.8921980857849121,
       "decision": "EXECUTE -> agenda_book_appointment",
-      "latency_ms": 6319.109100004425,
+      "latency_ms": 6601.0139000136405,
       "pass": true
     },
     {
@@ -664,13 +664,13 @@
       "predicted_tool": "workspace_file_info",
       "predicted_top3": [
         "workspace_file_info",
-        "debt_collection_reminder_send",
-        "iot_send_mqtt_command"
+        "spark_submit_job",
+        "profiler_take_heap_snapshot"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.11084561049938202,
+      "noul": 0.1781787872314453,
       "decision": "ABSTAIN",
-      "latency_ms": 6345.547799995984,
+      "latency_ms": 6545.022400008747,
       "pass": true
     },
     {
@@ -682,13 +682,13 @@
       "predicted_tool": "alert_send_slack_channel",
       "predicted_top3": [
         "alert_send_slack_channel",
-        "ch_whatsapp_request_qr",
-        "ch_whatsapp_status"
+        "search_memory",
+        "ch_facebook_fiwano"
       ],
       "route": "PREV_RESPONSE",
-      "noul": 0.9937426447868347,
+      "noul": 0.995023250579834,
       "decision": "EXECUTE -> alert_send_slack_channel",
-      "latency_ms": 6393.581199998152,
+      "latency_ms": 6354.510799981654,
       "pass": true
     },
     {
@@ -700,13 +700,13 @@
       "predicted_tool": "search_memory",
       "predicted_top3": [
         "search_memory",
-        "data_lineage_trace",
+        "redis_cache_set",
         "security_scan_vulnerabilities"
       ],
       "route": "TOOL",
-      "noul": 0.899799644947052,
-      "decision": "EXECUTE -> search_memory",
-      "latency_ms": 6249.829799999134,
+      "noul": 0.05710609629750252,
+      "decision": "ABSTAIN",
+      "latency_ms": 6355.878999980632,
       "pass": true
     },
     {
@@ -718,13 +718,13 @@
       "predicted_tool": "search_memory",
       "predicted_top3": [
         "search_memory",
-        "db_kill_idle_connections",
-        "db_manage_indexes"
+        "git_pull_latest",
+        "cert_manager_inspect_expiry"
       ],
       "route": "TOOL",
-      "noul": 0.7620801329612732,
-      "decision": "EXECUTE -> search_memory",
-      "latency_ms": 6310.186200003955,
+      "noul": 0.06104762479662895,
+      "decision": "ABSTAIN",
+      "latency_ms": 6326.291199977277,
       "pass": true
     },
     {
@@ -733,16 +733,16 @@
       "context": "",
       "expected_tool": "ABSTAIN",
       "expected_decision": "ABSTAIN",
-      "predicted_tool": "responder_comentario_publico",
+      "predicted_tool": "document_generate",
       "predicted_top3": [
-        "responder_comentario_publico",
-        "search_conversation_history",
-        "search_knowledge_base"
+        "document_generate",
+        "moderation_check_safety",
+        "security_detect_data_leak"
       ],
       "route": "TOOL",
-      "noul": 0.1526782214641571,
+      "noul": 0.13102775812149048,
       "decision": "ABSTAIN",
-      "latency_ms": 6125.511699996423,
+      "latency_ms": 6456.697300018277,
       "pass": true
     },
     {
@@ -754,13 +754,13 @@
       "predicted_tool": "search_memory",
       "predicted_top3": [
         "search_memory",
-        "knowledge_add",
-        "budget_adjust_allocation"
+        "ch_activities_pending",
+        "search_knowledge_base"
       ],
       "route": "TOOL",
-      "noul": 0.30897101759910583,
+      "noul": 0.1440965086221695,
       "decision": "ABSTAIN",
-      "latency_ms": 6402.855699998327,
+      "latency_ms": 6450.0044000160415,
       "pass": true
     },
     {
@@ -772,13 +772,13 @@
       "predicted_tool": "metrics_get_error_rate_5xx",
       "predicted_top3": [
         "metrics_get_error_rate_5xx",
-        "db_kill_idle_connections",
-        "uptime_ping_endpoint"
+        "search_memory",
+        "iam_list_stale_keys"
       ],
       "route": "TOOL",
-      "noul": 0.8288071751594543,
+      "noul": 0.9653757214546204,
       "decision": "EXECUTE -> metrics_get_error_rate_5xx",
-      "latency_ms": 6400.131400005193,
+      "latency_ms": 6234.232999995584,
       "pass": false
     },
     {
@@ -787,16 +787,16 @@
       "context": "",
       "expected_tool": "ABSTAIN",
       "expected_decision": "ABSTAIN",
-      "predicted_tool": "ml_model_train_status",
+      "predicted_tool": "terraform_destroy",
       "predicted_top3": [
-        "ml_model_train_status",
-        "metrics_get_disk_io",
-        "tracing_find_slow_spans"
+        "terraform_destroy",
+        "security_detect_data_leak",
+        "security_inspect_open_ports"
       ],
       "route": "TOOL",
-      "noul": 0.37431952357292175,
+      "noul": 0.07543567568063736,
       "decision": "ABSTAIN",
-      "latency_ms": 6080.5986000050325,
+      "latency_ms": 6247.4084999994375,
       "pass": true
     },
     {
@@ -805,16 +805,16 @@
       "context": "",
       "expected_tool": "ABSTAIN",
       "expected_decision": "ABSTAIN",
-      "predicted_tool": "iam_assign_role",
+      "predicted_tool": "redis_cache_set",
       "predicted_top3": [
-        "iam_assign_role",
-        "db_kill_idle_connections",
-        "db_manage_indexes"
+        "redis_cache_set",
+        "iam_list_stale_keys",
+        "security_audit_ssh_keys"
       ],
       "route": "TOOL",
-      "noul": 0.18923048675060272,
+      "noul": 0.10184301435947418,
       "decision": "ABSTAIN",
-      "latency_ms": 6426.722399992286,
+      "latency_ms": 6559.631299984176,
       "pass": true
     },
     {
@@ -823,17 +823,17 @@
       "context": "",
       "expected_tool": "ABSTAIN",
       "expected_decision": "ABSTAIN",
-      "predicted_tool": "transfer_to_human",
+      "predicted_tool": "document_generate",
       "predicted_top3": [
-        "transfer_to_human",
-        "process_order_draft",
-        "send_product_image"
+        "document_generate",
+        "security_detect_brute_force",
+        "ch_list"
       ],
       "route": "TOOL",
-      "noul": 0.8739286065101624,
-      "decision": "EXECUTE -> transfer_to_human",
-      "latency_ms": 6352.476799991564,
-      "pass": false
+      "noul": 0.05983386188745499,
+      "decision": "ABSTAIN",
+      "latency_ms": 6348.056100017857,
+      "pass": true
     },
     {
       "id": 47,
@@ -844,13 +844,13 @@
       "predicted_tool": "search_memory",
       "predicted_top3": [
         "search_memory",
-        "cron_remove_job",
-        "cert_manager_inspect_expiry"
+        "metrics_get_memory_usage",
+        "iot_drone_emergency_return"
       ],
       "route": "TOOL",
-      "noul": 0.8580225110054016,
+      "noul": 0.8251517415046692,
       "decision": "EXECUTE -> search_memory",
-      "latency_ms": 6265.506499999901,
+      "latency_ms": 6345.616499980679,
       "pass": false
     }
   ]
