@@ -146,7 +146,7 @@
   },
   "schedule_task": {
     "name": "schedule_task",
-    "description": "Programa una tarea del agente para el futuro: única (executeAt) o periódica (cron).",
+    "description": "Programa un recordatorio, alarma, aviso o tarea periódica (cron job) del agente para el futuro: única (executeAt) o periódica (cron).",
     "source_file": "scheduler.mcp.ts"
   },
   "schedule_list": {

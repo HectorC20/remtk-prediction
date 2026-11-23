@@ -1,0 +1,882 @@
+[
+  {
+    "query": "Quiero agendar una cita con el doctor para este viernes a las 4pm.",
+    "latency_ms": 21861.6,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.4439,
+      "all": {
+        "EXPLICIT_NEW": 0.4439,
+        "AFFIRM_CONT": 0.3552,
+        "SELECT_CONT": 0.0751,
+        "CANCEL_REJECT": 0.0409,
+        "MODIFY_CORRECT": 0.0849
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0003
+      }
+    },
+    "gates": {
+      "master_gate": 0.9993,
+      "p_noul_intent": 0.9998,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "agenda_get_client_appointments",
+      "get_current_datetime",
+      "agenda_book_appointment",
+      "agenda_get_today_summary",
+      "agenda_reschedule",
+      "agenda_cancel",
+      "google_calendar_list_events",
+      "document_generate",
+      "request_reservation",
+      "am_reply_to_agent",
+      "agenda_check_availability",
+      "generate_operational_plan_draft",
+      "sys_workspace_query",
+      "db_explain_query_plan",
+      "ask_plan_requirements",
+      "uptime_ping_endpoint",
+      "web_search",
+      "responder_comentario_publico",
+      "am_delegate_to_agent",
+      "ch_test",
+      "moderation_check_safety",
+      "am_get_agent_result",
+      "github_list_assigned_issues",
+      "ask_questions",
+      "ch_business_context",
+      "prompt_version_compare",
+      "knowledge_list",
+      "search_conversation_history",
+      "ch_assign_agent",
+      "iam_list_stale_keys",
+      "search_knowledge_base",
+      "search_memory"
+    ],
+    "top_tools": [
+      {
+        "tool": "agenda_book_appointment",
+        "gated_score": 0.9975,
+        "raw_affinity": 0.9982,
+        "colbert": -0.038
+      },
+      {
+        "tool": "agenda_get_today_summary",
+        "gated_score": 0.9966,
+        "raw_affinity": 0.9973,
+        "colbert": -0.0086
+      },
+      {
+        "tool": "get_current_datetime",
+        "gated_score": 0.992,
+        "raw_affinity": 0.9927,
+        "colbert": 0.0127
+      }
+    ],
+    "test_id": "T1_AGENDA",
+    "category": "Comando Directo"
+  },
+  {
+    "query": "Ejecuta una consulta SELECT sobre la tabla de clientes para listar activos.",
+    "latency_ms": 16102.7,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.4599,
+      "all": {
+        "EXPLICIT_NEW": 0.4599,
+        "AFFIRM_CONT": 0.2971,
+        "SELECT_CONT": 0.0691,
+        "CANCEL_REJECT": 0.0524,
+        "MODIFY_CORRECT": 0.1215
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0002
+      }
+    },
+    "gates": {
+      "master_gate": 0.9992,
+      "p_noul_intent": 0.9997,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "db_execute_sql",
+      "list_skills",
+      "clickhouse_olap_query",
+      "metrics_query_prometheus",
+      "ch_activities_pending",
+      "am_list_agents",
+      "am_delegate_to_agent",
+      "db_explain_query_plan",
+      "list_tools",
+      "db_vacuum_analyze",
+      "knowledge_list",
+      "payment_get_payment_methods",
+      "request_reservation",
+      "agenda_get_client_appointments",
+      "sys_workspace_query",
+      "am_get_agent_result",
+      "list_own_tools",
+      "ch_business_context",
+      "search_memory",
+      "sys_harness_map_records",
+      "process_order_draft",
+      "get_current_datetime",
+      "db_query_cache_flush",
+      "llm_tokenize_count",
+      "iam_list_stale_keys",
+      "schedule_list",
+      "vector_db_delete_collection",
+      "google_calendar_list_events",
+      "workspace_file_command",
+      "knowledge_add",
+      "eval_golden_dataset_run",
+      "db_read_replica_scale"
+    ],
+    "top_tools": [
+      {
+        "tool": "clickhouse_olap_query",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": 0.0542
+      },
+      {
+        "tool": "db_execute_sql",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": -0.0375
+      },
+      {
+        "tool": "ch_business_context",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": 0.0247
+      }
+    ],
+    "test_id": "T2_SQL",
+    "category": "Comando Directo"
+  },
+  {
+    "query": "Envía un mensaje de texto por WhatsApp al cliente informando su pedido.",
+    "latency_ms": 15266.3,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.4426,
+      "all": {
+        "EXPLICIT_NEW": 0.4426,
+        "AFFIRM_CONT": 0.3162,
+        "SELECT_CONT": 0.0885,
+        "CANCEL_REJECT": 0.0444,
+        "MODIFY_CORRECT": 0.1082
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0002
+      }
+    },
+    "gates": {
+      "master_gate": 0.9992,
+      "p_noul_intent": 0.9997,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "invoice_send_by_email",
+      "ch_whatsapp_request_qr",
+      "send_product_image",
+      "am_reply_to_agent",
+      "alert_send_email_digest",
+      "ch_whatsapp_status",
+      "ch_whatsapp_twilio",
+      "email_send_smtp",
+      "process_order_request_review",
+      "search_memory",
+      "slack_send_direct_message",
+      "debt_collection_reminder_send",
+      "request_reservation",
+      "iot_send_mqtt_command",
+      "search_chat_history",
+      "am_agent_broadcast",
+      "process_order_draft",
+      "grafana_import_dashboard_json",
+      "ch_facebook_publish",
+      "grafana_export_dashboard_json",
+      "ch_activity_validate",
+      "alert_send_slack_channel",
+      "redis_pubsub_publish",
+      "agenda_get_client_appointments",
+      "alert_send_pagerduty",
+      "kafka_consume_messages",
+      "interest_status",
+      "ch_create_draft",
+      "knowledge_add",
+      "ask_plan_requirements",
+      "invoice_void_cancel",
+      "git_create_pull_request"
+    ],
+    "top_tools": [
+      {
+        "tool": "send_product_image",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": -0.0311
+      },
+      {
+        "tool": "ch_whatsapp_request_qr",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": 0.0034
+      },
+      {
+        "tool": "invoice_send_by_email",
+        "gated_score": 0.9992,
+        "raw_affinity": 1.0,
+        "colbert": 0.0056
+      }
+    ],
+    "test_id": "T3_WHATSAPP",
+    "category": "Comando Directo"
+  },
+  {
+    "query": "Despliega el nuevo pod del microservicio en el clúster de Kubernetes.",
+    "latency_ms": 13276.7,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.3847,
+      "all": {
+        "EXPLICIT_NEW": 0.3847,
+        "AFFIRM_CONT": 0.3468,
+        "SELECT_CONT": 0.1015,
+        "CANCEL_REJECT": 0.0698,
+        "MODIFY_CORRECT": 0.0973
+      }
+    },
+    "route": {
+      "route": "INDEPENDENT",
+      "prob": 0.9983,
+      "all": {
+        "TOOL": 0.0009,
+        "MEMORY": 0.0004,
+        "PREV_RESPONSE": 0.0004,
+        "INDEPENDENT": 0.9983
+      }
+    },
+    "gates": {
+      "master_gate": 0.0,
+      "p_noul_intent": 0.2583,
+      "p_noul_coverage": 0.0,
+      "p_sink": 1.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "k8s_deploy_pod",
+      "gcp_gke_cluster_resize",
+      "k8s_restart_rollout",
+      "k8s_get_cluster_nodes",
+      "k8s_apply_manifest",
+      "k8s_scale_deployment",
+      "gcp_cloud_run_deploy",
+      "fivetran_sync_connector",
+      "docker_push_registry",
+      "git_pull_latest",
+      "process_order_draft",
+      "knowledge_add",
+      "git_merge_pull_request",
+      "glue_catalog_crawl_table",
+      "spark_submit_job",
+      "metrics_get_cpu_usage",
+      "git_create_pull_request",
+      "terraform_apply",
+      "security_cors_policy_update",
+      "snowflake_create_warehouse",
+      "k8s_drain_node",
+      "aws_cloudfront_invalidate",
+      "gcp_cloud_storage_bucket_sync",
+      "env_var_set_secret",
+      "snowflake_suspend_warehouse",
+      "am_delegate_to_agent",
+      "knowledge_update",
+      "docker_build_image",
+      "sandbox_project_init",
+      "iot_restart_gateway",
+      "db_vacuum_analyze",
+      "ch_activities_pending"
+    ],
+    "top_tools": [
+      {
+        "tool": "ch_activities_pending",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": -0.025
+      },
+      {
+        "tool": "db_vacuum_analyze",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": -0.0525
+      },
+      {
+        "tool": "iot_restart_gateway",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": -0.0753
+      }
+    ],
+    "test_id": "T4_K8S",
+    "category": "Comando Directo"
+  },
+  {
+    "query": "la carta embrujada",
+    "latency_ms": 15267.8,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.3633,
+      "all": {
+        "EXPLICIT_NEW": 0.3633,
+        "AFFIRM_CONT": 0.3289,
+        "SELECT_CONT": 0.1089,
+        "CANCEL_REJECT": 0.0619,
+        "MODIFY_CORRECT": 0.137
+      }
+    },
+    "route": {
+      "route": "INDEPENDENT",
+      "prob": 0.995,
+      "all": {
+        "TOOL": 0.0007,
+        "MEMORY": 0.0004,
+        "PREV_RESPONSE": 0.0039,
+        "INDEPENDENT": 0.995
+      }
+    },
+    "gates": {
+      "master_gate": 0.0,
+      "p_noul_intent": 0.9769,
+      "p_noul_coverage": 0.0,
+      "p_sink": 1.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "document_generate",
+      "generate_operational_plan_draft",
+      "email_read_inbox_imap",
+      "ask_plan_requirements",
+      "git_merge_pull_request",
+      "workspace_file_command",
+      "ch_test",
+      "dynamodb_batch_write",
+      "moderation_check_safety",
+      "llm_embed_text_chunks",
+      "sys_harness_map_records",
+      "sys_workspace_query",
+      "email_send_smtp",
+      "am_reply_to_agent",
+      "document_convert",
+      "data_quality_validate_schema",
+      "profiler_take_heap_snapshot",
+      "git_pull_latest",
+      "ch_list",
+      "uptime_ping_endpoint",
+      "knowledge_list",
+      "search_memory",
+      "agenda_cancel",
+      "web_fetch",
+      "am_get_agent_result",
+      "cloudflare_purge_cache",
+      "security_detect_brute_force",
+      "aws_cloudfront_invalidate",
+      "am_delegate_to_agent",
+      "knowledge_add",
+      "publicar_en_pagina",
+      "clipboard_paste_text"
+    ],
+    "top_tools": [
+      {
+        "tool": "clipboard_paste_text",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": 0.1496
+      },
+      {
+        "tool": "publicar_en_pagina",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": 0.1532
+      },
+      {
+        "tool": "knowledge_add",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": 0.0965
+      }
+    ],
+    "test_id": "T5_ANAPHORA_HALLOWEEN",
+    "category": "Anáfora / Continuación"
+  },
+  {
+    "query": "puedes mandarme como recordatorioow para mañana a las 8AM",
+    "latency_ms": 17869.0,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.4663,
+      "all": {
+        "EXPLICIT_NEW": 0.4663,
+        "AFFIRM_CONT": 0.3184,
+        "SELECT_CONT": 0.0685,
+        "CANCEL_REJECT": 0.0558,
+        "MODIFY_CORRECT": 0.091
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0002
+      }
+    },
+    "gates": {
+      "master_gate": 0.9992,
+      "p_noul_intent": 0.9998,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "debt_collection_reminder_send",
+      "search_chat_history",
+      "get_current_datetime",
+      "agenda_get_today_summary",
+      "iot_lorawan_send_downlink",
+      "agent_memory_summarize",
+      "search_conversation_history",
+      "cron_add_job",
+      "am_reply_to_agent",
+      "search_memory",
+      "generate_operational_plan_draft",
+      "schedule_list",
+      "k8s_get_cluster_nodes",
+      "schedule_cancel",
+      "alert_send_email_digest",
+      "search_knowledge_base",
+      "am_delegate_to_agent",
+      "alert_send_pagerduty",
+      "am_agent_broadcast",
+      "am_get_agent_result",
+      "aws_s3_generate_presigned_url",
+      "agenda_reschedule",
+      "ml_model_quantize_int8",
+      "request_reservation",
+      "iam_list_stale_keys",
+      "agenda_get_client_appointments",
+      "process_order_draft",
+      "ch_business_context",
+      "iot_drone_emergency_return",
+      "responder_comentario_publico",
+      "cert_manager_inspect_expiry",
+      "iot_device_ping_heartbeat"
+    ],
+    "top_tools": [
+      {
+        "tool": "cron_add_job",
+        "gated_score": 0.8646,
+        "raw_affinity": 0.8653,
+        "colbert": -0.0283
+      },
+      {
+        "tool": "aws_s3_generate_presigned_url",
+        "gated_score": 0.8456,
+        "raw_affinity": 0.8462,
+        "colbert": 0.0281
+      },
+      {
+        "tool": "agenda_get_today_summary",
+        "gated_score": 0.58,
+        "raw_affinity": 0.5805,
+        "colbert": 0.0134
+      }
+    ],
+    "test_id": "T6_TYPO_SINK_MISSING",
+    "category": "Typo + Ausencia de Herramienta ([NOUL_SINK])"
+  },
+  {
+    "query": "puedes mandarme como recordatorioow para mañana a las 8AM",
+    "latency_ms": 14247.4,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.4663,
+      "all": {
+        "EXPLICIT_NEW": 0.4663,
+        "AFFIRM_CONT": 0.3184,
+        "SELECT_CONT": 0.0685,
+        "CANCEL_REJECT": 0.0558,
+        "MODIFY_CORRECT": 0.091
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0002
+      }
+    },
+    "gates": {
+      "master_gate": 0.9992,
+      "p_noul_intent": 0.9998,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "alert_send_slack_channel",
+      "ch_whatsapp_twilio",
+      "agenda_book_appointment",
+      "debt_collection_reminder_send",
+      "search_chat_history",
+      "get_current_datetime",
+      "agenda_get_today_summary",
+      "iot_lorawan_send_downlink",
+      "agent_memory_summarize",
+      "search_conversation_history",
+      "cron_add_job",
+      "am_reply_to_agent",
+      "search_memory",
+      "generate_operational_plan_draft",
+      "schedule_list",
+      "k8s_get_cluster_nodes",
+      "schedule_cancel",
+      "alert_send_email_digest",
+      "search_knowledge_base",
+      "am_delegate_to_agent",
+      "alert_send_pagerduty",
+      "am_agent_broadcast",
+      "am_get_agent_result",
+      "aws_s3_generate_presigned_url",
+      "agenda_reschedule",
+      "ml_model_quantize_int8",
+      "request_reservation",
+      "iam_list_stale_keys",
+      "agenda_get_client_appointments",
+      "process_order_draft",
+      "ch_business_context",
+      "iot_drone_emergency_return"
+    ],
+    "top_tools": [
+      {
+        "tool": "cron_add_job",
+        "gated_score": 0.8645,
+        "raw_affinity": 0.8652,
+        "colbert": -0.0283
+      },
+      {
+        "tool": "aws_s3_generate_presigned_url",
+        "gated_score": 0.8455,
+        "raw_affinity": 0.8461,
+        "colbert": 0.0281
+      },
+      {
+        "tool": "agenda_get_today_summary",
+        "gated_score": 0.5798,
+        "raw_affinity": 0.5802,
+        "colbert": 0.0134
+      }
+    ],
+    "test_id": "T7_TYPO_WITH_TOOL",
+    "category": "Typo + Presencia de Herramienta"
+  },
+  {
+    "query": "dame los precios de la carta de platos y cócteles",
+    "latency_ms": 14448.5,
+    "discourse": {
+      "class": "AFFIRM_CONT",
+      "prob": 0.4008,
+      "all": {
+        "EXPLICIT_NEW": 0.3981,
+        "AFFIRM_CONT": 0.4008,
+        "SELECT_CONT": 0.0746,
+        "CANCEL_REJECT": 0.0371,
+        "MODIFY_CORRECT": 0.0894
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9954,
+      "all": {
+        "TOOL": 0.9954,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0031,
+        "INDEPENDENT": 0.0013
+      }
+    },
+    "gates": {
+      "master_gate": 0.138,
+      "p_noul_intent": 0.9987,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.8612
+    },
+    "candidates": [
+      "process_order_draft",
+      "search_knowledge_base",
+      "knowledge_list",
+      "send_product_image",
+      "knowledge_add",
+      "card_issuing_create_virtual",
+      "debt_collection_reminder_send",
+      "search_memory",
+      "get_current_datetime",
+      "bigquery_estimate_query_cost",
+      "split_payment_commission",
+      "agenda_get_client_appointments",
+      "process_order_request_review",
+      "security_detect_data_leak",
+      "request_reservation",
+      "harness_dataset_op",
+      "git_pull_latest",
+      "prompt_template_render",
+      "db_explain_query_plan",
+      "card_freeze_temporary",
+      "budget_check_overspend",
+      "snowflake_create_warehouse",
+      "security_rate_limit_exempt",
+      "agenda_get_today_summary",
+      "k8s_apply_manifest",
+      "agenda_book_appointment",
+      "parquet_inspect_metadata",
+      "k8s_get_cluster_nodes",
+      "ch_activities_pending",
+      "db_read_replica_scale",
+      "google_calendar_list_events",
+      "am_delegate_to_agent"
+    ],
+    "top_tools": [
+      {
+        "tool": "bigquery_estimate_query_cost",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": 0.0535
+      },
+      {
+        "tool": "get_current_datetime",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": 0.0331
+      },
+      {
+        "tool": "send_product_image",
+        "gated_score": 0.0,
+        "raw_affinity": 0.0,
+        "colbert": -0.006
+      }
+    ],
+    "test_id": "T8_REDUNDANCY_SUPPRESSION",
+    "category": "Redundancia de Sesión"
+  },
+  {
+    "query": "no nada, olvídalo",
+    "latency_ms": 12386.5,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.5247,
+      "all": {
+        "EXPLICIT_NEW": 0.5247,
+        "AFFIRM_CONT": 0.2838,
+        "SELECT_CONT": 0.0659,
+        "CANCEL_REJECT": 0.0521,
+        "MODIFY_CORRECT": 0.0736
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9994,
+      "all": {
+        "TOOL": 0.9994,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0003,
+        "INDEPENDENT": 0.0003
+      }
+    },
+    "gates": {
+      "master_gate": 0.9991,
+      "p_noul_intent": 0.9997,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "moderation_check_safety",
+      "generate_operational_plan_draft",
+      "iot_lorawan_send_downlink",
+      "aws_cloudfront_invalidate",
+      "ml_model_export_onnx",
+      "alert_send_slack_channel",
+      "iot_turn_off_relay",
+      "clickhouse_olap_query",
+      "responder_comentario_publico",
+      "sys_harness_map_records",
+      "vector_db_delete_collection",
+      "sys_workspace_query",
+      "data_mask_sensitive_pii",
+      "security_quarantine_asset",
+      "semantic_cache_store",
+      "search_chat_history",
+      "document_generate",
+      "snowflake_suspend_warehouse",
+      "db_vacuum_analyze",
+      "alert_send_pagerduty",
+      "server_cpu_throttle_check",
+      "workspace_file_command",
+      "alert_create_rule",
+      "iot_device_ping_heartbeat",
+      "ask_questions",
+      "k8s_get_cluster_nodes",
+      "llm_evaluate_hallucination",
+      "ch_activity_validate",
+      "iot_read_sensor_telemetry",
+      "redis_cache_invalidate",
+      "invoice_void_cancel",
+      "etl_cancel_job"
+    ],
+    "top_tools": [
+      {
+        "tool": "iot_lorawan_send_downlink",
+        "gated_score": 0.0005,
+        "raw_affinity": 0.0005,
+        "colbert": -0.0399
+      },
+      {
+        "tool": "sys_harness_map_records",
+        "gated_score": 0.0001,
+        "raw_affinity": 0.0001,
+        "colbert": 0.015
+      },
+      {
+        "tool": "iot_read_sensor_telemetry",
+        "gated_score": 0.0001,
+        "raw_affinity": 0.0001,
+        "colbert": 0.0031
+      }
+    ],
+    "test_id": "T9_CANCELLATION",
+    "category": "Cancelación / Rechazo"
+  },
+  {
+    "query": "Hola buenos días, ¿cómo estás hoy?",
+    "latency_ms": 14934.0,
+    "discourse": {
+      "class": "EXPLICIT_NEW",
+      "prob": 0.3909,
+      "all": {
+        "EXPLICIT_NEW": 0.3909,
+        "AFFIRM_CONT": 0.3863,
+        "SELECT_CONT": 0.0796,
+        "CANCEL_REJECT": 0.0534,
+        "MODIFY_CORRECT": 0.0899
+      }
+    },
+    "route": {
+      "route": "TOOL",
+      "prob": 0.9995,
+      "all": {
+        "TOOL": 0.9995,
+        "MEMORY": 0.0001,
+        "PREV_RESPONSE": 0.0002,
+        "INDEPENDENT": 0.0003
+      }
+    },
+    "gates": {
+      "master_gate": 0.9993,
+      "p_noul_intent": 0.9998,
+      "p_noul_coverage": 1.0,
+      "p_sink": 0.0,
+      "redundancy_prob": 0.0
+    },
+    "candidates": [
+      "get_current_datetime",
+      "agenda_get_today_summary",
+      "search_conversation_history",
+      "ask_questions",
+      "moderation_check_safety",
+      "responder_comentario_publico",
+      "ask_plan_requirements",
+      "web_search",
+      "am_reply_to_agent",
+      "analytics_churn_risk_score",
+      "ch_business_context",
+      "ch_list",
+      "data_quality_validate_schema",
+      "search_knowledge_base",
+      "ch_activity_validate",
+      "ch_test",
+      "document_generate",
+      "cash_flow_forecast_30d",
+      "currency_convert_live_rate",
+      "search_chat_history",
+      "transfer_to_human",
+      "am_get_agent_result",
+      "generate_operational_plan_draft",
+      "google_calendar_list_events",
+      "interest_status",
+      "data_quality_detect_anomalies",
+      "ch_assign_agent",
+      "translation_translate_text",
+      "ch_activities_pending",
+      "task_resume",
+      "schedule_update",
+      "sentiment_analyze_text"
+    ],
+    "top_tools": [
+      {
+        "tool": "ask_questions",
+        "gated_score": 0.8886,
+        "raw_affinity": 0.8892,
+        "colbert": 0.0461
+      },
+      {
+        "tool": "ch_business_context",
+        "gated_score": 0.8761,
+        "raw_affinity": 0.8767,
+        "colbert": 0.0905
+      },
+      {
+        "tool": "agenda_get_today_summary",
+        "gated_score": 0.8701,
+        "raw_affinity": 0.8707,
+        "colbert": 0.0421
+      }
+    ],
+    "test_id": "T10_CHITCHAT",
+    "category": "Charla Factual"
+  }
+]

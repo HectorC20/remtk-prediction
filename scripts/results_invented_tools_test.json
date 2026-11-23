@@ -1,0 +1,86 @@
+[
+  {
+    "caso": "Caso 1: Drones de cosecha de maíz",
+    "query": "Mandá inmediatamente la flota de drones para cosechar todo el maíz del lote norte antes de la lluvia.",
+    "esperado": "dron_cosecha_maiz_agricola",
+    "top_seleccionado": "dron_cosecha_maiz_agricola",
+    "gated_score": 0.9988,
+    "raw_affinity": 0.9998,
+    "colbert": 0.0044,
+    "master_gate": 0.999,
+    "p_sink": 0.0,
+    "veredicto": "✅ ACIERTO TOTAL"
+  },
+  {
+    "caso": "Caso 2: Proyector de holograma",
+    "query": "Prendé el proyector de hologramas en 3D en el auditorio para mostrar la maqueta del edificio.",
+    "esperado": "holograma_proyector_3d_activar",
+    "top_seleccionado": "holograma_proyector_3d_activar",
+    "gated_score": 0.8813,
+    "raw_affinity": 0.8821,
+    "colbert": -0.0341,
+    "master_gate": 0.9991,
+    "p_sink": 0.0,
+    "veredicto": "✅ ACIERTO TOTAL"
+  },
+  {
+    "caso": "Caso 3: Cóctel Halloween (Tiki)",
+    "query": "¿Qué trago o pócima con hielo seco podemos preparar para la noche de brujas en el rooftop?",
+    "esperado": "tiki_cocteleria_halloween_receta",
+    "top_seleccionado": "criogenia_temperatura_regular",
+    "gated_score": 0.9993,
+    "raw_affinity": 1.0,
+    "colbert": 0.0284,
+    "master_gate": 0.9993,
+    "p_sink": 0.0,
+    "veredicto": "❌ FALLO"
+  },
+  {
+    "caso": "Caso 4: Tanque Criogénico",
+    "query": "Baja la temperatura a menos de -196 grados y regula el nitrógeno líquido de las cápsulas celulares.",
+    "esperado": "criogenia_temperatura_regular",
+    "top_seleccionado": "resource_get_constructor",
+    "gated_score": 0.8021,
+    "raw_affinity": 0.8029,
+    "colbert": -0.0075,
+    "master_gate": 0.9991,
+    "p_sink": 0.0,
+    "veredicto": "❌ FALLO"
+  },
+  {
+    "caso": "Caso 5: Blindaje y Búnker",
+    "query": "Alerta roja en el complejo: sellen todas las compuertas blindadas y activen el escudo cuántico del búnker.",
+    "esperado": "bunker_escudo_cuantico_sellar",
+    "top_seleccionado": "bunker_escudo_cuantico_sellar",
+    "gated_score": 0.0,
+    "raw_affinity": 0.0,
+    "colbert": 0.0365,
+    "master_gate": 0.999,
+    "p_sink": 0.0,
+    "veredicto": "❌ FALLO"
+  },
+  {
+    "caso": "Caso 6: Solicitud No Cubierta -> Debe ir al [NOUL_SINK]",
+    "query": "Necesito reservar un vuelo comercial de ida y vuelta a París para el próximo mes.",
+    "esperado": "[NOUL_SINK]",
+    "top_seleccionado": "dron_cosecha_maiz_agricola",
+    "gated_score": 0.9993,
+    "raw_affinity": 1.0,
+    "colbert": -0.0104,
+    "master_gate": 0.9993,
+    "p_sink": 0.0,
+    "veredicto": "❌ FALSA ALARMA"
+  },
+  {
+    "caso": "Caso 7: Agradecimiento social -> Debe abstenerse",
+    "query": "Muchísimas gracias por explicarme todo tan claro, que tengas buena tarde.",
+    "esperado": "[ABSTAIN]",
+    "top_seleccionado": "tiki_cocteleria_halloween_receta",
+    "gated_score": 0.9977,
+    "raw_affinity": 0.9985,
+    "colbert": 0.0566,
+    "master_gate": 0.9992,
+    "p_sink": 0.0,
+    "veredicto": "❌ FALSA ALARMA"
+  }
+]
